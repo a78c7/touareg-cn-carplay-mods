@@ -517,6 +517,10 @@ static void dash_layout_all(void) {
     for (int i = 0; i < 2; i++) { dash_use(i); if (g_dash_conf.enabled && g_nrows > 0) { dash_layout(); if (L_sz > sz) sz = L_sz; } }
     g_dash_min_sz = sz;
     for (int i = 0; i < 2; i++) { dash_use(i); if (g_dash_conf.enabled && g_nrows > 0) dash_layout(); }
+    /* both shown: same height too (rows from the top, the shorter box keeps empty space at the bottom) */
+    int h = 0;
+    for (int i = 0; i < 2; i++) { dash_use(i); if (g_dash_conf.enabled && g_nrows > 0 && g_dash_h > h) h = g_dash_h; }
+    for (int i = 0; i < 2; i++) { dash_use(i); if (g_dash_conf.enabled && g_nrows > 0) g_dash_h = h; }
     dash_use(cur);
 }
 

@@ -255,7 +255,8 @@ function pvBox(pv, show, list, sd){
   const n = list.length, sc = SZ[sizeClass(Math.max(dash.show ? dash.items.length : 0, dash.r_show ? dash.r_items.length : 0))];
   pv.style.outline = sd === side ? '2px solid rgba(158,193,251,.8)' : 'none';
   if (!show || !n) { pv.style.cssText += ';padding:12px 16px;background:rgba(16,18,22,.5);grid-auto-rows:auto'; pv.innerHTML = `<div style="grid-column:1/-1;color:#ccc;font-size:13px">${sd === 'l' ? '左边框' : '右边框'}${show ? '（没有选项目）' : '：不显示'}</div>`; return; }
-  pv.style.cssText = `padding:${sc.pad}px 18px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});grid-auto-rows:${sc.row}px;outline:${sd === side ? '2px solid rgba(158,193,251,.8)' : 'none'}`;
+  const both = dash.show && dash.items.length && dash.r_show && dash.r_items.length, hn = Math.max(dash.items.length, dash.r_items.length);
+  pv.style.cssText = `padding:${sc.pad}px 18px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});grid-auto-rows:${sc.row}px;align-content:start;${both ? `height:${hn * sc.row}px;box-sizing:content-box;` : ''}outline:${sd === side ? '2px solid rgba(158,193,251,.8)' : 'none'}`;
   pv.innerHTML = list.map(k => {
     const i = item(k);
     const lab = i.label.includes('|') ? `<div class="l2"><span class="m" style="font-size:${sc.top}px">${esc(i.label.split('|')[0])}</span><span class="l" style="font-size:${sc.bot}px">${esc(i.label.split('|')[1])}</span></div>` : `<div class="l" style="font-size:${sc.lab}px">${esc(i.label)}</div>`;

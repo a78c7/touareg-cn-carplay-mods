@@ -3,7 +3,7 @@
 让中国版大众途锐（MH2p 车机）用一个 U 盘一次刷入五项改装。**当前版本 v19**（右边信息框尚未上车实测）。
 
 > **v19 新增**
-> - **右边也能放信息框**：仪表右下角车速框上方可以再放一个框，和左边一样从 30 多项里任选、拖动排序，左右各自独立（例如左边放实时功率/扭矩/G 值，右边放 0–100 和最大值）。两个框用同一种字号，左右对称。「改装设置」里点「左边框 / 右边框」切换编辑。
+> - **右边也能放信息框**：仪表右下角车速框上方可以再放一个框，和左边一样从 30 多项里任选、拖动排序，左右各自独立（例如左边放实时功率/扭矩/G 值，右边放 0–100 和最大值）。两个框字号相同、高度相同（项目少的框下面留空），左右对称。「改装设置」里点「左边框 / 右边框」切换编辑。
 >
 > **v18 新增**
 > - **0–100 计时和本次最大值**：信息框可选「0–100」（起步后显示计时，过 100 km/h 显示成绩）、「最大功率」「最大扭矩」「最大 G 值」（车机开机以来）。
@@ -21,6 +21,8 @@
 - **CarPlay 导航上 HUD**：苹果地图 / 高德等 CarPlay 导航的转向箭头、到路口距离（带进度条）、路名、车道指引显示在抬头显示 HUD 上（`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`）
 - **CarPlay 地图上仪表**：手机导航 App 的地图画面显示在仪表中间（原车导航地图的位置），车标对准仪表时钟正下方、靠近底部（高德、苹果地图、百度地图分别校准，自动切换）；仪表上方显示剩余距离和到达时间（原车样式）；断开 CarPlay 自动回到原车地图（`Mods/VW_HUD_3_CarPlayCluster`，需要和 HUD 两个文件夹一起装）
 - **仪表信息框**：叠在仪表 CarPlay 地图上的半透明小框（左边一个，v19 起右边也可以放一个），实时显示行车数据，每秒刷新 5 次。**显示哪几项、什么顺序自己选**（「改装设置」程序里点选、拖动排序），默认功率、扭矩、G 值、转速、机油温度、变速箱油温；共 30 项可选，最多 10 项，详见下面"仪表信息框说明"
+
+> ⚠️ **非官方改装，风险自负。** 本项目只公开个人研究的方法和代码，不提供任何保证，作者不对使用后果承担责任。使用前请先读[免责声明](#免责声明)。
 
 下载即用，已包含刷机所需的 [MH2p SD ModKit](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)，不用另外准备。
 
@@ -77,7 +79,7 @@
 *三种常用组合（「改装设置」里的快速选择），30 多项可以任意组合、排序；左右两个框各选各的。*
 
 - 仪表显示 CarPlay 地图时，地图左下（挡位框上方）有一个半透明小框，每行一个数，每秒刷新 5 次。只在连着 CarPlay、仪表显示地图时出现。
-- **右边框（v19）**：右下角车速框上方可以再放一个框，默认不显示。在「改装设置」里点「右边框」，勾上"显示右边框"，再点选项目、排序（或手改 `dash.conf` 的 `r_items=`、`r_show=1`）。两个框用同一种字号（按项目多的那个框选），左右对称；右边框的位置在 `dash.conf` 的 `r_x`、`r_y`、`r_right`。
+- **右边框（v19）**：右下角车速框上方可以再放一个框，默认不显示。在「改装设置」里点「右边框」，勾上"显示右边框"，再点选项目、排序（或手改 `dash.conf` 的 `r_items=`、`r_show=1`）。两个框字号相同（按项目多的那个框选）、高度相同（项目少的框下面留空），左右对称；右边框的位置在 `dash.conf` 的 `r_x`、`r_y`、`r_right`。
 - **自己选显示什么**：刷机前运行 U 盘里的「改装设置」程序，在"仪表信息框"里点选项目、拖动排序，页面上有效果示意；改完要重新刷一次 U 盘。（也可以手改 `Mods/VW_HUD_3_CarPlayCluster/Update/dash.conf` 的 `items=` 行，文件里有说明。）
   可选的 30 项，名称和大众行车电脑一致：功率、扭矩、G 值、纵向 G、横向 G、转速、车速、油门、制动压力、转向角、挡位、变速箱油温、机油温度、冷却液温度、车外温度、当前消耗、燃油存量（升）、续驶里程，以及"行驶数据"三个存储器**自启动起、自上次加油起、累计**各自的平均消耗、行驶里程、平均车速、行驶时间（框里分两行显示，上面小字是存储器名）。
   - **最多 10 项**，第 11 项起不显示。字号按项数自动选：1～6 项大字，7～8 项中字，9～10 项小字（都不会挡到仪表左下角的挡位框；小字在仪表上偏小，建议不超过 8 项）。
@@ -122,7 +124,7 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 - 仪表一直显示原车地图：确认仪表在地图页、手机 App 已开始导航；开机后等 1 分钟；按上面方法收集日志。
 - CarPlay 异常：按上面方法卸载（先卸 `VW_HUD_3`，再卸 HUD_1/2）。
 
-⚠️ 改装风险自负，可能影响保修。仪表地图只占用原车导航地图的位置，车速、警告灯等由仪表自己显示，不经过本改装。
+⚠️ 改装风险自负，可能影响保修（见[免责声明](#免责声明)）。仪表地图只占用原车导航地图的位置，车速、警告灯等由仪表自己显示，不经过本改装。
 
 ## 开发过程与源码
 
@@ -143,6 +145,17 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 - **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)**（[网站](https://fifthbro.github.io)）：`dio_cluster.so` 原样来自其 v0034 版本（让 iPhone 发出路线指引数据）；仪表显示程序 `cl_render` 基于其公开的 `cluster.c` 修改。均遵循 **CC BY-NC-SA 4.0**（见 [LICENSES/fifthBro_mh2p-cluster_LICENSE.md](LICENSES/fifthBro_mh2p-cluster_LICENSE.md)）。他是 MH2p 仪表投屏的开拓者，本项目的"断开后恢复原车地图"等问题都参考了他代码里的注释。
 - **[fifthBro / mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**：开发调试用的 SSH 模块（未包含在 U 盘包里）。
 - **[luka-dev / mib2q-carplay-rgi](https://github.com/luka-dev/mib2q-carplay-rgi)**：CarPlay 路线指引和第二屏（altScreen）协议研究；**[luka-dev / jxe2jar](https://github.com/luka-dev/jxe2jar)**：车机 Java 程序转换/反编译；**[luka-dev / qnx65-armv7-toolchain](https://github.com/luka-dev/qnx65-armv7-toolchain)**：QNX 交叉编译环境。
+
+## 免责声明
+
+1. **非官方**：本项目是个人业余研究，与大众汽车（Volkswagen）、上汽大众 / 一汽-大众、苹果（Apple）、谷歌（Google）、高德等公司没有任何关系，也未获得其授权或认可。文中提到的品牌和商标归各自所有者，只用来说明适用车型和功能。
+2. **只公开方法，不提供保证**：仓库里的代码、U 盘包和文档按"现状"公开，供学习、研究和个人使用。作者不保证它们能用、适合你的车、没有错误，也不保证以后会维护或更新。
+3. **风险自负**：刷机和改装可能导致车机或仪表功能异常、无法启动、需要到 4S 店恢复，可能失去原厂保修，也可能不符合你所在地的法规或车辆检验要求。是否使用由你自己判断，**由此造成的车辆损坏、数据丢失、维修费用、保修或法律纠纷等任何直接或间接后果，由使用者自行承担，作者不承担责任**。
+4. **行车安全**：不要在驾驶时操作手机或车机设置。HUD、仪表地图和信息框里的数据只供参考，车速、警告灯等一律以原车仪表为准；数据显示有误或延迟时不要据此驾驶。
+5. **不提供服务、禁止商用**：作者不提供付费刷机或远程协助。任何人修改、打包、转售或代刷本项目的，与作者无关，也违反下面的非商业许可。
+6. **权利联系**：如果你是相关权利人，认为本仓库的内容侵犯了你的权利，请通过 [Issue](https://github.com/a78c7/touareg-cn-carplay-mods/issues) 联系，核实后会及时修改或删除。
+
+下载、复制或使用本项目，即表示你已阅读并同意以上内容。
 
 ## 许可证
 
@@ -189,4 +202,6 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 - **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)**: `dio_cluster.so` (v0034, unmodified) and `cluster.c` (modified, `src/cl_render`), CC BY-NC-SA 4.0. Pioneer of MH2p cluster projection.
 - **[luka-dev](https://github.com/luka-dev)**: mib2q-carplay-rgi (CarPlay route guidance and altScreen research), jxe2jar, qnx65-armv7-toolchain.
 
-**License**: new code GPL-3.0 ([LICENSE](LICENSE)); `src/cl_render`, `dio_cluster.so`, ModKit and LawPaul mods CC BY-NC-SA 4.0; info-box glyphs (`src/cl_render/dash_font.h`, pre-rendered from Noto Sans CJK SC) SIL OFL 1.1 ([LICENSES/NotoSansCJK_OFL.md](LICENSES/NotoSansCJK_OFL.md)). The USB bundle as a whole is for **personal, non-commercial use only**. No VW or Apple program code is included. Use at your own risk.
+**License**: new code GPL-3.0 ([LICENSE](LICENSE)); `src/cl_render`, `dio_cluster.so`, ModKit and LawPaul mods CC BY-NC-SA 4.0; info-box glyphs (`src/cl_render/dash_font.h`, pre-rendered from Noto Sans CJK SC) SIL OFL 1.1 ([LICENSES/NotoSansCJK_OFL.md](LICENSES/NotoSansCJK_OFL.md)). The USB bundle as a whole is for **personal, non-commercial use only**. No VW or Apple program code is included.
+
+**Disclaimer**: unofficial personal research, not affiliated with or endorsed by Volkswagen, Apple, Google or any other company; trademarks belong to their owners. Published "as is", without any warranty. Flashing and modifying the head unit may cause malfunctions, require a dealer restore, void the warranty or conflict with local rules — you use it entirely at your own risk, and the author is not liable for any direct or indirect damage or loss. Do not operate the phone or head unit while driving; the original cluster is always authoritative. No paid flashing or support is offered; anyone reselling or flashing this for money has nothing to do with the author. Rights holders: please open an Issue and the content will be reviewed and changed or removed.
