@@ -1,0 +1,28 @@
+# Push a version tag (v18.1, v19 ...) -> GitHub packs the USB folder (tools/make_release.sh) and publishes a Release
+# with touareg-cn-carplay-mods-<tag>.zip attached (download counts are shown per asset).
+# Release notes: RELEASE_NOTES.md (the section for this tag, if present) + a pointer to the README.
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: pack USB folder
+        run: sh tools/make_release.sh "${GITHUB_REF_NAME}"
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          awk -v t="## $TAG" '$0==t{f=1;next} /^## /{f=0} f' RELEASE_NOTES.md > notes.md 2>/dev/null || true
+          printf '\n下载 `touareg-cn-carplay-mods-%s.zip`，解压后把里面的全部内容复制到 FAT32 U 盘根目录，按 README 安装。\n' "$TAG" >> notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "touareg-cn-carplay-mods-$TAG.zip" --clobber
+          else
+            gh release create "$TAG" "touareg-cn-carplay-mods-$TAG.zip" --title "$TAG" --notes-file notes.md --latest
+          fi
