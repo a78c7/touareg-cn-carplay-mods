@@ -6,13 +6,13 @@
 - **无线 CarPlay**：开启原厂未激活的无线 CarPlay（`Mods/AppleCarPlay`，LawPaul 作品）
 - **Android Auto**：开启原厂未激活的 Android Auto，安卓手机可投屏（`Mods/AndroidAuto`，LawPaul 作品）
 - **CarPlay 导航上 HUD**：苹果地图 / 高德等 CarPlay 导航的转向箭头、到路口距离（带进度条）、路名、车道指引显示在抬头显示 HUD 上（`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`）
-- **CarPlay 地图上仪表**：手机导航 App 的地图画面显示在仪表中间（原车导航地图的位置），车标对准仪表时钟正下方、靠近底部（高德、苹果地图、百度地图分别校准，自动切换）；仪表上方显示剩余距离和到达时间（原车样式）；断开 CarPlay 自动回到原车地图（`Mods/VW_HUD_3_CarPlayCluster`，需要和 HUD 两个文件夹一起装）
+- **CarPlay 地图上仪表**：手机导航 App 的地图画面显示在仪表中间（原车导航地图的位置），车标对准仪表时钟正下方、靠近底部（高德、苹果地图、百度地图分别校准，自动切换）；仪表上方显示剩余距离和到达时间（原车样式）；断开 CarPlay 自动回到原车地图；地图左侧半透明小框实时显示**功率、扭矩、G 值、转速、机油温度、变速箱油温**（`Mods/VW_HUD_3_CarPlayCluster`，需要和 HUD 两个文件夹一起装）
 
 下载即用，已包含刷机所需的 [MH2p SD ModKit](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)，不用另外准备。
 
 **只适用于车机版本 `MH2p_CN_VWG36_P2878`**，其它版本脚本会自动退出，不改动任何东西。
 
-✅ 已在作者的 2023 款途锐（P2878）上验证：全屏、无线、HUD（箭头、距离、路名）、仪表 CarPlay 地图（无线/有线 CarPlay，高德、苹果地图、百度地图：出图、按 VIEW 切换、断开自动恢复、车机设置切夜间后仪表同步变深色）。
+✅ 已在作者的 2023 款途锐（P2878）上验证：全屏、无线、HUD（箭头、距离、路名）、仪表 CarPlay 地图（无线/有线 CarPlay，高德、苹果地图、百度地图：出图、按 VIEW 切换、断开自动恢复、车机设置切夜间后仪表同步变深色）、仪表信息框（v16）。
 ⚠️ **仪表地图模块（VW_HUD_3）的 U 盘安装流程尚未在未改装的车上完整实测**（作者车上是调试时手动装的，程序与本包相同）。另外只在 iOS 27 上测试过。遇到问题请按下面"排查日志"收集日志并提 Issue。
 
 **装过作者旧版本（touareg-cn-carplay-fullscreen，已下线）的车主**：可以直接用本仓库的新 U 盘覆盖刷入，脚本会识别已装状态。但**以后卸载全屏 CarPlay 要用当初的旧 U 盘**（全屏的原厂备份只存在旧 U 盘里）；HUD 和仪表地图用新 U 盘也能卸载干净。
@@ -47,6 +47,17 @@
 - 夜间：在车机设置里切到夜间，仪表地图同步变深色。
 - 只关闭仪表地图（保留 HUD）：最简单是用"卸载"方法只卸载 `VW_HUD_3_CarPlayCluster`。
 
+### 仪表信息框说明（v16）
+
+- 仪表显示 CarPlay 地图时，地图左侧有一个半透明小框，每行一个数，每秒刷新 5 次：
+  - **功率**（kW）、**扭矩**（Nm）：发动机当前输出，数据来自车上的发动机控制单元
+  - **G 值**：加速度合成值（纵向 + 横向），加速时带 `+`、刹车时带 `-`，只转弯或匀速时不带符号；轻度平滑，比实际慢约 0.2～0.3 秒
+  - **转速**（rpm）、**机油**温度、**变速箱**油温（°C）
+- 挡位、油量、续航仪表本身已经显示，框里不重复。
+- 只在连着 CarPlay、仪表显示地图时出现；断开或回到原车地图就消失。
+- 位置/透明度/开关：`cl.conf` 里的 `info_x`、`info_y`、`info_alpha`、`info=0`（去掉行首 `#` 再改），下次连接 CarPlay 生效。默认位置在仪表顶部导航条和左下角挡位框之间，其它车可能要重新调。
+- 数据由 Java 插件（`VW_HUD_2_ClusterNav`）读车机自己的车辆状态和行车电脑接口，不连 OBD、不改仪表编码。
+
 ### 排查日志
 
 U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟以上，日志会自动拷进去（`vwcn.log`、`dio_cluster.log`、`cl_probe.log`、`clusterd.log`）。提 Issue 时附上。注意：日志里可能有手机名称、导航路名等信息，公开前先看一遍，不想公开的删掉。
@@ -76,7 +87,7 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 - `src/hud-java`：车机 Java 插件 VWClusterNav（HUD 数据、剩余距离/到达时间、去掉提示、仪表显示切换）
 - `src/cluster-probe`：`cl_probe.so`，注入 CarPlay 进程，向 iPhone 声明仪表屏、接收并解密第二路视频
 - `src/clusterd`：仪表守护进程，有画面时启动显示、断开时恢复原车
-- `src/cl_render`：H.264 解码显示（基于 fifthBro 的 `cluster.c` 修改，CC BY-NC-SA 4.0）
+- `src/cl_render`：H.264 解码显示（基于 fifthBro 的 `cluster.c` 修改，CC BY-NC-SA 4.0）；`dash.c` 仪表信息框
 - `src/build.sh`：交叉编译脚本；`tools/`：调试工具（macOS 网卡驱动 axbridge、截屏等）
 
 ## 致谢
@@ -92,7 +103,7 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 ## 许可证
 
 - 本仓库新写的部分（全屏补丁脚本、`src/hud-java`、`src/cluster-probe`、`src/clusterd`、`tools/`、各模块安装脚本、文档）：**GPL-3.0**（见 [LICENSE](LICENSE)）。
-- `src/cl_render` 和 `dio_cluster.so`：fifthBro 作品及其修改版，**CC BY-NC-SA 4.0**。
+- `src/cl_render` 和 `dio_cluster.so`：fifthBro 作品及其修改版，**CC BY-NC-SA 4.0**。信息框字形 `src/cl_render/dash_font.h` 由 Noto Sans CJK SC 预渲染，**SIL OFL 1.1**（见 [LICENSES/NotoSansCJK_OFL.md](LICENSES/NotoSansCJK_OFL.md)）。
 - ModKit 及 LawPaul 的模块：**CC BY-NC-SA 4.0**。
 - 因包含禁止商用的部分，**整个 U 盘包仅供个人非商业使用**。
 - 本仓库不包含任何大众或苹果的原厂程序代码；`VW_FullScreenCarPlay/Update/viewhandler.zip` 为修改后的原厂界面配置文件，仅供车主自用。
@@ -107,13 +118,15 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 - **Wireless CarPlay** (`Mods/AppleCarPlay`, by LawPaul)
 - **Android Auto** (`Mods/AndroidAuto`, by LawPaul)
 - **CarPlay turn-by-turn on the HUD**: arrow, distance, street name, lanes (`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`)
-- **CarPlay map on the instrument cluster**: the phone's cluster map (iPhone second video stream, "altScreen") replaces the stock navigation map in the middle of the cluster; it switches back to the stock map automatically when CarPlay disconnects (`Mods/VW_HUD_3_CarPlayCluster`, needs both HUD folders)
+- **CarPlay map on the instrument cluster**: the phone's cluster map (iPhone second video stream, "altScreen") replaces the stock navigation map in the middle of the cluster; it switches back to the stock map automatically when CarPlay disconnects; a translucent box on the left shows live **power, torque, G, rpm, engine oil and gearbox oil temperature** (`Mods/VW_HUD_3_CarPlayCluster`, needs both HUD folders)
 
 ✅ Verified on the author's 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ The USB install of `VW_HUD_3` has not yet been tested end-to-end on an unmodified car (same binaries were installed by hand on the author's car); only tested on iOS 27. Upgrading from the author's earlier touareg-cn-carplay-fullscreen package: flash this drive over it; keep the old drive to uninstall full-screen CarPlay (its backup lives there). Logs may contain your phone name and street names — review before posting.
 
 **Install**: FAT32 drive ≤ 32 GB → copy everything inside `USB` to the root (macOS: `find /Volumes/DRIVE -name '._*' -delete`) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. **Keep the drive** (it holds the backups); don't leave it plugged in.
 
 **Cluster map**: put the cluster on its navigation map page (VIEW button); the phone's map appears 1–3 s after CarPlay connects, also right after boot. Remaining distance and arrival time are shown by the cluster itself (stock style). The car icon is placed under the cluster clock near the bottom: the phone is told the cluster is 1920x960 and only rows 230–869 are shown; per-app safe areas (AMap / Apple Maps / Baidu behave differently, AMap also shifts the car ~210 px toward the next turn, which is compensated from the route-guidance maneuver type) are switched automatically by app name. Settings: `/mnt/app/eso/bin/apps/cluster/cl.conf`. Side gauges can be hidden in the cluster settings.
+
+**Info box (v16)**: while the CarPlay map is on the cluster, a translucent box left of the map shows power (kW), torque (Nm), G (total of longitudinal + lateral; `+` accelerating, `-` braking), rpm, engine oil and gearbox oil temperature, 5 updates/s. Data comes from the head unit's own vehicle-state / board-computer DSI services (Java bundle `vwcn.Dash`), no OBD or cluster coding. `cl.conf`: `info=0` hides it, `info_x` / `info_y` / `info_alpha` move it / set the background opacity.
 
 **Uninstall**: empty `uninstall.txt` in each mod folder to remove, flash again. Remove the three HUD folders together.
 
@@ -128,4 +141,4 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 - **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)**: `dio_cluster.so` (v0034, unmodified) and `cluster.c` (modified, `src/cl_render`), CC BY-NC-SA 4.0. Pioneer of MH2p cluster projection.
 - **[luka-dev](https://github.com/luka-dev)**: mib2q-carplay-rgi (CarPlay route guidance and altScreen research), jxe2jar, qnx65-armv7-toolchain.
 
-**License**: new code GPL-3.0 ([LICENSE](LICENSE)); `src/cl_render`, `dio_cluster.so`, ModKit and LawPaul mods CC BY-NC-SA 4.0. The USB bundle as a whole is for **personal, non-commercial use only**. No VW or Apple program code is included. Use at your own risk.
+**License**: new code GPL-3.0 ([LICENSE](LICENSE)); `src/cl_render`, `dio_cluster.so`, ModKit and LawPaul mods CC BY-NC-SA 4.0; info-box glyphs (`src/cl_render/dash_font.h`, pre-rendered from Noto Sans CJK SC) SIL OFL 1.1 ([LICENSES/NotoSansCJK_OFL.md](LICENSES/NotoSansCJK_OFL.md)). The USB bundle as a whole is for **personal, non-commercial use only**. No VW or Apple program code is included. Use at your own risk.

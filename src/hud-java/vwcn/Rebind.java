@@ -121,14 +121,24 @@ public final class Rebind implements Runnable {
         File f = new File("/tmp/vwcn_rebind");
         try { Thread.sleep(5000); rebindLogOnly(); } catch (Throwable t) { }
         int tick = 0;
+        String failedQ = null;   // v16: a failed request is retried every 2 s and logged once (was: every 1 s, 2 lines each)
+        long nextTry = 0;
         while (!stop) {
             try {
                 Thread.sleep(1000);
                 String q = f.exists() ? readRaw(f) : "";
                 if (q.length() > 0 && !q.equals(applied)) {
-                    Log.log("rebind requested seq=" + q);
-                    if (rebind(q.equals("1") ? DEFAULT_SEQ : q)) { applied = q; tick = 0; }
-                    else Log.log("rebind: not applied yet, will retry");
+                    long now = System.currentTimeMillis();
+                    boolean first = !q.equals(failedQ);
+                    if (first || now >= nextTry) {
+                        if (first) Log.log("rebind requested seq=" + q);
+                        if (rebind(q.equals("1") ? DEFAULT_SEQ : q)) { applied = q; tick = 0; failedQ = null; }
+                        else {
+                            if (first) Log.log("rebind: not applied yet, will retry every 2 s");
+                            failedQ = q;
+                            nextTry = now + 2000;
+                        }
+                    }
                 }
                 int[] h = hold;
                 if (h != null && holdSvc != null && (++tick * 1000) >= HOLD_MS) {

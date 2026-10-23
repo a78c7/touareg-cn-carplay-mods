@@ -59,6 +59,12 @@ static const char *cl_disp_id(void) { const char *e = getenv("CL_DISPID"); retur
 #include <stdint.h>
 #include <time.h>
 
+#ifdef USE_DASH
+#include "dash.c"                 /* v16: cluster info box (power/torque/G/gear/temps/consumption/fuel) */
+#endif
+#ifdef USE_DASH
+static void dash_setup(int win_w, int win_h);
+#endif
 /* SCREEN_FORMAT_YV12 — used in h264 mode for the decode window */
 #define SCREEN_FORMAT_YV12  13
 
@@ -1672,6 +1678,9 @@ static int setup_screen(int width, int height) {
     }
     screen_get_window_property_pv(g_dec.post_win, SCREEN_PROPERTY_RENDER_BUFFERS,
                                   (void**)g_dec.post_bufs);
+#ifdef USE_DASH
+    dash_setup(width, height);
+#endif
     /* Verify ID_STRING and VISIBLE actually took effect — read back. */
     char idbuf[16] = {0};
     int got_vis = 0;
@@ -2156,7 +2165,98 @@ static int cb_decode_picture(void* user, void* pic_info) {
  * the main decode loop's idle path (so transitions also fire when no new
  * H.264 data is arriving — the pause case, where the phone has stopped
  * sending frames and cb_display_picture is no longer invoked). */
+#ifdef USE_DASH
+/* v16 info box glue: pixmap holding the panel, blitted (source-over) onto each frame for the cluster window. */
+static screen_pixmap_t g_dash_pix;
+static screen_buffer_t g_dash_buf;
+static unsigned char  *g_dash_ptr;
+static int             g_dash_stride, g_dash_x, g_dash_y, g_dash_noblend, g_dash_logged;
+static uint64_t        g_dash_poll_ms;
+
+static void dash_setup(int win_w, int win_h) {
+    static const char *paths[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
+    for (unsigned i = 0; i < 2; i++) {
+        FILE *f = fopen(paths[i], "r"); if (!f) continue;
+        char l[128];
+        while (fgets(l, sizeof l, f)) dash_read_conf_line(l);
+        fclose(f);
+        break;
+    }
+    g_dash_x = g_dash_conf.x;
+    g_dash_y = g_dash_conf.y < 0 ? (win_h - DASH_H) / 2 : g_dash_conf.y;
+    if (g_dash_x < 0) g_dash_x = 0;
+    if (g_dash_x + DASH_W > win_w) g_dash_x = win_w - DASH_W;
+    if (g_dash_y < 0) g_dash_y = 0;
+    if (g_dash_y + DASH_H > win_h) g_dash_y = win_h - DASH_H;
+    if (!g_dash_conf.enabled) { LOG("dash: disabled in cl.conf\n"); return; }
+    if (screen_create_pixmap(&g_dash_pix, g_dec.scr_ctx)) { LOG("dash: pixmap create failed errno=%d\n", errno); g_dash_pix = NULL; return; }
+    int fmt = SCREEN_FORMAT_RGBA8888, usage = SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE, size[2] = { DASH_W, DASH_H };
+    screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_FORMAT, &fmt);
+    screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_USAGE, &usage);
+    screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_BUFFER_SIZE, size);
+    int rc;
+    do { rc = screen_create_pixmap_buffer(g_dash_pix); } while (rc < 0 && errno == EINTR);
+    if (rc) { LOG("dash: pixmap buffer failed errno=%d\n", errno); screen_destroy_pixmap(g_dash_pix); g_dash_pix = NULL; return; }
+    screen_get_pixmap_property_pv(g_dash_pix, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)&g_dash_buf);
+    void *ptr = NULL;
+    screen_get_buffer_property_pv(g_dash_buf, SCREEN_PROPERTY_POINTER, &ptr);
+    screen_get_buffer_property_iv(g_dash_buf, SCREEN_PROPERTY_STRIDE, &g_dash_stride);
+    g_dash_ptr = (unsigned char *)ptr;
+    if (!g_dash_ptr || g_dash_stride < DASH_W * 4) {
+        LOG("dash: no CPU access (ptr=%p stride=%d), box disabled\n", ptr, g_dash_stride);
+        screen_destroy_pixmap(g_dash_pix); g_dash_pix = NULL; return;
+    }
+    LOG("dash: box %dx%d at %d,%d alpha=%d tank_l=%d stride=%d\n", DASH_W, DASH_H, g_dash_x, g_dash_y,
+        g_dash_conf.alpha, g_dash_conf.tank_l, g_dash_stride);
+}
+
+/* poll /tmp/dash.state at most every 200 ms; copy a changed panel into the pixmap. Returns 1 on change. */
+static int dash_tick(void) {
+    if (!g_dash_pix) return 0;
+    uint64_t now = now_us() / 1000ULL;
+    if (now - g_dash_poll_ms < 200) return 0;
+    g_dash_poll_ms = now;
+    int ch = dash_poll(now);
+    if (ch && g_dash_have) {
+        for (int y = 0; y < DASH_H; y++) memcpy(g_dash_ptr + y * g_dash_stride, &g_dash_px[y * DASH_W], DASH_W * 4);
+    }
+    if (ch && g_dash_logged < 3) { g_dash_logged++; LOG("dash: %s %s", g_dash_have ? "show" : "hide", g_dash_line); }
+    return ch;
+}
+
+static void dash_overlay(int pidx) {
+    if (!g_dash_pix || !g_dash_have || pidx < 0) return;
+    int a[] = {
+        SCREEN_BLIT_SOURCE_X, 0, SCREEN_BLIT_SOURCE_Y, 0,
+        SCREEN_BLIT_SOURCE_WIDTH, DASH_W, SCREEN_BLIT_SOURCE_HEIGHT, DASH_H,
+        SCREEN_BLIT_DESTINATION_X, g_dash_x, SCREEN_BLIT_DESTINATION_Y, g_dash_y,
+        SCREEN_BLIT_DESTINATION_WIDTH, DASH_W, SCREEN_BLIT_DESTINATION_HEIGHT, DASH_H,
+        SCREEN_BLIT_TRANSPARENCY, SCREEN_TRANSPARENCY_SOURCE_OVER,
+        SCREEN_BLIT_END
+    };
+    if (g_dash_noblend) { a[16] = SCREEN_BLIT_END; }
+    int rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dash_buf, a);
+    if (rc && !g_dash_noblend) {
+        g_dash_noblend = 1;
+        a[16] = SCREEN_BLIT_END;
+        rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dash_buf, a);
+        LOG("dash: source-over blit not supported (errno=%d), opaque blit rc=%d\n", errno, rc);
+    }
+}
+#endif /* USE_DASH */
+
 static void apply_stage_signals(void) {
+#ifdef USE_DASH
+    /* idle refresh: no decoded frame for 300 ms -> draw the changed box over the last posted frame */
+    if (dash_tick() && g_dec.scr_ready && g_render_stage == STAGE_RENDERING && g_last_posted_pidx >= 0 &&
+        (now_us() / 1000ULL) - g_last_post_ms > 300 && (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
+        dash_overlay(g_last_posted_pidx);
+        int dd[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
+        screen_post_window(g_dec.post_win, g_dec.post_bufs[g_last_posted_pidx], 1, dd, 0);
+        screen_flush_context(g_dec.scr_ctx, 0);
+        g_last_post_ms = now_us() / 1000ULL;
+    }
+#endif
     if (g_resume_requested) {
         g_resume_requested = 0;
         if (g_dec.scr_ready && g_render_stage == STAGE_PREPARE) {
@@ -2369,6 +2469,10 @@ static int cb_display_picture(void* user, void* disp_info) {
     };
     int mr = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx],
                          g_dec.decode_bufs[didx], blit_attribs);
+#ifdef USE_DASH
+    dash_tick();
+    dash_overlay(pidx);
+#endif
 #elif defined(USE_NVMEDIA2D)
     /* NvMedia2DBlit: YV12 src → RGBA dst. NULL rects = full surface, NULL params = defaults. */
     int mr = -1;

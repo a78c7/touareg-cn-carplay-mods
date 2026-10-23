@@ -27,7 +27,7 @@ arm-linux-gnueabi-ld --hash-style=both -o out/clusterd $EXE_START -L$L -L$UL out
 # 3) cl_render (fifthBro cluster.c, CC BY-NC-SA 4.0) - screen_blit path, NvMedia decoder loaded with dlopen
 #    libscreen/libEGL/libGLESv2/libz must resolve to the head unit's own libraries at run time: link against
 #    stub libraries with the same soname (do NOT use --unresolved-symbols=ignore-all, that crashes).
-clang $CF -DUSE_SCREEN_BLIT -Icl_render -include cl_render/glchar.h -w -c cl_render/cluster.c -o out/cluster.o
+clang $CF -DUSE_SCREEN_BLIT -DUSE_DASH -Icl_render -include cl_render/glchar.h -w -c cl_render/cluster.c -o out/cluster.o
 clang $CF -fvisibility=hidden -c cl_render/shim.c -o out/shim.o
 for lib in libscreen.so.1 libEGL.so.1 libGLESv2.so.2 libz.so.2; do
     [ -f out/$lib ] || { echo "need stub out/$lib (copy the real one from the head unit or build a stub with that soname)"; exit 1; }
