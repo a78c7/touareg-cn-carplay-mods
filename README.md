@@ -12,10 +12,10 @@
 
 **只适用于车机版本 `MH2p_CN_VWG36_P2878`**，其它版本脚本会自动退出，不改动任何东西。
 
-✅ 已在作者的 2023 款途锐（P2878）上验证：全屏、无线、HUD（箭头、距离、路名）、仪表 CarPlay 地图（无线/有线 CarPlay，高德、苹果地图、百度地图：出图、按 VIEW 切换、断开自动恢复、车机设置切夜间后仪表同步变深色）、仪表信息框（v16）。
-⚠️ **仪表地图模块（VW_HUD_3）的 U 盘安装流程尚未在未改装的车上完整实测**（作者车上是调试时手动装的，程序与本包相同）。另外只在 iOS 27 上测试过。**v17（可自定义信息框、行驶数据存储器各项、「改装设置」程序）刚发布，尚未在车上和 Windows/Mac 实机验证**，遇到问题可以先用 v16（GitHub 上提交 7e17fbd 的 Download ZIP）。遇到问题请按下面"排查日志"收集日志并提 Issue。
+✅ 已在 2023 款途锐（P2878）上验证：全屏、无线、HUD（箭头、距离、路名）、仪表 CarPlay 地图（无线/有线 CarPlay，高德、苹果地图、百度地图：出图、按 VIEW 切换、断开自动恢复、车机设置切夜间后仪表同步变深色）、仪表信息框（v16）。
+⚠️ **仪表地图模块（VW_HUD_3）的 U 盘安装流程尚未在未改装的车上完整实测**（验证用的车是调试时手动装的，程序与本包相同）。另外只在 iOS 27 上测试过。**v17（可自定义信息框、行驶数据存储器各项、「改装设置」程序）刚发布，尚未在车上和 Windows/Mac 实机验证**，遇到问题可以先用 v16（GitHub 上提交 7e17fbd 的 Download ZIP）。遇到问题请按下面"排查日志"收集日志并提 Issue。
 
-**装过作者旧版本（touareg-cn-carplay-fullscreen，已下线）的车主**：可以直接用本仓库的新 U 盘覆盖刷入，脚本会识别已装状态。卸载也可以用新 U 盘（包里自带原厂文件，见下面"原厂备份"）。
+**装过旧版本（touareg-cn-carplay-fullscreen，已下线）的车**：可以直接用本仓库的新 U 盘覆盖刷入，脚本会识别已装状态。卸载也可以用新 U 盘（包里自带原厂文件，见下面"原厂备份"）。
 
 ## 安装（5 步）
 
@@ -59,7 +59,7 @@
   - `dash.conf` 每次刷 U 盘都会覆盖车上的同名文件（`cl.conf` 不会被覆盖，那是车标位置的校准）。
 - **G 值**：加速度合成值（纵向 + 横向），加速时带 `+`、刹车时带 `-`，只转弯或匀速时不带符号；轻度平滑，比实际慢约 0.2～0.3 秒。要分开看可选"纵向G""横向G"。
 - 单位按公制（km/h、°C、L/100km）显示；当前消耗停车时自动变成 L/h。
-- 数据由 Java 插件（`VW_HUD_2_ClusterNav`）读车机自己的车辆状态和行车电脑接口，不连 OBD、不改仪表编码。功率/扭矩/加速度/转速/油温已在作者车上实测；车速、油门、刹车、方向盘、外温、续航和行车电脑数据走同一接口，**v17 尚未上车验证**。
+- 数据由 Java 插件（`VW_HUD_2_ClusterNav`）读车机自己的车辆状态和行车电脑接口，不连 OBD、不改仪表编码。功率/扭矩/加速度/转速/油温已在 2023 款途锐上实测；车速、油门、刹车、方向盘、外温、续航和行车电脑数据走同一接口，**v17 尚未上车验证**。
 
 ### 排查日志
 
@@ -127,7 +127,7 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 - **CarPlay turn-by-turn on the HUD**: arrow, distance, street name, lanes (`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`)
 - **CarPlay map on the instrument cluster**: the phone's cluster map (iPhone second video stream, "altScreen") replaces the stock navigation map in the middle of the cluster; it switches back to the stock map automatically when CarPlay disconnects; a translucent box on the left shows live **power, torque, G, rpm, engine oil and gearbox oil temperature** (`Mods/VW_HUD_3_CarPlayCluster`, needs both HUD folders)
 
-✅ Verified on the author's 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ The USB install of `VW_HUD_3` has not yet been tested end-to-end on an unmodified car (same binaries were installed by hand on the author's car); only tested on iOS 27. Upgrading from the author's earlier touareg-cn-carplay-fullscreen package: flash this drive over it; keep the old drive to uninstall full-screen CarPlay (its backup lives there). Logs may contain your phone name and street names — review before posting.
+✅ Verified on a 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ The USB install of `VW_HUD_3` has not yet been tested end-to-end on an unmodified car (the test car had the same binaries installed by hand); only tested on iOS 27. Upgrading from the earlier touareg-cn-carplay-fullscreen package: flash this drive over it; this package can also uninstall it (stock files in `USB/Stock/`). Logs may contain your phone name and street names — review before posting.
 
 **Install**: FAT32 drive ≤ 32 GB → copy everything inside `USB` to the root → double-click `改装设置（Windows）.exe` / `改装设置（Mac）.command` on the drive to choose install / uninstall / skip per mod and the info-box rows in a local web page (it also removes macOS `._*` files) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. Stock copies of the files changed by full-screen CarPlay are in `USB/Stock/`, so any copy of the package can uninstall.
 
