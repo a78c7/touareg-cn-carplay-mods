@@ -5,8 +5,8 @@
 > **v17 新增**
 > - **仪表信息框可自定义**：30 项行车数据任选，最多 10 项，**自己定显示顺序**；名称和大众行车电脑一致（当前消耗、续驶里程、自启动起 / 自上次加油起 / 累计的平均消耗、行驶里程、平均车速、行驶时间等），选得越多字号自动越小，不会挡住仪表上的挡位。
 > - **「改装设置」程序**：U 盘里双击就能打开（Windows / Mac 都有），在网页里勾选每个功能"安装 / 卸载 / 不处理"、点选信息框项目并**拖动排序**，带效果预览，点保存即可，不用改文件、不用敲命令。
-> - **自带原厂备份**：换了 U 盘也能卸载恢复原车。
-> - v17 尚未上车实测，遇到问题可退回 v16（见下方说明）。
+> - **全屏 CarPlay 改为在车上就地修改**：包里不再带任何大众文件，卸载也不依赖当初那个 U 盘。
+> - v17 尚未上车实测，遇到问题可以用「改装设置」把对应功能选为卸载再刷一次，并提 Issue。
 
 - **全屏 CarPlay**：去掉黑边，铺满整个中控屏（`Mods/VW_FullScreenCarPlay`）
 - **无线 CarPlay**：开启原厂未激活的无线 CarPlay（`Mods/AppleCarPlay`，LawPaul 作品）
@@ -20,14 +20,14 @@
 **只适用于车机版本 `MH2p_CN_VWG36_P2878`**，其它版本脚本会自动退出，不改动任何东西。
 
 ✅ 已在 2023 款途锐（P2878）上验证：全屏、无线、HUD（箭头、距离、路名）、仪表 CarPlay 地图（无线/有线 CarPlay，高德、苹果地图、百度地图：出图、按 VIEW 切换、断开自动恢复、车机设置切夜间后仪表同步变深色）、仪表信息框（v16）。
-⚠️ **仪表地图模块（VW_HUD_3）的 U 盘安装流程尚未在未改装的车上完整实测**（验证用的车是调试时手动装的，程序与本包相同）。另外只在 iOS 27 上测试过。**v17（可自定义信息框、行驶数据存储器各项、「改装设置」程序）刚发布，尚未在车上和 Windows/Mac 实机验证**，遇到问题可以先用 v16（GitHub 上提交 7e17fbd 的 Download ZIP）。遇到问题请按下面"排查日志"收集日志并提 Issue。
+⚠️ **仪表地图模块（VW_HUD_3）的 U 盘安装流程尚未在未改装的车上完整实测**（验证用的车是调试时手动装的，程序与本包相同）。另外只在 iOS 27 上测试过。**v17（可自定义信息框、行驶数据存储器各项、「改装设置」程序）刚发布，尚未在车上和 Windows/Mac 实机验证**，遇到问题请按下面"排查日志"收集日志并提 Issue。
 
-**装过旧版本（touareg-cn-carplay-fullscreen，已下线）的车**：可以直接用本仓库的新 U 盘覆盖刷入，脚本会识别已装状态。卸载也可以用新 U 盘（包里自带原厂文件，见下面"原厂备份"）。
+**装过旧版本（touareg-cn-carplay-fullscreen，已下线）的车**：可以直接用本仓库的新 U 盘覆盖刷入，脚本会识别已装状态。卸载也可以用新 U 盘（见下面"全屏 CarPlay 是怎么改的"）。
 
 ## 安装（5 步）
 
 1. **准备 U 盘**：找一个 32GB 以内的 U 盘，格式化为 **FAT32**（Windows：右键 U 盘 → 格式化；Mac：磁盘工具 → 抹掉 → MS-DOS (FAT)）。
-2. **复制文件**：点本页绿色 **Code → Download ZIP**，解压，把 `USB` 文件夹**里面的全部内容**（`Data`、`Meta`、`Logs`、`Mods`、`Stock` 和两个「改装设置」程序）复制到 U 盘根目录。
+2. **复制文件**：点本页绿色 **Code → Download ZIP**，解压，把 `USB` 文件夹**里面的全部内容**（`Data`、`Meta`、`Logs`、`Mods` 和两个「改装设置」程序）复制到 U 盘根目录。
 3. **选择功能**：双击 U 盘里的 **「改装设置（Windows）.exe」** 或 **「改装设置（Mac）.command」**，浏览器里会打开设置页面：每个功能选「安装 / 卸载 / 不处理」，仪表信息框勾选要显示的项目、拖动排序，点 **「保存到 U 盘」**。程序会自动处理依赖关系、检查 U 盘格式，并清掉 Mac 复制时产生的隐藏文件（不联网，只改这个 U 盘里的文件）。全部默认安装的话这一步可以跳过（Mac 用户仍建议运行一次，用来清理隐藏文件）。
    - Windows 如果提示"Windows 已保护你的电脑"：点"更多信息" → "仍要运行"。
    - Mac 第一次打开会提示"无法验证开发者"：打开 系统设置 → 隐私与安全性，在下面点"仍要打开"，再双击一次（macOS 14 及以前也可以右键 → 打开）。
@@ -74,9 +74,9 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 
 安装时原版文件会备份到 U 盘（各模块文件夹的 `Update/backup/` 或 `Update/Backup/`），建议保留这个 U 盘。平时不要把它插在车上，否则每次插入都会进入刷机。
 
-### 原厂备份
+### 全屏 CarPlay 是怎么改的
 
-`USB/Stock/` 里是本车机版本（P2878）被改过的原厂文件（全屏 CarPlay 改的界面文件 `viewhandler.zip`、`info.txt`）。卸载全屏 CarPlay 时优先用 U 盘里当初的备份，没有就用这里的原厂文件，所以**换了 U 盘、U 盘格式化过也能卸载**。其它被改的文件（CarPlay 进程配置、HMI 插件列表、功能授权）卸载时在车机上原地还原，不需要备份。
+包里不带大众的文件。刷机时，U 盘里的小程序 `vhpatch` 打开车机自己的界面文件 `skin3/viewhandler.zip`，先逐项核对是不是这个车机版本的原样（不是就什么都不改），再按补丁表 `fullscreen.patch` 改其中两个文件的 38 个字节；`info.txt` 里的 CarPlay 画面尺寸由 1152×592 改为 1673×748。改之前原文件会复制到 U 盘（`Mods/VW_FullScreenCarPlay/Update/backup/`）。卸载时优先用这个备份，没有就按同一张补丁表在车上改回去，所以**换了 U 盘、U 盘格式化过也能卸载**。其它被改的文件（CarPlay 进程配置、HMI 插件列表、功能授权）卸载时也是在车机上原地还原。
 
 ## 卸载（恢复原车）
 
@@ -102,7 +102,7 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 - `src/cluster-probe`：`cl_probe.so`，注入 CarPlay 进程，向 iPhone 声明仪表屏、接收并解密第二路视频
 - `src/clusterd`：仪表守护进程，有画面时启动显示、断开时恢复原车
 - `src/cl_render`：H.264 解码显示（基于 fifthBro 的 `cluster.c` 修改，CC BY-NC-SA 4.0）；`dash.c` 仪表信息框
-- `src/build.sh`：交叉编译脚本；`tools/configurator`：U 盘里的「改装设置」程序（Go，`sh build.sh 版本号` 生成 Windows/Mac 版）；`tools/`：调试工具（macOS 网卡驱动 axbridge、截屏等）
+- `src/vhpatch`：车上给 viewhandler.zip 打补丁 / 还原的小程序（`mkpatch.py` 用你自己的原厂和改装文件生成补丁表）；`src/build.sh`：交叉编译脚本；`tools/configurator`：U 盘里的「改装设置」程序（Go，`sh build.sh 版本号` 生成 Windows/Mac 版）；`tools/`：调试工具（macOS 网卡驱动 axbridge、截屏等）
 
 ## 致谢
 
@@ -120,7 +120,7 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 - `src/cl_render` 和 `dio_cluster.so`：fifthBro 作品及其修改版，**CC BY-NC-SA 4.0**。信息框字形 `src/cl_render/dash_font.h` 由 Noto Sans CJK SC 预渲染，**SIL OFL 1.1**（见 [LICENSES/NotoSansCJK_OFL.md](LICENSES/NotoSansCJK_OFL.md)）。
 - ModKit 及 LawPaul 的模块：**CC BY-NC-SA 4.0**。
 - 因包含禁止商用的部分，**整个 U 盘包仅供个人非商业使用**。
-- 本仓库不包含任何大众或苹果的原厂程序代码；`VW_FullScreenCarPlay/Update/viewhandler.zip` 为修改后的原厂界面配置文件，`USB/Stock/` 为对应的原厂文件（用于卸载恢复），仅供本车型车主自用。
+- 仓库和 U 盘包里不含大众或苹果的文件：全屏 CarPlay 只带补丁表（改哪几个字节），在车上就地修改本车已有的文件。
 
 ---
 
@@ -134,9 +134,9 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 - **CarPlay turn-by-turn on the HUD**: arrow, distance, street name, lanes (`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`)
 - **CarPlay map on the instrument cluster**: the phone's cluster map (iPhone second video stream, "altScreen") replaces the stock navigation map in the middle of the cluster; it switches back to the stock map automatically when CarPlay disconnects; a translucent box on the left shows live **power, torque, G, rpm, engine oil and gearbox oil temperature** (`Mods/VW_HUD_3_CarPlayCluster`, needs both HUD folders)
 
-✅ Verified on a 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ The USB install of `VW_HUD_3` has not yet been tested end-to-end on an unmodified car (the test car had the same binaries installed by hand); only tested on iOS 27. Upgrading from the earlier touareg-cn-carplay-fullscreen package: flash this drive over it; this package can also uninstall it (stock files in `USB/Stock/`). Logs may contain your phone name and street names — review before posting.
+✅ Verified on a 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ The USB install of `VW_HUD_3` has not yet been tested end-to-end on an unmodified car (the test car had the same binaries installed by hand); only tested on iOS 27. Upgrading from the earlier touareg-cn-carplay-fullscreen package: flash this drive over it; this package can also uninstall it. Logs may contain your phone name and street names — review before posting.
 
-**Install**: FAT32 drive ≤ 32 GB → copy everything inside `USB` to the root → double-click `改装设置（Windows）.exe` / `改装设置（Mac）.command` on the drive to choose install / uninstall / skip per mod and the info-box rows in a local web page (it also removes macOS `._*` files) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. Stock copies of the files changed by full-screen CarPlay are in `USB/Stock/`, so any copy of the package can uninstall.
+**Install**: FAT32 drive ≤ 32 GB → copy everything inside `USB` to the root → double-click `改装设置（Windows）.exe` / `改装设置（Mac）.command` on the drive to choose install / uninstall / skip per mod and the info-box rows in a local web page (it also removes macOS `._*` files) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. Full-screen CarPlay ships no VW file: `vhpatch` checks the car's own `skin3/viewhandler.zip` and changes 38 bytes listed in `fullscreen.patch` (reverted the same way on uninstall).
 
 **Cluster map**: put the cluster on its navigation map page (VIEW button); the phone's map appears 1–3 s after CarPlay connects, also right after boot. Remaining distance and arrival time are shown by the cluster itself (stock style). The car icon is placed under the cluster clock near the bottom: the phone is told the cluster is 1920x960 and only rows 230–869 are shown; per-app safe areas (AMap / Apple Maps / Baidu behave differently, AMap also shifts the car ~210 px toward the next turn, which is compensated from the route-guidance maneuver type) are switched automatically by app name. Settings: `/mnt/app/eso/bin/apps/cluster/cl.conf`. Side gauges can be hidden in the cluster settings.
 

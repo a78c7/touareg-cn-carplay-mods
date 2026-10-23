@@ -26,28 +26,27 @@ var web embed.FS
 var version = "dev"
 
 type volInfo struct {
-	FS        string `json:"fs"`        // e.g. FAT32, exFAT, NTFS, msdos, apfs
-	FAT       bool   `json:"fat"`       // usable by the head unit
-	IsRoot    bool   `json:"isRoot"`    // the package sits at the root of its drive
-	Mount     string `json:"mount"`     // drive / mount point
+	FS        string `json:"fs"`     // e.g. FAT32, exFAT, NTFS, msdos, apfs
+	FAT       bool   `json:"fat"`    // usable by the head unit
+	IsRoot    bool   `json:"isRoot"` // the package sits at the root of its drive
+	Mount     string `json:"mount"`  // drive / mount point
 	TotalGB   int    `json:"totalGB"`
 	Removable bool   `json:"removable"` // best effort
 }
 
 type stateResp struct {
-	Version      string            `json:"version"`
-	OS           string            `json:"os"`
-	Root         string            `json:"root"`
-	Vol          volInfo           `json:"vol"`
-	Features     []feature         `json:"features"`
-	States       map[string]string `json:"states"`
-	Catalogue    []item            `json:"catalogue"`
-	MaxRows      int               `json:"maxRows"`
-	Dash         dashConf          `json:"dash"`
-	DashFound    bool              `json:"dashFound"`
-	MacJunk      int               `json:"macJunk"`
-	FullBackup   string            `json:"fullBackup"` // where uninstalling full-screen CarPlay takes the originals from: usb / stock / none
-	Errors       []string          `json:"errors"`
+	Version   string            `json:"version"`
+	OS        string            `json:"os"`
+	Root      string            `json:"root"`
+	Vol       volInfo           `json:"vol"`
+	Features  []feature         `json:"features"`
+	States    map[string]string `json:"states"`
+	Catalogue []item            `json:"catalogue"`
+	MaxRows   int               `json:"maxRows"`
+	Dash      dashConf          `json:"dash"`
+	DashFound bool              `json:"dashFound"`
+	MacJunk   int               `json:"macJunk"`
+	Errors    []string          `json:"errors"`
 }
 
 func findRoot() (string, error) {
@@ -86,24 +85,7 @@ func (p pkg) state() stateResp {
 	}
 	s.Dash, s.DashFound = p.readDash()
 	s.MacJunk = len(p.macJunk())
-	fs := p.modPath("VW_FullScreenCarPlay")
-	switch {
-	case fileSize(filepath.Join(fs, "Update", "backup", "viewhandler.zip")) == 14662791:
-		s.FullBackup = "usb"
-	case fileSize(p.path("Stock", "MH2p_CN_VWG36_P2878", "skin3", "viewhandler.zip")) == 14662791:
-		s.FullBackup = "stock"
-	default:
-		s.FullBackup = "none"
-	}
 	return s
-}
-
-func fileSize(p string) int64 {
-	st, err := os.Stat(p)
-	if err != nil {
-		return -1
-	}
-	return st.Size()
 }
 
 func openBrowser(url string) error {
@@ -229,4 +211,3 @@ func main() {
 		}
 	}
 }
-

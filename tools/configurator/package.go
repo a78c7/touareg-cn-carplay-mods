@@ -93,7 +93,9 @@ func defaultDash() dashConf {
 
 type pkg struct{ Root string }
 
-func (p pkg) path(parts ...string) string { return filepath.Join(append([]string{p.Root}, parts...)...) }
+func (p pkg) path(parts ...string) string {
+	return filepath.Join(append([]string{p.Root}, parts...)...)
+}
 
 func isDir(p string) bool  { st, err := os.Stat(p); return err == nil && st.IsDir() }
 func isFile(p string) bool { st, err := os.Stat(p); return err == nil && !st.IsDir() }
@@ -167,7 +169,9 @@ func lookupItem(name string) (string, bool) {
 	return "", false
 }
 
-func (p pkg) dashPath() string { return filepath.Join(p.modPath("VW_HUD_3_CarPlayCluster"), "Update", "dash.conf") }
+func (p pkg) dashPath() string {
+	return filepath.Join(p.modPath("VW_HUD_3_CarPlayCluster"), "Update", "dash.conf")
+}
 
 func confKV(line string) (string, string, bool) {
 	t := strings.TrimSpace(line)

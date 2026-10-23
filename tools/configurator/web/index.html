@@ -211,11 +211,7 @@ function setFeat(id, v){
 function featNotes(id){
   const out = [];
   if (notes[id]) out.push(notes[id]);
-  if (id === 'fullscreen' && sel.fullscreen === 'uninstall') {
-    if (S.fullBackup === 'usb') out.push(['info', '会用这个 U 盘当初安装时留下的备份恢复原厂界面。']);
-    else if (S.fullBackup === 'stock') out.push(['info', '这个 U 盘里没有当初的备份，会用改装包里自带的原厂文件（Stock 文件夹）恢复。']);
-    else out.push(['bad', '找不到原厂文件（U 盘备份和 Stock 文件夹都没有），卸载会跳过这一项。请用完整的新版改装包。']);
-  }
+  if (id === 'fullscreen' && sel.fullscreen === 'uninstall') out.push(['info', '在车上把改过的地方按补丁表改回原样，不需要当初那个 U 盘里的备份。']);
   if (id === 'carplay' && sel.carplay === 'uninstall' && sel.aa !== 'uninstall') out.push(['warn', '无线 CarPlay 和 Android Auto 共用一部分授权，只卸载 CarPlay 可能让 Android Auto 也失效。如果卸载后 Android Auto 不能用，再刷一次只把 Android Auto 选为安装。']);
   if (id === 'aa' && sel.aa === 'uninstall' && sel.carplay === 'skip') out.push(['warn', 'Android Auto 和无线 CarPlay 共用一部分授权，只卸载 Android Auto 可能影响 CarPlay；建议把无线 CarPlay 同时选为安装（会重新写入授权）。']);
   if (S.states[id] === 'missing') out.push(['warn', 'U 盘里没有这个功能的文件夹，只能选「不处理」。']);

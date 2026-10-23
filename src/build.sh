@@ -4,7 +4,8 @@
 #   - clang (tested 18), arm-linux-gnueabi binutils (ld)
 #   - QNX 6.5/6.6 ARMv7 sysroot: https://github.com/luka-dev/qnx65-armv7-toolchain  (sdp/target/qnx6)
 #   - QNX screen headers (screen/screen.h) for cl_render, e.g. from the same toolchain repo
-# usage: QNX_TARGET=/path/to/sdp/target/qnx6 SCREEN_INC=/path/with/screen_h ./build.sh
+#   - zlib source (https://github.com/madler/zlib, tested 1.3.1) for vhpatch: ZLIB_SRC=/path/to/zlib
+# usage: QNX_TARGET=/path/to/sdp/target/qnx6 SCREEN_INC=/path/with/screen_h ZLIB_SRC=/path/to/zlib ./build.sh
 # QNX 6.6 libc has no __aeabi_memcpy/memclr/ul2d (clang emits them) -> aeabi_shim.h provides them.
 # Link with --hash-style=both (the QNX loader needs DT_HASH); lld-linked .so made dlsym(RTLD_NEXT) fail.
 set -e
@@ -34,4 +35,13 @@ for lib in libscreen.so.1 libEGL.so.1 libGLESv2.so.2 libz.so.2; do
 done
 arm-linux-gnueabi-ld --hash-style=both -o out/cl_render $EXE_START -L$L -L$UL out/cluster.o out/shim.o \
     out/libscreen.so.1 out/libEGL.so.1 out/libz.so.2 out/libGLESv2.so.2 -lm -lc $EXE_END
-echo "built: out/cl_probe.so out/clusterd out/cl_render"
+
+# 4) vhpatch - applies / reverts the full-screen CarPlay byte patch on the car's own viewhandler.zip (zlib built in)
+if [ -n "$ZLIB_SRC" ]; then
+    for f in adler32 crc32 deflate inflate inffast inftrees trees zutil; do
+        clang $CF -w -I"$ZLIB_SRC" -c "$ZLIB_SRC/$f.c" -o out/z_$f.o
+    done
+    clang $CF -I"$ZLIB_SRC" -c vhpatch/vhpatch.c -o out/vhpatch.o
+    arm-linux-gnueabi-ld --hash-style=both -o out/vhpatch $EXE_START -L$L -L$UL out/vhpatch.o out/z_*.o -lc $EXE_END
+fi
+echo "built: out/cl_probe.so out/clusterd out/cl_render ${ZLIB_SRC:+out/vhpatch}"

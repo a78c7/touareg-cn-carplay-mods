@@ -1,59 +1,60 @@
 #!/bin/ksh
-# VW Touareg CN (MH2p_CN_VWG36_P2878) full-screen CarPlay, skin3 only.
-# Needs the patched viewhandler.zip + info.txt next to this script.
-# Originals are backed up to the USB drive; uninstall.sh restores them.
-T=/mnt/app/eso/hmi/lsd/Resources/skin3
-ORIG_SIZE=14662791
-size_of() { ls -l "$1" 2>/dev/null | awk '{print $5}'; }
-
+# VW Touareg CN (MH2p_CN_VWG36_P2878) full-screen CarPlay, skin3 only - patched on the car.
+# No VW file is shipped: vhpatch changes 38 bytes (listed in fullscreen.patch) in the unit's own
+# skin3/viewhandler.zip after checking that every entry is exactly the stock version, and info.txt gets its
+# CarPlay canvas size changed (1152x592 -> 1673x748). The originals are copied to this USB drive (backup/) first;
+# uninstall.sh reverts the same patch, so it works from any copy of the package even without that backup.
 if [ "$RELEASE_VERSION" != "MH2p_CN_VWG36_P2878" ]; then
     echo "abort: built for MH2p_CN_VWG36_P2878, this unit is $RELEASE_VERSION"; exit 0
 fi
 touch $MOD_PATH/test.txt
 if [[ ! -e $MOD_PATH/test.txt ]]; then echo "abort: USB is write protected"; exit 0; fi
 rm -f $MOD_PATH/test.txt
-
-NEW_SIZE=$(size_of $MOD_PATH/viewhandler.zip)
-if [ -z "$NEW_SIZE" ] || [ "$NEW_SIZE" = "$ORIG_SIZE" ]; then
-    echo "abort: patched viewhandler.zip missing on USB (or it is the unpatched original)"; exit 0
-fi
-if ! grep -q "Carplay.Canvas_Dimension.width=1673" $MOD_PATH/info.txt 2>/dev/null; then
-    echo "abort: patched info.txt missing on USB"; exit 0
-fi
-
+[[ ! -f $MOD_PATH/vhpatch || ! -f $MOD_PATH/fullscreen.patch ]] && { echo "abort: vhpatch / fullscreen.patch missing on USB"; exit 0; }
 [[ ! -e "/mnt/app/eso" ]] && mount -t qnx6 /dev/mnanda0t177.1 /mnt/app
+mount -uw /mnt/app
+. $MOD_PATH/common.sh
+vh_setup || { echo "abort: vhpatch cannot run on this unit, nothing touched"; exit 0; }
 mkdir -p $MOD_PATH/backup
 
 # ---- viewhandler.zip ----
-CUR=$(size_of $T/viewhandler.zip)
-echo "current skin3 viewhandler.zip size: $CUR"
-if [ "$CUR" = "$NEW_SIZE" ]; then
-    echo "viewhandler.zip already patched"
-elif [ "$CUR" = "$ORIG_SIZE" ]; then
-    [[ ! -e $MOD_PATH/backup/viewhandler.zip ]] && cp -v $T/viewhandler.zip $MOD_PATH/backup/viewhandler.zip
-    if [ "$(size_of $MOD_PATH/backup/viewhandler.zip)" != "$ORIG_SIZE" ]; then echo "abort: no valid original backup on USB"; exit 0; fi
-    mount -uw /mnt/app
-    cp -v $MOD_PATH/viewhandler.zip $T/viewhandler.zip
+ST=$(vh_state $VH)
+echo "skin3 viewhandler.zip: $ST"
+case "$ST" in
+patched)
+    echo "viewhandler.zip already patched" ;;
+stock)
+    [ "$(vh_state $MOD_PATH/backup/viewhandler.zip)" = "stock" ] || cp -v $VH $MOD_PATH/backup/viewhandler.zip
+    if [ "$(vh_state $MOD_PATH/backup/viewhandler.zip)" != "stock" ]; then echo "abort: backup to USB failed, nothing touched"; vh_cleanup; exit 0; fi
+    rm -f $MOD_PATH/backup/viewhandler.new.zip
+    $VP apply $VH $P $MOD_PATH/backup/viewhandler.new.zip
+    if [ "$(vh_state $MOD_PATH/backup/viewhandler.new.zip)" != "patched" ]; then echo "abort: patching failed, nothing touched"; vh_cleanup; exit 0; fi
+    cp $MOD_PATH/backup/viewhandler.new.zip $VH
     sync
-    if [ "$(size_of $T/viewhandler.zip)" != "$NEW_SIZE" ]; then
-        echo "copy failed, restoring original"; cp -v $MOD_PATH/backup/viewhandler.zip $T/viewhandler.zip; sync; exit 0
+    if [ "$(vh_state $VH)" != "patched" ]; then
+        echo "copy failed, restoring original"; cp -v $MOD_PATH/backup/viewhandler.zip $VH; sync; vh_cleanup; exit 0
     fi
-    echo "viewhandler.zip patched, size $(size_of $T/viewhandler.zip)"
-else
-    echo "abort: unexpected viewhandler.zip size (not stock, not this patch). Run uninstall first. Nothing touched."; exit 0
-fi
+    rm -f $MOD_PATH/backup/viewhandler.new.zip
+    echo "viewhandler.zip patched" ;;
+*)
+    echo "abort: viewhandler.zip is neither stock nor patched by this mod. Nothing touched."; vh_cleanup; exit 0 ;;
+esac
+vh_cleanup
 
-# ---- info.txt ----
-echo "current skin3 info.txt CarPlay canvas:"; grep Carplay $T/info.txt
-if grep -q "Carplay.Canvas_Dimension.width=1673" $T/info.txt; then
+# ---- info.txt (CRLF line ends: no $ anchors) ----
+echo "skin3 info.txt CarPlay canvas:"; grep Carplay $INFO
+if grep -q "Carplay.Canvas_Dimension.width=1673" $INFO; then
     echo "info.txt already patched"
-elif grep -q "Carplay.Canvas_Dimension.width=1152" $T/info.txt; then
-    [[ ! -e $MOD_PATH/backup/info.txt ]] && cp -v $T/info.txt $MOD_PATH/backup/info.txt
-    if ! grep -q "Carplay.Canvas_Dimension.width=1152" $MOD_PATH/backup/info.txt; then echo "abort: info.txt backup failed"; exit 0; fi
-    mount -uw /mnt/app
-    cp -v $MOD_PATH/info.txt $T/info.txt
-    sync
-    echo "new info.txt CarPlay canvas:"; grep Carplay $T/info.txt
+elif grep -q "Carplay.Canvas_Dimension.width=1152" $INFO; then
+    [[ ! -e $MOD_PATH/backup/info.txt ]] && cp -v $INFO $MOD_PATH/backup/info.txt
+    sed -e 's/^Layout.Carplay.Canvas_Dimension.width=1152/Layout.Carplay.Canvas_Dimension.width=1673/' \
+        -e 's/^Layout.Carplay.Canvas_Dimension.height=592/Layout.Carplay.Canvas_Dimension.height=748/' $INFO > /tmp/info_new.txt
+    if grep -q "width=1673" /tmp/info_new.txt && grep -q "height=748" /tmp/info_new.txt && [ "$(wc -l < /tmp/info_new.txt)" = "$(wc -l < $INFO)" ]; then
+        cp -v /tmp/info_new.txt $INFO; sync
+        echo "new info.txt CarPlay canvas:"; grep Carplay $INFO
+    else
+        echo "info.txt edit check failed, not touched"
+    fi
 else
     echo "abort: unexpected info.txt, not touching it"
 fi
