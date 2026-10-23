@@ -73,6 +73,11 @@ ol.order li.drag{opacity:.4} ol.order li.over{border-color:var(--acc);box-shadow
 .btn:hover{border-color:#b9c0cc;color:var(--ink)}
 .preview-wrap{margin-top:12px;border-radius:12px;padding:16px;background:linear-gradient(135deg,#3d4b45 0%,#2f3a36 45%,#46534d 100%);overflow:auto}
 .pv-title{font-size:12px;color:#c9d1cc;margin:0 0 8px}
+.pv-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.sides{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:0 0 10px}
+.sides button{border:0;background:#fff;padding:7px 16px;font:inherit;font-size:14px;color:var(--sub);cursor:pointer;border-left:1px solid var(--line)}
+.sides button:first-child{border-left:0}
+.sides button.on{background:var(--acc);color:#fff}
 .pv{display:inline-grid;grid-template-columns:auto auto auto;column-gap:14px;border-radius:16px;color:#fff;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .pv .l{color:#a5a5a5;font-weight:500;align-self:center;white-space:nowrap}
 .pv .l2{display:flex;flex-direction:column;justify-content:center;line-height:1.05;align-self:center}
@@ -114,10 +119,11 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 
   <section class="card dash" id="dash">
     <h2><span class="num">2</span>仪表信息框</h2>
-    <p class="hint">连着 CarPlay、仪表显示地图时，地图左侧的半透明小框。点左边的项目加入，右边拖动排序，最多 <span id="maxrows">10</span> 项。</p>
+    <p class="hint">连着 CarPlay、仪表显示地图时，叠在地图上的半透明小框。左右各可以放一个框（左边框在挡位上方，右边框在车速上方），分别选择项目、拖动排序，每个最多 <span id="maxrows">10</span> 项。</p>
     <div class="msg info dash-off-msg">要显示信息框，先在上面把「仪表地图 + 信息框」选为「安装」。</div>
     <div class="dash-body">
-      <label class="switch"><input type="checkbox" id="show"> 显示信息框</label>
+      <div class="sides" id="sides"><button data-side="l" class="on">左边框</button><button data-side="r">右边框</button></div>
+      <label class="switch"><input type="checkbox" id="show"> <span id="showlab">显示左边框</span></label>
       <div class="grid">
         <div>
           <div id="cat"></div>
@@ -137,10 +143,10 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
       </div>
       <div class="preview-wrap">
         <div class="pv-title">效果示意（数字是举例；车上用的字体和位置以实车为准）</div>
-        <div class="pv" id="pv"></div>
+        <div class="pv-row"><div class="pv" id="pv"></div><div class="pv" id="pv2"></div></div>
       </div>
       <details>
-        <summary>高级：位置、透明度、油箱容积</summary>
+        <summary>高级：左边框位置、透明度、油箱容积</summary>
         <div class="adv">
           <label>左边距 x（仪表画面像素）<input type="number" id="x" min="0" max="1500"></label>
           <label>上边距 y（默认 172，刚好在导航条和挡位框之间）<input type="number" id="y" min="0" max="600"></label>
@@ -177,7 +183,9 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 <script>
 const T = new URLSearchParams(location.search).get('t') || '';
 const $ = id => document.getElementById(id);
-let S = null, sel = {}, dash = null, notes = {};
+let S = null, sel = {}, dash = null, notes = {}, side = 'l';
+const curItems = () => side === 'l' ? dash.items : dash.r_items;
+const setCurItems = v => { if (side === 'l') dash.items = v; else dash.r_items = v; };
 const NAMES = {install:'安装', uninstall:'卸载', skip:'不处理'};
 const NOW = {install:'U 盘里现在：安装', uninstall:'U 盘里现在：卸载', skip:'U 盘里现在：不处理', missing:'U 盘里没有这个功能的文件夹', mixed:'U 盘里现在：不完整'};
 
@@ -243,38 +251,44 @@ const SZ = [ // same metrics as dash.c / gen_dash_font.py
   {row:40, pad:12, val:32, lab:22, unit:18, top:15, bot:19, name:'中字'},
   {row:32, pad:10, val:26, lab:18, unit:15, top:13, bot:15, name:'小字'}];
 
+function pvBox(pv, show, list, sd){
+  const n = list.length, sc = SZ[sizeClass(Math.max(dash.show ? dash.items.length : 0, dash.r_show ? dash.r_items.length : 0))];
+  pv.style.outline = sd === side ? '2px solid rgba(158,193,251,.8)' : 'none';
+  if (!show || !n) { pv.style.cssText += ';padding:12px 16px;background:rgba(16,18,22,.5);grid-auto-rows:auto'; pv.innerHTML = `<div style="grid-column:1/-1;color:#ccc;font-size:13px">${sd === 'l' ? '左边框' : '右边框'}${show ? '（没有选项目）' : '：不显示'}</div>`; return; }
+  pv.style.cssText = `padding:${sc.pad}px 18px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});grid-auto-rows:${sc.row}px;outline:${sd === side ? '2px solid rgba(158,193,251,.8)' : 'none'}`;
+  pv.innerHTML = list.map(k => {
+    const i = item(k);
+    const lab = i.label.includes('|') ? `<div class="l2"><span class="m" style="font-size:${sc.top}px">${esc(i.label.split('|')[0])}</span><span class="l" style="font-size:${sc.bot}px">${esc(i.label.split('|')[1])}</span></div>` : `<div class="l" style="font-size:${sc.lab}px">${esc(i.label)}</div>`;
+    let val = i.sample;
+    if (k === 'fuel' && !dash.tank_l) val = '46';
+    const unit = k === 'fuel' && !dash.tank_l ? '%' : i.unit;
+    return `${lab}<div class="v" style="font-size:${sc.val}px">${esc(val)}</div><div class="u" style="font-size:${sc.unit}px">${esc(unit)}</div>`;
+  }).join('');
+}
+
 function renderDash(){
   const on = sel.cluster === 'install';
   $('dash').classList.toggle('off', !on);
-  $('show').checked = dash.show;
-  const n = dash.items.length, full = n >= S.maxRows;
+  const items = curItems(), shown = side === 'l' ? dash.show : dash.r_show;
+  $('show').checked = shown;
+  $('showlab').textContent = side === 'l' ? '显示左边框' : '显示右边框';
+  document.querySelectorAll('#sides button').forEach(b => { b.classList.toggle('on', b.dataset.side === side); b.textContent = (b.dataset.side === 'l' ? '左边框' : '右边框') + ((b.dataset.side === 'l' ? dash.show : dash.r_show) ? ` · ${(b.dataset.side === 'l' ? dash.items : dash.r_items).length} 项` : ' · 不显示'); });
+  const n = items.length, full = n >= S.maxRows;
   const groups = [];
   S.catalogue.forEach(i => { let g = groups.find(x => x.name === i.group); if (!g) groups.push(g = {name: i.group, items: []}); g.items.push(i); });
   $('cat').innerHTML = groups.map(g => `<div class="grp"><div class="gt">${esc(g.name)}${['自启动起','自上次加油起','累计'].includes(g.name) ? '（行驶数据存储器）' : ''}</div><div class="chips">${g.items.map(i => {
-    const ix = dash.items.indexOf(i.key);
+    const ix = items.indexOf(i.key);
     const lab = i.label.includes('|') ? i.label.split('|')[1] : i.label;
     return `<button class="chip${ix >= 0 ? ' sel' : ''}" data-k="${i.key}" title="${esc(i.note || '')}" ${ix < 0 && full ? 'disabled' : ''}>${ix >= 0 ? `<span class="ix">${ix + 1}</span>` : ''}${esc(lab)}</button>`;
   }).join('')}</div></div>`).join('');
   const sc = SZ[sizeClass(n)];
   $('count').innerHTML = n ? `<b>${n}</b> / ${S.maxRows} 项 · ${sc.name}${n >= 9 ? '（偏小，建议不超过 8 项）' : ''}` : `0 / ${S.maxRows} 项`;
-  $('order').innerHTML = n ? dash.items.map((k, ix) => {
+  $('order').innerHTML = n ? items.map((k, ix) => {
     const i = item(k);
     return `<li draggable="true" data-ix="${ix}"><span class="grip" title="拖动排序">⠿</span><span class="oi">${ix + 1}</span><span class="oname">${esc(plain(i.label))}${i.unit ? ` <span style="color:var(--mute);font-size:12px">${esc(i.unit)}</span>` : ''}</span><button class="ib" data-up="${ix}" title="上移" ${ix === 0 ? 'disabled' : ''}>↑</button><button class="ib" data-down="${ix}" title="下移" ${ix === n - 1 ? 'disabled' : ''}>↓</button><button class="ib" data-del="${ix}" title="去掉">✕</button></li>`;
   }).join('') : `<li class="empty" style="border:0">还没有选项目，点左边的项目加入。</li>`;
-  // preview
-  const pv = $('pv');
-  if (!dash.show || !n) { pv.style.cssText = 'padding:12px 16px;background:rgba(16,18,22,.5)'; pv.innerHTML = `<div style="grid-column:1/-1;color:#ccc;font-size:13px">${dash.show ? '（没有选项目）' : '（信息框不显示）'}</div>`; }
-  else {
-    pv.style.cssText = `padding:${sc.pad}px 18px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});grid-auto-rows:${sc.row}px`;
-    pv.innerHTML = dash.items.map(k => {
-      const i = item(k);
-      const lab = i.label.includes('|') ? `<div class="l2"><span class="m" style="font-size:${sc.top}px">${esc(i.label.split('|')[0])}</span><span class="l" style="font-size:${sc.bot}px">${esc(i.label.split('|')[1])}</span></div>` : `<div class="l" style="font-size:${sc.lab}px">${esc(i.label)}</div>`;
-      let val = i.sample;
-      if (k === 'fuel' && !dash.tank_l) val = '46';
-      const unit = k === 'fuel' && !dash.tank_l ? '%' : i.unit;
-      return `${lab}<div class="v" style="font-size:${sc.val}px">${esc(val)}</div><div class="u" style="font-size:${sc.unit}px">${esc(unit)}</div>`;
-    }).join('');
-  }
+  // preview: both boxes (left, right)
+  pvBox($('pv'), dash.show, dash.items, 'l'); pvBox($('pv2'), dash.r_show, dash.r_items, 'r');
   $('x').value = dash.x; $('y').value = dash.y; $('alpha').value = dash.alpha; $('alphav').textContent = dash.alpha; $('tank').value = dash.tank_l; $('latflip').checked = !!dash.lat_flip;
 }
 
@@ -285,9 +299,10 @@ function renderSummary(){
   if (by.install.length) lines.push(`<div>安装 / 升级：<b>${esc(by.install.join('、'))}</b></div>`);
   if (by.uninstall.length) lines.push(`<div>卸载（恢复原车）：<b>${esc(by.uninstall.join('、'))}</b></div>`);
   if (by.skip.length) lines.push(`<div>不处理：${esc(by.skip.join('、'))}</div>`);
-  if (sel.cluster === 'install') lines.push(`<div>信息框：${dash.show ? (dash.items.length ? esc(dash.items.map(k => plain(item(k).label)).join('、')) : '<span style="color:var(--bad)">还没有选项目</span>') : '不显示'}</div>`);
+  const lst = (show, l) => show ? (l.length ? esc(l.map(k => plain(item(k).label)).join('、')) : '<span style="color:var(--bad)">还没有选项目</span>') : '不显示';
+  if (sel.cluster === 'install') { lines.push(`<div>左边信息框：${lst(dash.show, dash.items)}</div>`); lines.push(`<div>右边信息框：${lst(dash.r_show, dash.r_items)}</div>`); }
   $('summary').innerHTML = lines.join('');
-  $('save').disabled = !!(S.errors && S.errors.length) || (sel.cluster === 'install' && dash.show && !dash.items.length);
+  $('save').disabled = !!(S.errors && S.errors.length) || (sel.cluster === 'install' && ((dash.show && !dash.items.length) || (dash.r_show && !dash.r_items.length)));
 }
 
 function renderUsb(){
@@ -311,13 +326,15 @@ document.addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || b.disabled) return;
   if (b.dataset.f) return setFeat(b.dataset.f, b.dataset.v);
-  if (b.dataset.k) { const k = b.dataset.k, ix = dash.items.indexOf(k); if (ix >= 0) dash.items.splice(ix, 1); else if (dash.items.length < S.maxRows) dash.items.push(k); renderDash(); renderSummary(); return; }
-  if (b.dataset.up !== undefined) { const i = +b.dataset.up; [dash.items[i - 1], dash.items[i]] = [dash.items[i], dash.items[i - 1]]; renderDash(); renderSummary(); return; }
-  if (b.dataset.down !== undefined) { const i = +b.dataset.down; [dash.items[i + 1], dash.items[i]] = [dash.items[i], dash.items[i + 1]]; renderDash(); renderSummary(); return; }
-  if (b.dataset.del !== undefined) { dash.items.splice(+b.dataset.del, 1); renderDash(); renderSummary(); return; }
-  if (b.dataset.preset !== undefined) { dash.items = b.dataset.preset ? b.dataset.preset.split(',') : []; renderDash(); renderSummary(); return; }
+  if (b.dataset.side) { side = b.dataset.side; renderDash(); return; }
+  const L = dash && curItems();
+  if (b.dataset.k) { const k = b.dataset.k, ix = L.indexOf(k); if (ix >= 0) L.splice(ix, 1); else if (L.length < S.maxRows) { L.push(k); if (side === 'r' && L.length === 1) dash.r_show = true; } renderDash(); renderSummary(); return; }
+  if (b.dataset.up !== undefined) { const i = +b.dataset.up; [L[i - 1], L[i]] = [L[i], L[i - 1]]; renderDash(); renderSummary(); return; }
+  if (b.dataset.down !== undefined) { const i = +b.dataset.down; [L[i + 1], L[i]] = [L[i], L[i + 1]]; renderDash(); renderSummary(); return; }
+  if (b.dataset.del !== undefined) { L.splice(+b.dataset.del, 1); renderDash(); renderSummary(); return; }
+  if (b.dataset.preset !== undefined) { setCurItems(b.dataset.preset ? b.dataset.preset.split(',') : []); if (side === 'r' && curItems().length) dash.r_show = true; renderDash(); renderSummary(); return; }
 });
-$('show').addEventListener('change', e => { dash.show = e.target.checked; renderDash(); renderSummary(); });
+$('show').addEventListener('change', e => { if (side === 'l') dash.show = e.target.checked; else dash.r_show = e.target.checked; renderDash(); renderSummary(); });
 const num = (id, key, lo, hi) => $(id).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dash[key] = Math.max(lo, Math.min(hi, v)); if (id === 'alpha') { $('alphav').textContent = dash.alpha; } renderDashPreviewOnly(); } });
 function renderDashPreviewOnly(){ const a = document.activeElement && document.activeElement.id; renderDash(); if (a && $(a)) $(a).focus(); }
 num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); num('tank', 'tank_l', 0, 200);
@@ -328,12 +345,12 @@ let dragIx = -1;
 $('order').addEventListener('dragstart', e => { const li = e.target.closest('li'); if (!li) return; dragIx = +li.dataset.ix; li.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragIx)); });
 $('order').addEventListener('dragend', e => { dragIx = -1; document.querySelectorAll('#order li').forEach(l => l.classList.remove('drag', 'over')); });
 $('order').addEventListener('dragover', e => { const li = e.target.closest('li[data-ix]'); if (!li || dragIx < 0) return; e.preventDefault(); document.querySelectorAll('#order li').forEach(l => l.classList.toggle('over', l === li)); });
-$('order').addEventListener('drop', e => { const li = e.target.closest('li[data-ix]'); if (!li || dragIx < 0) return; e.preventDefault(); const to = +li.dataset.ix; const [m] = dash.items.splice(dragIx, 1); dash.items.splice(to, 0, m); dragIx = -1; renderDash(); renderSummary(); });
+$('order').addEventListener('drop', e => { const li = e.target.closest('li[data-ix]'); if (!li || dragIx < 0) return; e.preventDefault(); const to = +li.dataset.ix; const L = curItems(); const [m] = L.splice(dragIx, 1); L.splice(to, 0, m); dragIx = -1; renderDash(); renderSummary(); });
 
 $('save').addEventListener('click', async () => {
   const btn = $('save'); btn.disabled = true; btn.textContent = '正在保存…';
   try {
-    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip}});
+    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip}});
     if (!r.ok) { $('result').innerHTML = `<div class="msg bad">没有保存：${esc(r.error)}</div>`; return; }
     const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip';
     $('result').innerHTML = `<div class="msg ok"><b>已保存。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>
@@ -360,7 +377,7 @@ document.addEventListener('click', async e => { if (e.target.id === 'quit') { aw
   S.features.forEach(f => { const s = S.states[f.id]; sel[f.id] = s === 'missing' ? 'skip' : (s === 'mixed' ? 'install' : s); });
   if (sel.cluster === 'install' && sel.hud !== 'install') sel.hud = 'install';
   if (sel.hud === 'uninstall' && sel.cluster !== 'uninstall') sel.cluster = 'uninstall';
-  dash = Object.assign({}, S.dash, {items: (S.dash.items || []).slice()});
+  dash = Object.assign({}, S.dash, {items: (S.dash.items || []).slice(), r_items: (S.dash.r_items || []).slice(), r_show: !!S.dash.r_show});
   renderStatus(); renderAll();
 })();
 </script>

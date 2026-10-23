@@ -48,7 +48,7 @@ typedef struct {
     int right;     /* v18: x of the box's right edge (0 = width from the content) */
 } dash_conf_t;
 
-static dash_conf_t g_dash_conf = { 1, 40, 172, 200, 90, 5000, 0, 348, -1, 0 };
+static dash_conf_t g_dash_conf = { 1, 5, 164, 200, 90, 5000, 0, 348, -1, 300 };
 
 /* ---- the item catalogue: config key, label (also accepted in items=), unit, sample for column width ---- */
 enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL, IT_BRAKE, IT_STEER, IT_GEAR,
@@ -114,12 +114,48 @@ typedef struct {
 static const dash_glyph *L_val, *L_lab, *L_unit;
 static int L_nval, L_nlab, L_nunit, L_row_h, L_base_off, L_pad_y;
 static int g_dash_w = 300, g_dash_h = 100, L_lab_x, L_val_r, L_unit_x;
+static int L_sz, g_dash_min_sz = -1;   /* v19: size used by dash_layout; both boxes use at least g_dash_min_sz */
 
 static char      g_dash_line[1024];
 static int       g_dash_have;
 static uint64_t  g_dash_last_new_ms;
 static long      g_dash_last_n = -1;
-static uint32_t  g_dash_px[DASH_MAX_W * DASH_MAX_H];
+static uint32_t  g_dash_pxbuf[2][DASH_MAX_W * DASH_MAX_H];
+static uint32_t *g_dash_px = g_dash_pxbuf[0];
+
+/* v19: two boxes, 0 = left (keys as before), 1 = right (keys with an "r_" prefix in dash.conf). Each has its own
+ * conf / rows / layout; the functions below work on "the current box" through the globals above, and dash_use()
+ * swaps a box in. Shared by both: the data line, tank_l, lat_flip, stale time. */
+typedef struct {
+    dash_conf_t conf; int rows[DASH_MAX_ROWS], nrows;
+    const dash_glyph *val, *lab, *unit; int nval, nlab, nunit, row_h, base_off, pad_y, w, h, lab_x, val_r, unit_x;
+} dash_box_t;
+static dash_box_t g_box[2];
+static int g_box_cur, g_box_init;
+static void dash_save(dash_box_t *b) {
+    b->conf = g_dash_conf; memcpy(b->rows, g_rows, sizeof g_rows); b->nrows = g_nrows;
+    b->val = L_val; b->lab = L_lab; b->unit = L_unit; b->nval = L_nval; b->nlab = L_nlab; b->nunit = L_nunit;
+    b->row_h = L_row_h; b->base_off = L_base_off; b->pad_y = L_pad_y; b->w = g_dash_w; b->h = g_dash_h;
+    b->lab_x = L_lab_x; b->val_r = L_val_r; b->unit_x = L_unit_x;
+}
+static void dash_load(const dash_box_t *b) {
+    g_dash_conf = b->conf; memcpy(g_rows, b->rows, sizeof g_rows); g_nrows = b->nrows;
+    L_val = b->val; L_lab = b->lab; L_unit = b->unit; L_nval = b->nval; L_nlab = b->nlab; L_nunit = b->nunit;
+    L_row_h = b->row_h; L_base_off = b->base_off; L_pad_y = b->pad_y; g_dash_w = b->w; g_dash_h = b->h;
+    L_lab_x = b->lab_x; L_val_r = b->val_r; L_unit_x = b->unit_x;
+}
+static void dash_use(int i) {
+    if (!g_box_init) {   /* box 1: mirror of box 0 at the speed panel's corner, off until r_show=1 */
+        g_box_init = 1;
+        dash_save(&g_box[0]); g_box[1] = g_box[0];
+        g_box[1].conf.enabled = 0; g_box[1].conf.x = 1620; g_box[1].conf.right = 1915; g_box[1].nrows = 0;
+    }
+    if (i == g_box_cur) return;
+    dash_save(&g_box[g_box_cur]);
+    dash_load(&g_box[i]);
+    g_dash_px = g_dash_pxbuf[i];
+    g_box_cur = i;
+}
 
 /* items=power,torque,... (keys or Chinese labels, spaces ignored) */
 static void dash_parse_items(const char *v) {
@@ -149,7 +185,7 @@ static void dash_parse_items(const char *v) {
     if (n > 0) g_nrows = n;
 }
 
-static void dash_read_conf_line(const char *l) {
+static void dash_read_conf_line1(const char *l) {
     int v;
     while (*l == ' ' || *l == '\t') l++;
     if (*l == '#') return;
@@ -163,6 +199,21 @@ static void dash_read_conf_line(const char *l) {
     else if (sscanf(l, "max_h = %d", &v) == 1) g_dash_conf.max_h = v;
     else if (sscanf(l, "compact = %d", &v) == 1) g_dash_conf.compact = v;
     else if (sscanf(l, "right = %d", &v) == 1) g_dash_conf.right = v;
+}
+
+static void dash_read_conf_line(const char *l) {
+    while (*l == ' ' || *l == '\t') l++;
+    if (!strncmp(l, "r_", 2)) {
+        int prev = g_box_cur; dash_use(1); dash_read_conf_line1(l + 2); dash_use(prev);
+        return;
+    }
+    int v, cur = g_box_cur;
+    dash_read_conf_line1(l);
+    /* settings that belong to the data, not to a box: copy to the other box too */
+    if (sscanf(l, "tank_l = %d", &v) == 1 || sscanf(l, "lat_flip = %d", &v) == 1 ||
+        sscanf(l, "alpha = %d", &v) == 1 || sscanf(l, "info_alpha = %d", &v) == 1) {   /* r_alpha after it still wins */
+        dash_use(1 - cur); dash_read_conf_line1(l); dash_use(cur);
+    }
 }
 
 static const dash_glyph *dash_find(const dash_glyph *set, int n, const char *key) {
@@ -223,6 +274,7 @@ static void dash_layout(void) {
     /* v18: right=<x> puts the box's right edge at x (e.g. on the corner of the cluster's gear panel): the box is
      * exactly right - x wide. Wider than needed -> the label/value gap grows; narrower -> tighter spacing, then
      * (font size auto only) a smaller font. */
+    if (g_dash_min_sz > sz) sz = g_dash_min_sz;
     int target = g_dash_conf.right > g_dash_conf.x ? g_dash_conf.right - g_dash_conf.x : 0;
     int lab_w, val_w, unit_w, pad = DASH_PAD_X, gap = DASH_GAP, ugap = 8;
     for (;;) {
@@ -236,7 +288,7 @@ static void dash_layout(void) {
         if (need <= target || !autosz || sz == 3) break;
         sz++;                                                            /* smaller font */
     }
-    L_row_h = ROW_H[sz]; L_pad_y = PAD_Y[sz]; L_base_off = BASE[sz];
+    L_row_h = ROW_H[sz]; L_pad_y = PAD_Y[sz]; L_base_off = BASE[sz]; L_sz = sz;
     L_lab_x = pad;
     if (target) {   /* units flush right, values right-aligned before them */
         g_dash_w = target;
@@ -458,10 +510,30 @@ static void dash_render(const dash_vals_t *v) {
     }
 }
 
+/* v19: lay out both boxes with the same font size (the smaller of the two best fits), so they match */
+static void dash_layout_all(void) {
+    int cur = g_box_cur, sz = 0;
+    g_dash_min_sz = -1;
+    for (int i = 0; i < 2; i++) { dash_use(i); if (g_dash_conf.enabled && g_nrows > 0) { dash_layout(); if (L_sz > sz) sz = L_sz; } }
+    g_dash_min_sz = sz;
+    for (int i = 0; i < 2; i++) { dash_use(i); if (g_dash_conf.enabled && g_nrows > 0) dash_layout(); }
+    dash_use(cur);
+}
+
+/* v19: render every enabled box (each into its own pixel buffer) */
+static void dash_render_all(const dash_vals_t *v) {
+    int cur = g_box_cur;
+    for (int i = 0; i < 2; i++) {
+        dash_use(i);
+        if (g_dash_conf.enabled && g_nrows > 0) dash_render(v);
+    }
+    dash_use(cur);
+}
+
 /* Poll the state file. Returns 1 when the box content or visibility changed (re-render/re-post needed). */
 static int dash_poll(uint64_t now_ms) {
     int want = 0, changed = 0;
-    if (g_dash_conf.enabled) {
+    if (g_box[0].conf.enabled || g_box[1].conf.enabled || g_dash_conf.enabled) {
         /* /tmp on this unit has no rename/link: older Java builds left the data in .new -> read either.
          * Only complete lines (ending in '\n') are used, so a read during a rewrite is skipped. */
         FILE *f = fopen(DASH_STATE, "r");
@@ -473,7 +545,7 @@ static int dash_poll(uint64_t now_ms) {
                 if (v.n != g_dash_last_n) { g_dash_last_n = v.n; g_dash_last_new_ms = now_ms; }
                 if (strcmp(l, g_dash_line)) {
                     strncpy(g_dash_line, l, sizeof g_dash_line - 1);
-                    dash_render(&v);
+                    dash_render_all(&v);
                     changed = 1;
                 }
             }

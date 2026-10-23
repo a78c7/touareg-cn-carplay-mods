@@ -2167,10 +2167,12 @@ static int cb_decode_picture(void* user, void* pic_info) {
  * sending frames and cb_display_picture is no longer invoked). */
 #ifdef USE_DASH
 /* v16 info box glue: pixmap holding the panel, blitted (source-over) onto each frame for the cluster window. */
-static screen_pixmap_t g_dash_pix;
-static screen_buffer_t g_dash_buf;
-static unsigned char  *g_dash_ptr;
-static int             g_dash_stride, g_dash_x, g_dash_y, g_dash_noblend, g_dash_logged;
+/* v19: one pixmap per box (0 left, 1 right) */
+static screen_pixmap_t g_dash_pix[2];
+static screen_buffer_t g_dash_buf[2];
+static unsigned char  *g_dash_ptr[2];
+static int             g_dash_stride[2], g_dash_x[2], g_dash_y[2], g_dash_bw[2], g_dash_bh[2];
+static int             g_dash_noblend, g_dash_logged;
 static uint64_t        g_dash_poll_ms;
 
 static int dash_read_conf_file(const char *const *paths) {
@@ -2184,73 +2186,89 @@ static int dash_read_conf_file(const char *const *paths) {
     return 0;
 }
 
+static void dash_setup_box(int b, int win_w, int win_h) {
+    dash_use(b);
+    if (!g_dash_conf.enabled || g_nrows <= 0) { LOG("dash: box %d off\n", b); return; }   /* laid out by dash_layout_all */
+    int x = g_dash_conf.x, y = g_dash_conf.y < 0 ? (win_h - g_dash_h) / 2 : g_dash_conf.y;
+    if (x < 0) x = 0;
+    if (x + g_dash_w > win_w) x = win_w - g_dash_w;
+    if (y < 0) y = 0;
+    if (y + g_dash_h > win_h) y = win_h - g_dash_h;
+    g_dash_x[b] = x; g_dash_y[b] = y; g_dash_bw[b] = g_dash_w; g_dash_bh[b] = g_dash_h;
+    if (screen_create_pixmap(&g_dash_pix[b], g_dec.scr_ctx)) { LOG("dash: pixmap create failed errno=%d\n", errno); g_dash_pix[b] = NULL; return; }
+    int fmt = SCREEN_FORMAT_RGBA8888, usage = SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE, size[2] = { g_dash_w, g_dash_h };
+    screen_set_pixmap_property_iv(g_dash_pix[b], SCREEN_PROPERTY_FORMAT, &fmt);
+    screen_set_pixmap_property_iv(g_dash_pix[b], SCREEN_PROPERTY_USAGE, &usage);
+    screen_set_pixmap_property_iv(g_dash_pix[b], SCREEN_PROPERTY_BUFFER_SIZE, size);
+    int rc;
+    do { rc = screen_create_pixmap_buffer(g_dash_pix[b]); } while (rc < 0 && errno == EINTR);
+    if (rc) { LOG("dash: pixmap buffer failed errno=%d\n", errno); screen_destroy_pixmap(g_dash_pix[b]); g_dash_pix[b] = NULL; return; }
+    screen_get_pixmap_property_pv(g_dash_pix[b], SCREEN_PROPERTY_RENDER_BUFFERS, (void **)&g_dash_buf[b]);
+    void *ptr = NULL;
+    screen_get_buffer_property_pv(g_dash_buf[b], SCREEN_PROPERTY_POINTER, &ptr);
+    screen_get_buffer_property_iv(g_dash_buf[b], SCREEN_PROPERTY_STRIDE, &g_dash_stride[b]);
+    g_dash_ptr[b] = (unsigned char *)ptr;
+    if (!g_dash_ptr[b] || g_dash_stride[b] < g_dash_w * 4) {
+        LOG("dash: no CPU access (ptr=%p stride=%d), box %d disabled\n", ptr, g_dash_stride[b], b);
+        screen_destroy_pixmap(g_dash_pix[b]); g_dash_pix[b] = NULL; return;
+    }
+    LOG("dash: box %d %d rows %dx%d at %d,%d alpha=%d stride=%d\n", b, g_nrows, g_dash_w, g_dash_h, x, y,
+        g_dash_conf.alpha, g_dash_stride[b]);
+}
+
 static void dash_setup(int win_w, int win_h) {
-    /* v16 kept the info_* keys in cl.conf; v17 reads them there first, then dash.conf (items/order/position) */
+    /* v16 kept the info_* keys in cl.conf; v17 reads them there first, then dash.conf (items/order/position);
+     * v19: keys with an "r_" prefix configure the right box */
     static const char *cl[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
     static const char *dc[] = { "/tmp/dash.conf", "/mnt/app/eso/bin/apps/cluster/dash.conf" };
     dash_read_conf_file(cl);
     int have = dash_read_conf_file(dc);
-    dash_layout();
-    LOG("dash: %s, %d rows, box %dx%d\n", have ? "dash.conf" : "defaults", g_nrows, g_dash_w, g_dash_h);
-    g_dash_x = g_dash_conf.x;
-    g_dash_y = g_dash_conf.y < 0 ? (win_h - g_dash_h) / 2 : g_dash_conf.y;
-    if (g_dash_x < 0) g_dash_x = 0;
-    if (g_dash_x + g_dash_w > win_w) g_dash_x = win_w - g_dash_w;
-    if (g_dash_y < 0) g_dash_y = 0;
-    if (g_dash_y + g_dash_h > win_h) g_dash_y = win_h - g_dash_h;
-    if (!g_dash_conf.enabled) { LOG("dash: disabled in cl.conf\n"); return; }
-    if (screen_create_pixmap(&g_dash_pix, g_dec.scr_ctx)) { LOG("dash: pixmap create failed errno=%d\n", errno); g_dash_pix = NULL; return; }
-    int fmt = SCREEN_FORMAT_RGBA8888, usage = SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE, size[2] = { g_dash_w, g_dash_h };
-    screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_FORMAT, &fmt);
-    screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_USAGE, &usage);
-    screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_BUFFER_SIZE, size);
-    int rc;
-    do { rc = screen_create_pixmap_buffer(g_dash_pix); } while (rc < 0 && errno == EINTR);
-    if (rc) { LOG("dash: pixmap buffer failed errno=%d\n", errno); screen_destroy_pixmap(g_dash_pix); g_dash_pix = NULL; return; }
-    screen_get_pixmap_property_pv(g_dash_pix, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)&g_dash_buf);
-    void *ptr = NULL;
-    screen_get_buffer_property_pv(g_dash_buf, SCREEN_PROPERTY_POINTER, &ptr);
-    screen_get_buffer_property_iv(g_dash_buf, SCREEN_PROPERTY_STRIDE, &g_dash_stride);
-    g_dash_ptr = (unsigned char *)ptr;
-    if (!g_dash_ptr || g_dash_stride < g_dash_w * 4) {
-        LOG("dash: no CPU access (ptr=%p stride=%d), box disabled\n", ptr, g_dash_stride);
-        screen_destroy_pixmap(g_dash_pix); g_dash_pix = NULL; return;
-    }
-    LOG("dash: box %dx%d at %d,%d alpha=%d tank_l=%d stride=%d\n", g_dash_w, g_dash_h, g_dash_x, g_dash_y,
-        g_dash_conf.alpha, g_dash_conf.tank_l, g_dash_stride);
+    LOG("dash: %s\n", have ? "dash.conf" : "defaults");
+    dash_layout_all();
+    dash_setup_box(0, win_w, win_h);
+    dash_setup_box(1, win_w, win_h);
+    dash_use(0);
 }
 
-/* poll /tmp/dash.state at most every 200 ms; copy a changed panel into the pixmap. Returns 1 on change. */
+/* poll /tmp/dash.state at most every 200 ms; copy changed boxes into their pixmaps. Returns 1 on change. */
 static int dash_tick(void) {
-    if (!g_dash_pix) return 0;
+    if (!g_dash_pix[0] && !g_dash_pix[1]) return 0;
     uint64_t now = now_us() / 1000ULL;
     if (now - g_dash_poll_ms < 200) return 0;
     g_dash_poll_ms = now;
     int ch = dash_poll(now);
     if (ch && g_dash_have) {
-        for (int y = 0; y < g_dash_h; y++) memcpy(g_dash_ptr + y * g_dash_stride, &g_dash_px[y * g_dash_w], g_dash_w * 4);
+        for (int b = 0; b < 2; b++) {
+            if (!g_dash_pix[b]) continue;
+            const uint32_t *px = g_dash_pxbuf[b];
+            for (int y = 0; y < g_dash_bh[b]; y++)
+                memcpy(g_dash_ptr[b] + y * g_dash_stride[b], &px[y * g_dash_bw[b]], g_dash_bw[b] * 4);
+        }
     }
     if (ch && g_dash_logged < 3) { g_dash_logged++; LOG("dash: %s %s", g_dash_have ? "show" : "hide", g_dash_line); }
     return ch;
 }
 
 static void dash_overlay(int pidx) {
-    if (!g_dash_pix || !g_dash_have || pidx < 0) return;
-    int a[] = {
-        SCREEN_BLIT_SOURCE_X, 0, SCREEN_BLIT_SOURCE_Y, 0,
-        SCREEN_BLIT_SOURCE_WIDTH, g_dash_w, SCREEN_BLIT_SOURCE_HEIGHT, g_dash_h,
-        SCREEN_BLIT_DESTINATION_X, g_dash_x, SCREEN_BLIT_DESTINATION_Y, g_dash_y,
-        SCREEN_BLIT_DESTINATION_WIDTH, g_dash_w, SCREEN_BLIT_DESTINATION_HEIGHT, g_dash_h,
-        SCREEN_BLIT_TRANSPARENCY, SCREEN_TRANSPARENCY_SOURCE_OVER,
-        SCREEN_BLIT_END
-    };
-    if (g_dash_noblend) { a[16] = SCREEN_BLIT_END; }
-    int rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dash_buf, a);
-    if (rc && !g_dash_noblend) {
-        g_dash_noblend = 1;
-        a[16] = SCREEN_BLIT_END;
-        rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dash_buf, a);
-        LOG("dash: source-over blit not supported (errno=%d), opaque blit rc=%d\n", errno, rc);
+    if (!g_dash_have || pidx < 0) return;
+    for (int b = 0; b < 2; b++) {
+        if (!g_dash_pix[b]) continue;
+        int a[] = {
+            SCREEN_BLIT_SOURCE_X, 0, SCREEN_BLIT_SOURCE_Y, 0,
+            SCREEN_BLIT_SOURCE_WIDTH, g_dash_bw[b], SCREEN_BLIT_SOURCE_HEIGHT, g_dash_bh[b],
+            SCREEN_BLIT_DESTINATION_X, g_dash_x[b], SCREEN_BLIT_DESTINATION_Y, g_dash_y[b],
+            SCREEN_BLIT_DESTINATION_WIDTH, g_dash_bw[b], SCREEN_BLIT_DESTINATION_HEIGHT, g_dash_bh[b],
+            SCREEN_BLIT_TRANSPARENCY, SCREEN_TRANSPARENCY_SOURCE_OVER,
+            SCREEN_BLIT_END
+        };
+        if (g_dash_noblend) { a[16] = SCREEN_BLIT_END; }
+        int rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dash_buf[b], a);
+        if (rc && !g_dash_noblend) {
+            g_dash_noblend = 1;
+            a[16] = SCREEN_BLIT_END;
+            rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dash_buf[b], a);
+            LOG("dash: source-over blit not supported (errno=%d), opaque blit rc=%d\n", errno, rc);
+        }
     }
 }
 #endif /* USE_DASH */

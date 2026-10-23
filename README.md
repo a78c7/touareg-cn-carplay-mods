@@ -1,7 +1,10 @@
 # 途锐中国版 CarPlay 改装合集：全屏 + 无线 + Android Auto + 导航上 HUD + CarPlay 地图上仪表 + 自定义仪表信息框
 
-让中国版大众途锐（MH2p 车机）用一个 U 盘一次刷入五项改装。**当前版本 v18**（尚未上车实测）。
+让中国版大众途锐（MH2p 车机）用一个 U 盘一次刷入五项改装。**当前版本 v19**（右边信息框尚未上车实测）。
 
+> **v19 新增**
+> - **右边也能放信息框**：仪表右下角车速框上方可以再放一个框，和左边一样从 30 多项里任选、拖动排序，左右各自独立（例如左边放实时功率/扭矩/G 值，右边放 0–100 和最大值）。两个框用同一种字号，左右对称。「改装设置」里点「左边框 / 右边框」切换编辑。
+>
 > **v18 新增**
 > - **0–100 计时和本次最大值**：信息框可选「0–100」（起步后显示计时，过 100 km/h 显示成绩）、「最大功率」「最大扭矩」「最大 G 值」（车机开机以来）。
 > - **行车记录**：「改装设置」里一键把 U 盘改成「行车记录 U 盘」一直插在车上，每次开车把功率、扭矩、转速、车速、油门、刹车、方向盘、加速度、挡位、油温、油耗等约 10 次/秒记到 U 盘（CSV，每小时约 5 MB），不连 OBD。
@@ -17,7 +20,7 @@
 - **Android Auto**：开启原厂未激活的 Android Auto，安卓手机可投屏（`Mods/AndroidAuto`，LawPaul 作品）
 - **CarPlay 导航上 HUD**：苹果地图 / 高德等 CarPlay 导航的转向箭头、到路口距离（带进度条）、路名、车道指引显示在抬头显示 HUD 上（`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`）
 - **CarPlay 地图上仪表**：手机导航 App 的地图画面显示在仪表中间（原车导航地图的位置），车标对准仪表时钟正下方、靠近底部（高德、苹果地图、百度地图分别校准，自动切换）；仪表上方显示剩余距离和到达时间（原车样式）；断开 CarPlay 自动回到原车地图（`Mods/VW_HUD_3_CarPlayCluster`，需要和 HUD 两个文件夹一起装）
-- **仪表信息框**：仪表 CarPlay 地图左侧的半透明小框，实时显示行车数据，每秒刷新 5 次。**显示哪几项、什么顺序自己选**（「改装设置」程序里点选、拖动排序），默认功率、扭矩、G 值、转速、机油温度、变速箱油温；共 30 项可选，最多 10 项，详见下面"仪表信息框说明"
+- **仪表信息框**：叠在仪表 CarPlay 地图上的半透明小框（左边一个，v19 起右边也可以放一个），实时显示行车数据，每秒刷新 5 次。**显示哪几项、什么顺序自己选**（「改装设置」程序里点选、拖动排序），默认功率、扭矩、G 值、转速、机油温度、变速箱油温；共 30 项可选，最多 10 项，详见下面"仪表信息框说明"
 
 下载即用，已包含刷机所需的 [MH2p SD ModKit](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)，不用另外准备。
 
@@ -67,13 +70,14 @@
 - 夜间：在车机设置里切到夜间，仪表地图同步变深色。
 - 只关闭仪表地图（保留 HUD）：最简单是用"卸载"方法只卸载 `VW_HUD_3_CarPlayCluster`。
 
-### 仪表信息框说明（v16，v17 起可自定义，v18 加性能项）
+### 仪表信息框说明（v16，v17 起可自定义，v18 加性能项，v19 加右边框）
 
 ![信息框示例](docs/img/infobox.png)
 
 *三种常用组合（「改装设置」里的快速选择），30 多项可以任意组合、排序。*
 
-- 仪表显示 CarPlay 地图时，地图左侧有一个半透明小框，每行一个数，每秒刷新 5 次。只在连着 CarPlay、仪表显示地图时出现。
+- 仪表显示 CarPlay 地图时，地图左下（挡位框上方）有一个半透明小框，每行一个数，每秒刷新 5 次。只在连着 CarPlay、仪表显示地图时出现。
+- **右边框（v19）**：右下角车速框上方可以再放一个框，默认不显示。在「改装设置」里点「右边框」，勾上"显示右边框"，再点选项目、排序（或手改 `dash.conf` 的 `r_items=`、`r_show=1`）。两个框用同一种字号（按项目多的那个框选），左右对称；右边框的位置在 `dash.conf` 的 `r_x`、`r_y`、`r_right`。
 - **自己选显示什么**：刷机前运行 U 盘里的「改装设置」程序，在"仪表信息框"里点选项目、拖动排序，页面上有效果示意；改完要重新刷一次 U 盘。（也可以手改 `Mods/VW_HUD_3_CarPlayCluster/Update/dash.conf` 的 `items=` 行，文件里有说明。）
   可选的 30 项，名称和大众行车电脑一致：功率、扭矩、G 值、纵向 G、横向 G、转速、车速、油门、制动压力、转向角、挡位、变速箱油温、机油温度、冷却液温度、车外温度、当前消耗、燃油存量（升）、续驶里程，以及"行驶数据"三个存储器**自启动起、自上次加油起、累计**各自的平均消耗、行驶里程、平均车速、行驶时间（框里分两行显示，上面小字是存储器名）。
   - **最多 10 项**，第 11 项起不显示。字号按项数自动选：1～6 项大字，7～8 项中字，9～10 项小字（都不会挡到仪表左下角的挡位框；小字在仪表上偏小，建议不超过 8 项）。
@@ -165,6 +169,8 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 **Install**: FAT32 drive ≤ 32 GB → download the zip from [Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) and copy everything in it to the root → double-click `改装设置（Windows）.exe` / `改装设置（Mac）.command` on the drive to choose install / uninstall / skip per mod and the info-box rows in a local web page (it also removes macOS `._*` files) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. Full-screen CarPlay ships no VW file: `vhpatch` checks the car's own `skin3/viewhandler.zip` and changes 38 bytes listed in `fullscreen.patch` (reverted the same way on uninstall).
 
 **Cluster map**: put the cluster on its navigation map page (VIEW button); the phone's map appears 1–3 s after CarPlay connects, also right after boot. Remaining distance and arrival time are shown by the cluster itself (stock style). The car icon is placed under the cluster clock near the bottom: the phone is told the cluster is 1920x960 and only rows 230–869 are shown; per-app safe areas (AMap / Apple Maps / Baidu behave differently, AMap also shifts the car ~210 px toward the next turn, which is compensated from the route-guidance maneuver type) are switched automatically by app name. Settings: `/mnt/app/eso/bin/apps/cluster/cl.conf`. Side gauges can be hidden in the cluster settings.
+
+**v19**: a second info box on the right (above the speed panel), with its own rows and order: `r_items=`, `r_show=1`, `r_x`, `r_y`, `r_right` in `dash.conf` or the 左边框/右边框 switch in 改装设置; both boxes use the same font size. Not yet verified on the car.
 
 **v18**: info-box rows `t100` (0–100 km/h: elapsed while running, then the result; start and finish interpolated between samples, real vehicle speed), `pmax`, `tqmax`, `gmax` (maxima since the head unit started); **drive log**: a USB drive with a `drive_logs` folder (and no `Data`/`Meta`, the 改装设置 program can switch a drive between flash and log mode) gets one CSV per head-unit start, ~10 rows/s of speed, rpm, power, torque, pedal, brake, steering, yaw, accelerations, gear, temperatures, consumption, tank, range and wheel speeds. Not yet verified on the car.
 

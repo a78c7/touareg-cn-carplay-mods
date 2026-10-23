@@ -89,10 +89,13 @@ type dashConf struct {
 	TankL   int      `json:"tank_l"`
 	LatFlip int      `json:"lat_flip"`
 	Unknown []string `json:"unknown,omitempty"` // names in items= that are not in the catalogue
+	// v19: right box (keys r_show / r_items in dash.conf; position r_x / r_y / r_right stays as in the file)
+	RShow  bool     `json:"r_show"`
+	RItems []string `json:"r_items"`
 }
 
 func defaultDash() dashConf {
-	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 40, Y: 172, Alpha: 200, TankL: 90}
+	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}}
 }
 
 type pkg struct{ Root string }
@@ -205,19 +208,31 @@ func (p pkg) readDash() (dashConf, bool) {
 		}
 		n, nerr := strconv.Atoi(v)
 		switch k {
-		case "items":
-			d.Items, d.Unknown = nil, nil
+		case "items", "r_items":
+			var list []string
 			for _, s := range strings.Split(v, ",") {
 				if strings.TrimSpace(s) == "" {
 					continue
 				}
 				if key, ok := lookupItem(s); ok {
-					if len(d.Items) < maxRows {
-						d.Items = append(d.Items, key)
+					if len(list) < maxRows {
+						list = append(list, key)
 					}
 				} else {
 					d.Unknown = append(d.Unknown, strings.TrimSpace(s))
 				}
+			}
+			if list == nil {
+				list = []string{}
+			}
+			if k == "items" {
+				d.Items = list
+			} else {
+				d.RItems = list
+			}
+		case "r_show":
+			if nerr == nil {
+				d.RShow = n != 0
 			}
 		case "show", "info":
 			if nerr == nil {
@@ -258,9 +273,12 @@ func (p pkg) writeDash(d dashConf) error {
 		}
 		b = []byte("# 仪表信息框设置（由「改装设置」程序生成）\n")
 	}
-	show := 0
+	show, rshow := 0, 0
 	if d.Show {
 		show = 1
+	}
+	if d.RShow {
+		rshow = 1
 	}
 	vals := []struct{ k, v string }{
 		{"items", strings.Join(d.Items, ",")},
@@ -270,6 +288,8 @@ func (p pkg) writeDash(d dashConf) error {
 		{"alpha", strconv.Itoa(clamp(d.Alpha, 0, 255))},
 		{"tank_l", strconv.Itoa(clamp(d.TankL, 0, 200))},
 		{"lat_flip", strconv.Itoa(clamp(d.LatFlip, 0, 1))},
+		{"r_items", strings.Join(d.RItems, ",")},
+		{"r_show", strconv.Itoa(rshow)},
 	}
 	aliases := map[string]string{"info": "show", "info_x": "x", "info_y": "y", "info_alpha": "alpha"}
 	done := map[string]bool{}
@@ -367,14 +387,22 @@ func validate(r applyReq) error {
 		return fmt.Errorf("信息框最多 %d 项", maxRows)
 	}
 	if r.Dash.Show && len(r.Dash.Items) == 0 {
-		return errors.New("信息框至少选一项，或者关掉信息框")
+		return errors.New("左边信息框至少选一项，或者关掉左边框")
 	}
-	seen := map[string]bool{}
-	for _, k := range r.Dash.Items {
-		if _, ok := lookupItem(k); !ok || seen[k] {
-			return fmt.Errorf("信息框项目有误：%s", k)
+	if len(r.Dash.RItems) > maxRows {
+		return fmt.Errorf("右边信息框最多 %d 项", maxRows)
+	}
+	if r.Dash.RShow && len(r.Dash.RItems) == 0 {
+		return errors.New("右边信息框至少选一项，或者关掉右边框")
+	}
+	for _, list := range [][]string{r.Dash.Items, r.Dash.RItems} {
+		seen := map[string]bool{}
+		for _, k := range list {
+			if _, ok := lookupItem(k); !ok || seen[k] {
+				return fmt.Errorf("信息框项目有误：%s", k)
+			}
+			seen[k] = true
 		}
-		seen[k] = true
 	}
 	return nil
 }
@@ -443,18 +471,26 @@ func (p pkg) apply(r applyReq) ([]string, error) {
 		if err := p.writeDash(r.Dash); err != nil {
 			return log, fmt.Errorf("写 dash.conf 失败：%v", err)
 		}
-		names := make([]string, 0, len(r.Dash.Items))
-		for _, k := range r.Dash.Items {
-			for _, it := range catalogue {
-				if it.Key == k {
-					names = append(names, strings.ReplaceAll(it.Label, "|", ""))
+		names := func(keys []string) string {
+			out := make([]string, 0, len(keys))
+			for _, k := range keys {
+				for _, it := range catalogue {
+					if it.Key == k {
+						out = append(out, strings.ReplaceAll(it.Label, "|", ""))
+					}
 				}
 			}
+			return strings.Join(out, "、")
 		}
 		if r.Dash.Show {
-			log = append(log, "信息框："+strings.Join(names, "、"))
+			log = append(log, "左边信息框："+names(r.Dash.Items))
 		} else {
-			log = append(log, "信息框：不显示")
+			log = append(log, "左边信息框：不显示")
+		}
+		if r.Dash.RShow {
+			log = append(log, "右边信息框："+names(r.Dash.RItems))
+		} else {
+			log = append(log, "右边信息框：不显示")
 		}
 	}
 	n := 0
