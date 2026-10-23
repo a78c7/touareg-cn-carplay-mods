@@ -3,8 +3,10 @@
  *
  * A translucent box on the left of the CarPlay map on the instrument cluster, one value per row.
  * Which values and in which order is chosen in dash.conf (items=...), up to DASH_MAX_ROWS rows; see the
- * catalogue g_items[] below (key, Chinese label, unit). Seven rows or more switch to a compact font so the
- * box still fits between the cluster's own navigation bar and its gear box.
+ * catalogue g_items[] below (key, Chinese label, unit). The font size follows the number of rows so the box
+ * always fits between the cluster's own navigation bar and its gear box: 1-6 rows normal, 7-8 compact,
+ * 9-10 small. Board-computer values use the VW names (memory "自启动起 / 自上次加油起 / 累计" on a small top
+ * line, value name below).
  *
  * Data comes from the head-unit Java bundle (VWClusterNav, class vwcn.Dash), which writes one line of
  * key=value pairs to /tmp/dash.state about 5 times a second while the CarPlay map is on the cluster.
@@ -28,7 +30,6 @@ static int dash_round(double d) { return d < 0 ? -(int)(-d + 0.5) : (int)(d + 0.
 #define DASH_MAX_W    600
 #define DASH_MAX_H    640
 #define DASH_PAD_X    18
-#define DASH_PAD_Y    12
 #define DASH_GAP      14
 #define DASH_RADIUS   16
 #define DASH_STATE    "/tmp/dash.state"
@@ -41,57 +42,70 @@ typedef struct {
     int stale_ms;  /* hide the box when the Java side stopped writing for this long */
     int lat_flip;  /* 1 = invert the lateral g sign */
     int max_h;     /* space available below y before the cluster's gear box (switch to compact above it) */
-    int compact;   /* -1 auto, 0 normal, 1 compact */
+    int compact;   /* font size: -1 auto (by row count), 0 normal, 1 compact, 2 small */
 } dash_conf_t;
 
 static dash_conf_t g_dash_conf = { 1, 40, 172, 200, 90, 5000, 0, 348, -1 };
 
 /* ---- the item catalogue: config key, label (also accepted in items=), unit, sample for column width ---- */
 enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL, IT_BRAKE, IT_STEER, IT_GEAR,
-       IT_GEARBOX, IT_OIL, IT_COOLANT, IT_OUTSIDE, IT_CONS, IT_TRIP, IT_REFUEL, IT_FUEL, IT_RANGE, IT_TRIPDIST,
-       IT_TRIPSPEED, IT_TRIPTIME, IT_N };
+       IT_GEARBOX, IT_OIL, IT_COOLANT, IT_OUTSIDE, IT_CONS, IT_FUEL, IT_RANGE,
+       IT_S_AVG, IT_S_DIST, IT_S_SPD, IT_S_TIME,      /* board computer memory 自启动起 (since start) */
+       IT_R_AVG, IT_R_DIST, IT_R_SPD, IT_R_TIME,      /* 自上次加油起 (since refuelling) */
+       IT_L_AVG, IT_L_DIST, IT_L_SPD, IT_L_TIME,      /* 累计 (long term) */
+       IT_N };
 typedef struct { const char *key; const char *label; const char *unit; const char *sample; } dash_item;
+/* label "A|B" = two lines (A small on top). In items= the label is matched without '|' and spaces. */
 static const dash_item g_items[IT_N] = {
-    { "power",     "功率",       "kW",      "-888" },
-    { "torque",    "扭矩",       "Nm",      "-888" },
-    { "g",         "G 值",       "g",       "-8.88" },
-    { "glong",     "纵向 G",     "g",       "-8.88" },
-    { "glat",      "横向 G",     "g",       "-8.88" },
-    { "rpm",       "转速",       "rpm",     "8888" },
-    { "speed",     "车速",       "km/h",    "888" },
-    { "pedal",     "油门",       "%",       "888" },
-    { "brake",     "刹车",       "bar",     "88.8" },
-    { "steer",     "方向盘",     "°",       "-888" },
-    { "gear",      "挡位",       NULL,      "M8" },
-    { "gearbox",   "变速箱",     "°C",      "188" },
-    { "oil",       "机油",       "°C",      "188" },
-    { "coolant",   "冷却液",     "°C",      "188" },
-    { "outside",   "外温",       "°C",      "-88" },
-    { "cons",      "瞬时油耗",   "L/100km", "88.8" },
-    { "trip",      "本程油耗",   "L/100km", "88.8" },
-    { "refuel",    "加油后油耗", "L/100km", "88.8" },
-    { "fuel",      "油量",       "L",       "188" },
-    { "range",     "续航",       "km",      "1888" },
-    { "tripdist",  "本程里程",   "km",      "8888" },
-    { "tripspeed", "平均车速",   "km/h",    "188" },
-    { "triptime",  "行驶时间",   "h",       "88:88" },
+    { "power",       "功率",                   "kW",      "-888" },
+    { "torque",      "扭矩",                   "Nm",      "-888" },
+    { "g",           "G 值",                   "g",       "-8.88" },
+    { "glong",       "纵向 G",                 "g",       "-8.88" },
+    { "glat",        "横向 G",                 "g",       "-8.88" },
+    { "rpm",         "转速",                   "rpm",     "8888" },
+    { "speed",       "车速",                   "km/h",    "888" },
+    { "pedal",       "油门",                   "%",       "888" },
+    { "brake",       "刹车",                   "bar",     "88.8" },
+    { "steer",       "方向盘",                 "°",       "-888" },
+    { "gear",        "挡位",                   NULL,      "M8" },
+    { "gearbox",     "变速箱",                 "°C",      "188" },
+    { "oil",         "机油",                   "°C",      "188" },
+    { "coolant",     "冷却液",                 "°C",      "188" },
+    { "outside",     "外温",                   "°C",      "-88" },
+    { "cons",        "瞬时油耗",               "L/100km", "88.8" },
+    { "fuel",        "油量",                   "L",       "188" },
+    { "range",       "续航",                   "km",      "1888" },
+    { "trip",        "自启动起|平均油耗",      "L/100km", "88.8" },
+    { "tripdist",    "自启动起|行驶里程",      "km",      "8888" },
+    { "tripspeed",   "自启动起|平均车速",      "km/h",    "188" },
+    { "triptime",    "自启动起|行驶时间",      "h",       "88:88" },
+    { "refuel",      "自上次加油起|平均油耗",  "L/100km", "88.8" },
+    { "refueldist",  "自上次加油起|行驶里程",  "km",      "8888" },
+    { "refuelspeed", "自上次加油起|平均车速",  "km/h",    "188" },
+    { "refueltime",  "自上次加油起|行驶时间",  "h",       "88:88" },
+    { "total",       "累计|平均油耗",          "L/100km", "88.8" },
+    { "totaldist",   "累计|行驶里程",          "km",      "8888" },
+    { "totalspeed",  "累计|平均车速",          "km/h",    "188" },
+    { "totaltime",   "累计|行驶时间",          "h",       "88:88" },
 };
 static int g_rows[DASH_MAX_ROWS] = { IT_POWER, IT_TORQUE, IT_G, IT_RPM, IT_OIL, IT_GEARBOX };
 static int g_nrows = 6;
 
-/* parsed values; NAN / -999 = not available */
+/* parsed values; NAN / -999 = not available. Board computer memories: [0] 自启动起, [1] 自上次加油起, [2] 累计 */
 typedef struct {
     long  n;
-    float p, gx, gy, cv, ca, cr, spd, brk, tdist, tspd;
-    int   tq, gm, gc, gbt, oil, cool, cu, au, cru, tank, rpm, ped, str, out, rng, ttime;
+    float p, gx, gy, cv, spd, brk;
+    float avg[3], dist[3], bspd[3];
+    int   tq, gm, gc, gbt, oil, cool, cu, tank, rpm, ped, str, out, rng;
+    int   avgu[3], btime[3];
 } dash_vals_t;
 
 /* ---- layout (computed once in dash_layout) ---- */
 static const dash_glyph *L_val, *L_lab, *L_unit;
-static int L_nval, L_nlab, L_nunit, L_row_h, L_base_off;
+static int L_nval, L_nlab, L_nunit, L_row_h, L_base_off, L_pad_y;
 static int g_dash_w = 300, g_dash_h = 100, L_lab_x, L_val_r, L_unit_x;
 
-static char      g_dash_line[512];
+static char      g_dash_line[1024];
 static int       g_dash_have;
 static uint64_t  g_dash_last_new_ms;
 static long      g_dash_last_n = -1;
@@ -113,7 +127,7 @@ static void dash_parse_items(const char *v) {
         if (tl) {
             for (int i = 0; i < IT_N; i++) {
                 char lab[64]; int ll = 0;
-                for (const char *p = g_items[i].label; *p && ll < 63; p++) if (*p != ' ') lab[ll++] = *p;
+                for (const char *p = g_items[i].label; *p && ll < 63; p++) if (*p != ' ' && *p != '|') lab[ll++] = *p;
                 lab[ll] = 0;
                 if (!strcmp(tok, g_items[i].key) || !strcmp(tok, lab)) { g_rows[n++] = i; break; }
             }
@@ -155,15 +169,23 @@ static int dash_str_w(const char *s) {   /* width of a value string in the value
 }
 
 static void dash_layout(void) {
-    int compact = g_dash_conf.compact;
-    if (compact < 0) compact = DASH_PAD_Y * 2 + g_nrows * 52 > g_dash_conf.max_h;
-    if (compact) {
-        L_val = dash_c_val; L_nval = DASH_C_VAL_N; L_lab = dash_c_lab; L_nlab = DASH_C_LAB_N;
-        L_unit = dash_c_unit; L_nunit = DASH_C_UNIT_N; L_row_h = 40; L_base_off = 11;
-    } else {
-        L_val = dash_n_val; L_nval = DASH_N_VAL_N; L_lab = dash_n_lab; L_nlab = DASH_N_LAB_N;
-        L_unit = dash_n_unit; L_nunit = DASH_N_UNIT_N; L_row_h = 52; L_base_off = 13;
+    /* sizes: row height, top/bottom padding, baseline offset of the value digits from the row middle */
+    static const int ROW_H[3] = { 52, 40, 32 }, PAD_Y[3] = { 12, 12, 10 }, BASE[3] = { 13, 11, 9 };
+    int sz = g_dash_conf.compact;
+    if (sz < 0 || sz > 2) {   /* auto: the largest size whose box fits into max_h */
+        for (sz = 0; sz < 2; sz++) if (PAD_Y[sz] * 2 + g_nrows * ROW_H[sz] <= g_dash_conf.max_h) break;
     }
+    if (sz == 0) {
+        L_val = dash_n_val; L_nval = DASH_N_VAL_N; L_lab = dash_n_lab; L_nlab = DASH_N_LAB_N;
+        L_unit = dash_n_unit; L_nunit = DASH_N_UNIT_N;
+    } else if (sz == 1) {
+        L_val = dash_c_val; L_nval = DASH_C_VAL_N; L_lab = dash_c_lab; L_nlab = DASH_C_LAB_N;
+        L_unit = dash_c_unit; L_nunit = DASH_C_UNIT_N;
+    } else {
+        L_val = dash_s_val; L_nval = DASH_S_VAL_N; L_lab = dash_s_lab; L_nlab = DASH_S_LAB_N;
+        L_unit = dash_s_unit; L_nunit = DASH_S_UNIT_N;
+    }
+    L_row_h = ROW_H[sz]; L_pad_y = PAD_Y[sz]; L_base_off = BASE[sz];
     int lab_w = 0, val_w = 0, unit_w = 0;
     for (int r = 0; r < g_nrows; r++) {
         const dash_item *it = &g_items[g_rows[r]];
@@ -172,14 +194,14 @@ static void dash_layout(void) {
         int vw = dash_str_w(it->sample);
         if (vw > val_w) val_w = vw;
         const char *u = it->unit;
-        if (g_rows[r] == IT_CONS) u = "L/100km";
+        if (u && !strcmp(u, "L/100km")) u = "L/100km";   /* widest of L/100km, km/L, L/h */
         if (u) { gl = dash_find(L_unit, L_nunit, u); if (gl && gl->adv > unit_w) unit_w = gl->adv; }
     }
     L_lab_x = DASH_PAD_X;
     L_val_r = L_lab_x + lab_w + DASH_GAP + val_w;
     L_unit_x = L_val_r + 8;
     g_dash_w = L_unit_x + unit_w + DASH_PAD_X;
-    g_dash_h = DASH_PAD_Y * 2 + g_nrows * L_row_h;
+    g_dash_h = L_pad_y * 2 + g_nrows * L_row_h;
     if (g_dash_w > DASH_MAX_W) g_dash_w = DASH_MAX_W;
     if (g_dash_h > DASH_MAX_H) g_dash_h = DASH_MAX_H;
 }
@@ -187,9 +209,12 @@ static void dash_layout(void) {
 static void dash_parse(const char *line, dash_vals_t *o) {
     float nanv = 0.0f / 0.0f;
     o->n = -1;
-    o->p = o->gx = o->gy = o->cv = o->ca = o->cr = o->spd = o->brk = o->tdist = o->tspd = nanv;
-    o->tq = o->gm = o->gc = o->gbt = o->oil = o->cool = o->cu = o->au = o->cru = o->tank = o->rpm =
-        o->ped = o->str = o->out = o->rng = o->ttime = -999;
+    o->p = o->gx = o->gy = o->cv = o->spd = o->brk = nanv;
+    o->tq = o->gm = o->gc = o->gbt = o->oil = o->cool = o->cu = o->tank = o->rpm = o->ped = o->str = o->out = o->rng = -999;
+    for (int m = 0; m < 3; m++) { o->avg[m] = o->dist[m] = o->bspd[m] = nanv; o->avgu[m] = o->btime[m] = -999; }
+    /* board computer keys per memory: average + unit, distance, speed, time (minutes) */
+    static const char *BK[3][5] = { { "ca", "au", "td", "ts", "tt" }, { "cr", "cru", "rd", "rs", "rt" },
+                                    { "cl", "clu", "ld", "ls", "lt" } };
     const char *s = line;
     while (*s) {
         while (*s == ' ' || *s == '\n' || *s == '\r') s++;
@@ -205,12 +230,8 @@ static void dash_parse(const char *line, dash_vals_t *o) {
         else if (!strcmp(key, "gx"))   o->gx = (float)d;
         else if (!strcmp(key, "gy"))   o->gy = (float)d;
         else if (!strcmp(key, "cv"))   o->cv = (float)d;
-        else if (!strcmp(key, "ca"))   o->ca = (float)d;
-        else if (!strcmp(key, "cr"))   o->cr = (float)d;
         else if (!strcmp(key, "spd"))  o->spd = (float)d;
         else if (!strcmp(key, "brk"))  o->brk = (float)d;
-        else if (!strcmp(key, "td"))   o->tdist = (float)d;
-        else if (!strcmp(key, "ts"))   o->tspd = (float)d;
         else if (!strcmp(key, "tq"))   o->tq = di;
         else if (!strcmp(key, "gm"))   o->gm = di;
         else if (!strcmp(key, "gc"))   o->gc = di;
@@ -218,15 +239,21 @@ static void dash_parse(const char *line, dash_vals_t *o) {
         else if (!strcmp(key, "oil"))  o->oil = di;
         else if (!strcmp(key, "cool")) o->cool = di;
         else if (!strcmp(key, "cu"))   o->cu = di;
-        else if (!strcmp(key, "au"))   o->au = di;
-        else if (!strcmp(key, "cru"))  o->cru = di;
         else if (!strcmp(key, "tank")) o->tank = di;
         else if (!strcmp(key, "rpm"))  o->rpm = di;
         else if (!strcmp(key, "ped"))  o->ped = di;
         else if (!strcmp(key, "str"))  o->str = di;
         else if (!strcmp(key, "out"))  o->out = di;
         else if (!strcmp(key, "rng"))  o->rng = di;
-        else if (!strcmp(key, "tt"))   o->ttime = di;
+        else {
+            for (int m = 0; m < 3; m++) {
+                if      (!strcmp(key, BK[m][0])) o->avg[m] = (float)d;
+                else if (!strcmp(key, BK[m][1])) o->avgu[m] = di;
+                else if (!strcmp(key, BK[m][2])) o->dist[m] = (float)d;
+                else if (!strcmp(key, BK[m][3])) o->bspd[m] = (float)d;
+                else if (!strcmp(key, BK[m][4])) o->btime[m] = di;
+            }
+        }
         while (*s && *s != ' ') s++;
     }
 }
@@ -338,18 +365,20 @@ static void dash_item_value(int it, const dash_vals_t *v, char *o, const char **
     case IT_COOLANT: I(v->cool == -999, "%d", v->cool); break;
     case IT_OUTSIDE: I(v->out == -999, "%d", v->out); break;
     case IT_CONS:    I(DASH_NAN(v->cv), "%.1f", v->cv); *unit = dash_cons_unit(v->cu); break;
-    case IT_TRIP:    I(DASH_NAN(v->ca), "%.1f", v->ca); *unit = dash_cons_unit(v->au); break;
-    case IT_REFUEL:  I(DASH_NAN(v->cr), "%.1f", v->cr); *unit = dash_cons_unit(v->cru); break;
     case IT_FUEL:
         if (v->tank == -999) snprintf(o, 16, "-");
         else if (g_dash_conf.tank_l > 0) snprintf(o, 16, "%d", (v->tank * g_dash_conf.tank_l + 50) / 100);
         else { snprintf(o, 16, "%d", v->tank); *unit = "%"; }
         break;
-    case IT_RANGE:     I(v->rng == -999, "%d", v->rng); break;
-    case IT_TRIPDIST:  I(DASH_NAN(v->tdist), "%d", dash_round(v->tdist)); break;
-    case IT_TRIPSPEED: I(DASH_NAN(v->tspd), "%d", dash_round(v->tspd)); break;
-    case IT_TRIPTIME:  I(v->ttime == -999 || v->ttime < 0, "%d:%02d", v->ttime / 60, v->ttime % 60); break;
-    default: snprintf(o, 16, "-");
+    case IT_RANGE:   I(v->rng == -999, "%d", v->rng); break;
+    default:
+        if (it >= IT_S_AVG && it <= IT_L_TIME) {   /* board computer: memory m, value k */
+            int m = (it - IT_S_AVG) / 4, k = (it - IT_S_AVG) % 4;
+            if (k == 0) { I(DASH_NAN(v->avg[m]) || v->avg[m] < 0, "%.1f", v->avg[m]); *unit = dash_cons_unit(v->avgu[m]); }
+            else if (k == 1) I(DASH_NAN(v->dist[m]) || v->dist[m] < 0, "%d", dash_round(v->dist[m]));
+            else if (k == 2) I(DASH_NAN(v->bspd[m]) || v->bspd[m] < 0, "%d", dash_round(v->bspd[m]));
+            else I(v->btime[m] == -999 || v->btime[m] < 0, "%d:%02d", v->btime[m] / 60, v->btime[m] % 60);
+        } else snprintf(o, 16, "-");
     }
     #undef I
 }
@@ -361,8 +390,10 @@ static void dash_render(const dash_vals_t *v) {
         int it = g_rows[r];
         char val[16]; const char *unit;
         dash_item_value(it, v, val, &unit);
-        int base = DASH_PAD_Y + r * L_row_h + L_row_h / 2 + L_base_off;
-        dash_draw_str(L_lab, L_nlab, g_items[it].label, L_lab_x, base - 1, C_LAB);
+        int top = L_pad_y + r * L_row_h, base = top + L_row_h / 2 + L_base_off;
+        const dash_glyph *lg = dash_find(L_lab, L_nlab, g_items[it].label);
+        if (lg && lg->base < 0) dash_blit_mask(lg, L_lab_x, top + (L_row_h - lg->h) / 2, C_LAB);   /* two-line label */
+        else if (lg) dash_blit_mask(lg, L_lab_x, base - 1 - lg->base, C_LAB);
         dash_draw_value(val, L_val_r, base, C_VAL);
         if (unit) dash_draw_str(L_unit, L_nunit, unit, L_unit_x, base - 1, C_UNIT);
     }
@@ -377,7 +408,7 @@ static int dash_poll(uint64_t now_ms) {
         FILE *f = fopen(DASH_STATE, "r");
         if (!f) f = fopen(DASH_STATE ".new", "r");
         if (f) {
-            char l[512];
+            char l[1024];
             if (fgets(l, sizeof l, f) && strchr(l, '\n')) {
                 dash_vals_t v; dash_parse(l, &v);
                 if (v.n != g_dash_last_n) { g_dash_last_n = v.n; g_dash_last_new_ms = now_ms; }

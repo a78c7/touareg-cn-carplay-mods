@@ -19,7 +19,8 @@ Changes in this copy (VW Touareg MH2p_CN_VWG36_P2878):
   Java bundle (`vwcn.Dash`). Glyphs in `dash_font.h` are pre-rendered from Noto Sans CJK SC (SIL OFL 1.1, see
   [../../LICENSES/NotoSansCJK_OFL.md](../../LICENSES/NotoSansCJK_OFL.md)); regenerate with `python3 gen_dash_font.py > dash_font.h`.
   `dash.c` / `dash_font.h` / `gen_dash_font.py` are new code by this repository, distributed with cl_render under the same terms.
-- v17: rows and order from `dash.conf` (`items=`, 23 items, keys or Chinese labels), box size computed from the chosen
-  rows, compact font set for 7+ rows; `/tmp/dash.conf` overrides the installed one for testing.
+- v17: rows and order from `dash.conf` (`items=`, 30 items, keys or Chinese labels, max 10 rows), box size computed
+  from the chosen rows, three font sizes (1-6 / 7-8 / 9-10 rows); board-computer values use the VW names as two-line
+  labels (memory on top: 自启动起 / 自上次加油起 / 累计); `/tmp/dash.conf` overrides the installed one for testing.
 
 Run: `CL_DISPID=58 cl_render capture=h264 xres=1920 yres=639 mode=stretch` (started by `clusterd`).
