@@ -28,7 +28,7 @@ var features = []feature{
 	{"carplay", "无线 CarPlay", "开启原厂未激活的无线 CarPlay（LawPaul 作品）", []string{"AppleCarPlay"}},
 	{"aa", "Android Auto", "开启原厂未激活的 Android Auto，安卓手机投屏（LawPaul 作品）", []string{"AndroidAuto"}},
 	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在抬头显示 HUD 上", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
-	{"cluster", "仪表地图 + 信息框", "手机导航地图显示在仪表中间，左侧小框显示行车数据；需要和「导航上 HUD」一起装", []string{"VW_HUD_3_CarPlayCluster"}},
+	{"cluster", "仪表地图 + 信息框", "手机导航地图显示在仪表中间，左右两个小框显示行车数据；需要和「导航上 HUD」一起装", []string{"VW_HUD_3_CarPlayCluster"}},
 }
 
 // info-box catalogue; keys and labels must match g_items[] in src/cl_render/dash.c (build.sh checks the keys)
