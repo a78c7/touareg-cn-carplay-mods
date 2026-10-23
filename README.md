@@ -97,6 +97,7 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 
 ## 开发过程与源码
 
+- **按主题整理的开发笔记**：[a78c7/vw-mh2p-dev-notes](https://github.com/a78c7/vw-mh2p-dev-notes)（调试环境、导航上 HUD、地图上仪表、信息框、全屏、给其他车型的建议）
 - **[docs/开发过程.md](docs/开发过程.md)**：从零做出"导航上 HUD"和"地图上仪表"的完整过程、踩过的坑、给其他 MH2p 车型（大众/奥迪/保时捷）的参考。
 - `src/hud-java`：车机 Java 插件 VWClusterNav（HUD 数据、剩余距离/到达时间、去掉提示、仪表显示切换）
 - `src/cluster-probe`：`cl_probe.so`，注入 CarPlay 进程，向 iPhone 声明仪表屏、接收并解密第二路视频
@@ -146,7 +147,7 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 
 **Logs**: create `cluster_logs` on a drive, leave it plugged in while navigating for 2+ minutes.
 
-**How it was built**: see [docs/开发过程.md](docs/开发过程.md) (Chinese) — LD_PRELOAD hook into `dio_manager` advertising a second display to the iPhone, ChaCha20-Poly1305 stream decryption (libairplay 320.17.1), NvMedia H.264 decode, displaymanager layering `[58, 33]` so the stock map stays bound underneath, and the VW HMI (J9 Java) plug-in. Sources in `src/`, build script `src/build.sh`.
+**How it was built**: see [docs/开发过程.md](docs/开发过程.md) (Chinese) — LD_PRELOAD hook into `dio_manager` advertising a second display to the iPhone, ChaCha20-Poly1305 stream decryption (libairplay 320.17.1), NvMedia H.264 decode, displaymanager layering `[58, 33]` so the stock map stays bound underneath, and the VW HMI (J9 Java) plug-in. Sources in `src/`, build script `src/build.sh`. Topic-organized notes: [a78c7/vw-mh2p-dev-notes](https://github.com/a78c7/vw-mh2p-dev-notes).
 
 ## Credits
 
