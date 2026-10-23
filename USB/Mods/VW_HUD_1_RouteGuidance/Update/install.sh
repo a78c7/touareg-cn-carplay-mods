@@ -5,6 +5,8 @@
 # - adds LD_PRELOAD + DIO_CLUSTER_LOG=1 to the "carplay" child envs in smartphone_integrator.json
 #   (the dio_manager binary itself is NOT modified)
 # Original json is backed up to the USB drive first; uninstall.sh restores it.
+# same line count, non-empty (awk: the ModKit USB install environment has no wc)
+same_lines() { a=$(awk 'END{print NR}' "$1" 2>/dev/null); b=$(awk 'END{print NR}' "$2" 2>/dev/null); [ -n "$a" ] && [ "$a" = "$b" ]; }
 J=/mnt/system/etc/eso/production/smartphone_integrator.json
 SO_DIR=/mnt/app/eso/bin/apps/cluster
 SO=$SO_DIR/dio_cluster.so
@@ -27,7 +29,7 @@ if [[ ! -e $MOD_PATH/backup/smartphone_integrator.json ]]; then
         # already patched by an earlier install from another drive: rebuild the stock file for the backup
         echo "json already patched by an earlier install - rebuilding the stock version as backup"
         sed -e "s#\"LD_PRELOAD=$SO[^\"]*\", \"DIO_CLUSTER_LOG=1\", ##" $J > /tmp/si_stock.json
-        if grep -q "dio_cluster" /tmp/si_stock.json || [ "$(wc -l < /tmp/si_stock.json)" != "$(wc -l < $J)" ]; then
+        if grep -q "dio_cluster" /tmp/si_stock.json || ! same_lines /tmp/si_stock.json $J; then
             echo "abort: could not rebuild the stock json"; exit 0
         fi
         cp -v /tmp/si_stock.json $MOD_PATH/backup/smartphone_integrator.json
@@ -57,7 +59,7 @@ else
     echo "carplay block line $CL, envs line $EL"
     awk -v e=$EL -v m="$MARK" 'NR==e { sub(/"envs":\[/, "\"envs\":[\"" m "\", \"DIO_CLUSTER_LOG=1\", ") } {print}' $J > /tmp/si_new.json
     if [ "$(grep -c "$MARK" /tmp/si_new.json)" != "1" ]; then echo "abort: edit check failed"; exit 0; fi
-    if [ "$(wc -l < /tmp/si_new.json)" != "$(wc -l < $J)" ]; then echo "abort: line count changed"; exit 0; fi
+    if ! same_lines /tmp/si_new.json $J; then echo "abort: line count changed"; exit 0; fi
     mount -uw /mnt/system
     cp -v /tmp/si_new.json $J
     sync

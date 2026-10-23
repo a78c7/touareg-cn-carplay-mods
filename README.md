@@ -1,6 +1,8 @@
 # 途锐中国版 CarPlay 改装合集：全屏 + 无线 + Android Auto + 导航上 HUD + CarPlay 地图上仪表 + 自定义仪表信息框
 
-让中国版大众途锐（MH2p 车机）用一个 U 盘一次刷入五项改装。**当前版本 v19**（右边信息框尚未上车实测）。
+让中国版大众途锐（MH2p 车机）用一个 U 盘一次刷入五项改装。**当前版本 v19.1**（右边信息框尚未上车实测）。
+
+> **v19.1**：修复 U 盘安装脚本里的一道安全检查（车机没有 `wc` 命令，导致检查被跳过），功能和 v19 相同，刷过 v19 且正常的车不用重刷。
 
 > **v19 新增**
 > - **右边也能放信息框**：仪表右下角车速框上方可以再放一个框，和左边一样从 30 多项里任选、拖动排序，左右各自独立（例如左边放实时功率/扭矩/G 值，右边放 0–100 和最大值）。两个框字号相同、高度相同（项目少的框下面留空），左右对称。「改装设置」里点「左边框 / 右边框」切换编辑。
@@ -33,7 +35,7 @@
 **只适用于车机版本 `MH2p_CN_VWG36_P2878`**，其它版本脚本会自动退出，不改动任何东西。
 
 ✅ 已在 2023 款途锐（P2878）上验证：全屏、无线、HUD（箭头、距离、路名）、仪表 CarPlay 地图（无线/有线 CarPlay，高德、苹果地图、百度地图：出图、按 VIEW 切换、断开自动恢复、车机设置切夜间后仪表同步变深色）、仪表信息框（v16）。
-⚠️ **仪表地图模块（VW_HUD_3）的 U 盘安装流程尚未在未改装的车上完整实测**（验证用的车是调试时手动装的，程序与本包相同）。另外只在 iOS 27 上测试过。**v17（可自定义信息框、行驶数据存储器各项、「改装设置」程序）刚发布，尚未在车上和 Windows/Mac 实机验证**，遇到问题请按下面"排查日志"收集日志并提 Issue。
+⚠️ 已有车主在未改装的车上用 U 盘完整刷入 v19，安装日志各步骤都正常；仪表地图在这辆车上的实际显示效果还在等反馈（作者验证用的车是调试时手动装的，程序与本包相同）。另外只在 iOS 27 上测试过。**v17（可自定义信息框、行驶数据存储器各项、「改装设置」程序）刚发布，尚未在车上和 Windows/Mac 实机验证**，遇到问题请按下面"排查日志"收集日志并提 Issue。
 
 **装过旧版本（touareg-cn-carplay-fullscreen，已下线）的车**：可以直接用本仓库的新 U 盘覆盖刷入，脚本会识别已装状态。卸载也可以用新 U 盘（见下面"全屏 CarPlay 是怎么改的"）。
 
@@ -120,6 +122,7 @@ U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟�
 
 - 插 U 盘没反应或提示"不支持更新"：U 盘不是 FAT32，或 `Data`、`Meta` 不在 U 盘根目录。
 - 刷完没变化：用电脑打开 U 盘 `Logs/` 里对应模块的 `.log` 查看原因（例如版本不匹配会写 `abort`）。
+- `Logs/_ModKit_Update.log` 里的 `cp: Can't get file status (.../Post/...): Filename too long` 是 ModKit 自带复制命令的提示，LawPaul 的模块也会出现，可以忽略：看 `_ModKit_Post.log` 和各模块的 `-Post.log`、`-Persist.log`，有内容就说明重启后的脚本都已正常运行。
 - 无线 CarPlay 连不上：需要车上导航数据正常、有 5GHz WiFi 天线（ModKit 官网说明）。
 - Android Auto 连不上：换一根支持数据传输的手机线。
 - 仪表一直显示原车地图：确认仪表在地图页、手机 App 已开始导航；开机后等 1 分钟；按上面方法收集日志。
@@ -178,11 +181,13 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 - **CarPlay turn-by-turn on the HUD**: arrow, distance, street name, lanes (`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`)
 - **CarPlay map on the instrument cluster**: the phone's cluster map (iPhone second video stream, "altScreen") replaces the stock navigation map in the middle of the cluster; it switches back to the stock map automatically when CarPlay disconnects; a translucent box on the left shows live **power, torque, G, rpm, engine oil and gearbox oil temperature** (`Mods/VW_HUD_3_CarPlayCluster`, needs both HUD folders)
 
-✅ Verified on a 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ The USB install of `VW_HUD_3` has not yet been tested end-to-end on an unmodified car (the test car had the same binaries installed by hand); only tested on iOS 27. Upgrading from the earlier touareg-cn-carplay-fullscreen package: flash this drive over it; this package can also uninstall it. Logs may contain your phone name and street names — review before posting.
+✅ Verified on a 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ One owner has flashed v19 from USB on an unmodified car and every install step logged OK; how the cluster map behaves on that car is still to be reported (the author's test car had the same binaries installed by hand); only tested on iOS 27. Upgrading from the earlier touareg-cn-carplay-fullscreen package: flash this drive over it; this package can also uninstall it. Logs may contain your phone name and street names — review before posting.
 
 **Install**: FAT32 drive ≤ 32 GB → download the zip from [Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) and copy everything in it to the root → double-click `改装设置（Windows）.exe` / `改装设置（Mac）.command` on the drive to choose install / uninstall / skip per mod and the info-box rows in a local web page (it also removes macOS `._*` files; it works offline, serves the page on 127.0.0.1 only and changes only files on the drive — the Windows/macOS warnings appear only because it is not code-signed) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. Full-screen CarPlay ships no VW file: `vhpatch` checks the car's own `skin3/viewhandler.zip` and changes 38 bytes listed in `fullscreen.patch` (reverted the same way on uninstall).
 
 **Cluster map**: put the cluster on its navigation map page (VIEW button); the phone's map appears 1–3 s after CarPlay connects, also right after boot. Remaining distance and arrival time are shown by the cluster itself (stock style). The car icon is placed under the cluster clock near the bottom: the phone is told the cluster is 1920x960 and only rows 230–869 are shown; per-app safe areas (AMap / Apple Maps / Baidu behave differently, AMap also shifts the car ~210 px toward the next turn, which is compensated from the route-guidance maneuver type) are switched automatically by app name. Settings: `/mnt/app/eso/bin/apps/cluster/cl.conf`. Side gauges can be hidden in the cluster settings.
+
+**v19.1**: the install/uninstall scripts no longer use `wc`, which the ModKit USB environment lacks (a line-count safety check was silently skipped; the edits themselves were correct); `cp: ... Filename too long` in `_ModKit_Update.log` comes from ModKit's own copy and is harmless. Same features as v19.
 
 **v19**: a second info box on the right (above the speed panel), with its own rows and order: `r_items=`, `r_show=1`, `r_x`, `r_y`, `r_right` in `dash.conf` or the 左边框/右边框 switch in 改装设置; both boxes use the same font size. Not yet verified on the car.
 

@@ -15,3 +15,5 @@ vh_setup() {
 }
 vh_state() { $VP check "$1" $P 2>/dev/null; }
 vh_cleanup() { [ -n "$VP" ] && rm -f $VP; }
+# same line count, non-empty (awk: the ModKit USB install environment has no wc)
+same_lines() { a=$(awk 'END{print NR}' "$1" 2>/dev/null); b=$(awk 'END{print NR}' "$2" 2>/dev/null); [ -n "$a" ] && [ "$a" = "$b" ]; }

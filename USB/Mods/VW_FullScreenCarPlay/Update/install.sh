@@ -49,7 +49,7 @@ elif grep -q "Carplay.Canvas_Dimension.width=1152" $INFO; then
     [[ ! -e $MOD_PATH/backup/info.txt ]] && cp -v $INFO $MOD_PATH/backup/info.txt
     sed -e 's/^Layout.Carplay.Canvas_Dimension.width=1152/Layout.Carplay.Canvas_Dimension.width=1673/' \
         -e 's/^Layout.Carplay.Canvas_Dimension.height=592/Layout.Carplay.Canvas_Dimension.height=748/' $INFO > /tmp/info_new.txt
-    if grep -q "width=1673" /tmp/info_new.txt && grep -q "height=748" /tmp/info_new.txt && [ "$(wc -l < /tmp/info_new.txt)" = "$(wc -l < $INFO)" ]; then
+    if grep -q "width=1673" /tmp/info_new.txt && grep -q "height=748" /tmp/info_new.txt && same_lines /tmp/info_new.txt $INFO; then
         cp -v /tmp/info_new.txt $INFO; sync
         echo "new info.txt CarPlay canvas:"; grep Carplay $INFO
     else

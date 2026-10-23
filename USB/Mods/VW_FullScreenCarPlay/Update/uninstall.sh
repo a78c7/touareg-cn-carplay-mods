@@ -38,7 +38,7 @@ if grep -q "Carplay.Canvas_Dimension.width=1152" $MOD_PATH/backup/info.txt 2>/de
 elif grep -q "Carplay.Canvas_Dimension.width=1673" $INFO; then
     sed -e 's/^Layout.Carplay.Canvas_Dimension.width=1673/Layout.Carplay.Canvas_Dimension.width=1152/' \
         -e 's/^Layout.Carplay.Canvas_Dimension.height=748/Layout.Carplay.Canvas_Dimension.height=592/' $INFO > /tmp/info_stock.txt
-    if grep -q "width=1152" /tmp/info_stock.txt && [ "$(wc -l < /tmp/info_stock.txt)" = "$(wc -l < $INFO)" ]; then
+    if grep -q "width=1152" /tmp/info_stock.txt && same_lines /tmp/info_stock.txt $INFO; then
         cp -v /tmp/info_stock.txt $INFO; echo "info.txt restored in place:"; grep Carplay $INFO
     else
         echo "info.txt in-place restore failed, not touched"

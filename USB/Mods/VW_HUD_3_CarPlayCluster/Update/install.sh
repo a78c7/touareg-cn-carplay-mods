@@ -8,6 +8,8 @@
 # - dash.conf   : info box on the cluster map (which values, order, position)
 # - the cluster display switching used by clusterd lives in VWClusterNav_v6.jar (installed by VW_HUD_2_ClusterNav)
 # smartphone_integrator.json is backed up to the USB first; uninstall.sh removes only our LD_PRELOAD entry.
+# same line count, non-empty (awk: the ModKit USB install environment has no wc)
+same_lines() { a=$(awk 'END{print NR}' "$1" 2>/dev/null); b=$(awk 'END{print NR}' "$2" 2>/dev/null); [ -n "$a" ] && [ "$a" = "$b" ]; }
 D=/mnt/app/eso/bin/apps/cluster
 SI=/mnt/system/etc/eso/production/smartphone_integrator.json
 DIO=$D/dio_cluster.so
@@ -54,10 +56,10 @@ if grep -q "$PR" $SI; then
 else
     sed -e "s#\"LD_PRELOAD=$DIO\"#\"LD_PRELOAD=$DIO:$PR\"#" $SI > /tmp/si_new.json
     if [ "$(grep -c "LD_PRELOAD=$DIO:$PR\"" /tmp/si_new.json)" != "1" ]; then echo "abort: json edit check failed (json not changed)"; exit 0; fi
-    if [ "$(wc -l < /tmp/si_new.json)" != "$(wc -l < $SI)" ]; then echo "abort: line count changed (json not changed)"; exit 0; fi
+    if ! same_lines /tmp/si_new.json $SI; then echo "abort: line count changed (json not changed)"; exit 0; fi
     mount -uw /mnt/system
     cp -v /tmp/si_new.json $SI
-    echo "patched:"; grep -o '"LD_PRELOAD=[^"]*"' $SI
+    echo "patched:"; grep LD_PRELOAD $SI
 fi
 
 # 3) remove the hand-installed development copy of the boot script, if any
