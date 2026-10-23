@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>途锐改装设置</title>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#fff; --ink:#1d2129; --sub:#5b6270; --mute:#8a919e; --line:#e3e6eb;
+  --acc:#1f6feb; --acc-weak:#e8f0fe; --ok:#1a7f37; --ok-weak:#e6f4ea; --warn:#9a6700; --warn-weak:#fff6dd;
+  --bad:#c62828; --bad-weak:#fdecea; --chip:#f0f2f5;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC","Hiragino Sans GB",sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:24px 20px 60px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:24px;margin:0;font-weight:650;letter-spacing:.5px}
+.ver{color:var(--mute);font-size:13px}
+.lead{color:var(--sub);margin:0 0 18px}
+.status{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:13px;background:var(--chip);color:var(--sub)}
+.pill.ok{background:var(--ok-weak);color:var(--ok)} .pill.warn{background:var(--warn-weak);color:var(--warn)} .pill.bad{background:var(--bad-weak);color:var(--bad)}
+.msg{border-radius:10px;padding:10px 14px;margin:0 0 10px;font-size:14px}
+.msg.warn{background:var(--warn-weak);color:#6b4a00} .msg.bad{background:var(--bad-weak);color:#8e1c1c} .msg.info{background:var(--acc-weak);color:#174ea6} .msg.ok{background:var(--ok-weak);color:#0f5323}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:0 0 16px}
+.card h2{font-size:17px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+.num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;font-size:13px;font-weight:700}
+.hint{color:var(--mute);font-size:13px;margin:0 0 12px}
+.feat{display:grid;grid-template-columns:1fr auto;gap:6px 16px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.feat:first-of-type{border-top:0}
+.feat .t{font-weight:600}
+.feat .d{color:var(--sub);font-size:13px}
+.feat .now{color:var(--mute);font-size:12px;margin-left:6px;font-weight:400}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:7px 14px;font:inherit;font-size:14px;color:var(--sub);cursor:pointer;border-left:1px solid var(--line)}
+.seg button:first-child{border-left:0}
+.seg button.on.install{background:var(--acc);color:#fff} .seg button.on.uninstall{background:var(--bad);color:#fff} .seg button.on.skip{background:#5b6270;color:#fff}
+.seg button:disabled{opacity:.45;cursor:not-allowed}
+.fnote{grid-column:1/-1;font-size:13px;border-radius:8px;padding:6px 10px}
+.fnote.warn{background:var(--warn-weak);color:#6b4a00} .fnote.bad{background:var(--bad-weak);color:#8e1c1c} .fnote.info{background:var(--acc-weak);color:#174ea6}
+.dash{position:relative}
+.dash.off .dash-body{opacity:.35;pointer-events:none}
+.dash-off-msg{display:none;margin:4px 0 10px}
+.dash.off .dash-off-msg{display:block}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-weight:600}
+.switch input{width:18px;height:18px;accent-color:var(--acc)}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;margin-top:12px}
+@media (max-width:820px){.grid{grid-template-columns:1fr}}
+.grp{margin:0 0 10px}
+.grp .gt{font-size:12px;color:var(--mute);margin:0 0 5px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{position:relative;border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 10px;font:inherit;font-size:13.5px;cursor:pointer;color:var(--ink)}
+.chip:hover{border-color:#b9c0cc}
+.chip.sel{background:var(--acc-weak);border-color:#9ec1fb;color:#174ea6}
+.chip .ix{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;background:var(--acc);color:#fff;font-size:11px;margin-right:5px;padding:0 4px}
+.chip:disabled{opacity:.4;cursor:not-allowed}
+.panel{border:1px solid var(--line);border-radius:12px;padding:12px}
+.order-head{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px}
+.count{font-size:13px;color:var(--sub)}
+.count b{color:var(--ink)}
+ol.order{list-style:none;margin:0;padding:0}
+ol.order li{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin:0 0 6px;background:#fff;font-size:14px}
+ol.order li.drag{opacity:.4} ol.order li.over{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc-weak)}
+.grip{cursor:grab;color:var(--mute);font-size:16px;line-height:1;padding:0 2px}
+.oi{min-width:20px;color:var(--mute);font-size:12px}
+.oname{flex:1}
+.ib{border:0;background:var(--chip);border-radius:6px;width:26px;height:26px;cursor:pointer;color:var(--sub);font-size:13px}
+.ib:hover{background:#e3e6eb}
+.empty{color:var(--mute);font-size:13px;padding:10px 0}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;color:var(--sub)}
+.btn:hover{border-color:#b9c0cc;color:var(--ink)}
+.preview-wrap{margin-top:12px;border-radius:12px;padding:16px;background:linear-gradient(135deg,#3d4b45 0%,#2f3a36 45%,#46534d 100%);overflow:auto}
+.pv-title{font-size:12px;color:#c9d1cc;margin:0 0 8px}
+.pv{display:inline-grid;grid-template-columns:auto auto auto;column-gap:14px;border-radius:16px;color:#fff;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
+.pv .l{color:#a5a5a5;font-weight:500;align-self:center;white-space:nowrap}
+.pv .l2{display:flex;flex-direction:column;justify-content:center;line-height:1.05;align-self:center}
+.pv .l2 .m{color:#777;font-weight:400}
+.pv .l2 .l{align-self:flex-start}
+.pv .v{font-weight:700;text-align:right;align-self:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pv .u{color:#969696;align-self:center;white-space:nowrap;margin-left:-6px}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--sub);font-size:14px}
+.adv{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:10px}
+.adv label{font-size:13px;color:var(--sub);display:flex;flex-direction:column;gap:4px}
+.adv input[type=number]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;width:100%}
+.adv .cb{flex-direction:row;align-items:center;gap:8px}
+.summary{font-size:14px;color:var(--sub);margin:0 0 12px}
+.summary div{margin:2px 0}
+.summary b{color:var(--ink);font-weight:600}
+.primary{border:0;background:var(--acc);color:#fff;border-radius:10px;padding:11px 26px;font:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.primary:disabled{background:#9fb7d9;cursor:not-allowed}
+.result{margin-top:14px}
+.result ul{margin:6px 0 0;padding-left:20px;font-size:13.5px}
+.steps{margin:10px 0 0;padding-left:20px;font-size:14px}
+.steps li{margin:3px 0}
+footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>途锐改装设置</h1><span class="ver" id="ver"></span></header>
+  <p class="lead">选好要装哪些功能、仪表信息框显示什么，点「保存到 U 盘」。保存后把 U 盘拿到车上刷机即可。</p>
+  <div class="status" id="status"></div>
+  <div id="alerts"></div>
+
+  <section class="card">
+    <h2><span class="num">1</span>选择功能</h2>
+    <p class="hint">「安装」包括第一次装和升级；「卸载」恢复原车；「不处理」这次不碰它（车上已经装的保持原样）。</p>
+    <div id="feats"></div>
+  </section>
+
+  <section class="card dash" id="dash">
+    <h2><span class="num">2</span>仪表信息框</h2>
+    <p class="hint">连着 CarPlay、仪表显示地图时，地图左侧的半透明小框。点左边的项目加入，右边拖动排序，最多 <span id="maxrows">10</span> 项。</p>
+    <div class="msg info dash-off-msg">要显示信息框，先在上面把「仪表地图 + 信息框」选为「安装」。</div>
+    <div class="dash-body">
+      <label class="switch"><input type="checkbox" id="show"> 显示信息框</label>
+      <div class="grid">
+        <div>
+          <div id="cat"></div>
+          <div class="presets">
+            <span class="hint" style="margin:6px 4px 0 0">快速选择：</span>
+            <button class="btn" data-preset="power,torque,g,rpm,oil,gearbox">默认（动力）</button>
+            <button class="btn" data-preset="trip,tripdist,tripspeed,triptime,cons,range">行驶数据</button>
+            <button class="btn" data-preset="oil,gearbox,coolant,outside">温度</button>
+            <button class="btn" data-preset="">清空</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="order-head"><b>显示顺序</b><span class="count" id="count"></span></div>
+          <ol class="order" id="order"></ol>
+        </div>
+      </div>
+      <div class="preview-wrap">
+        <div class="pv-title">效果示意（数字是举例；车上用的字体和位置以实车为准）</div>
+        <div class="pv" id="pv"></div>
+      </div>
+      <details>
+        <summary>高级：位置、透明度、油箱容积</summary>
+        <div class="adv">
+          <label>左边距 x（仪表画面像素）<input type="number" id="x" min="0" max="1500"></label>
+          <label>上边距 y（默认 172，刚好在导航条和挡位框之间）<input type="number" id="y" min="0" max="600"></label>
+          <label>背景不透明度 <span id="alphav"></span><input type="range" id="alpha" min="0" max="255"></label>
+          <label>油箱容积（升，"燃油存量"用；0 = 显示百分比）<input type="number" id="tank" min="0" max="200"></label>
+          <label class="cb"><input type="checkbox" id="latflip"> 横向 G 正负号反过来</label>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">3</span>保存</h2>
+    <div class="summary" id="summary"></div>
+    <button class="primary" id="save">保存到 U 盘</button>
+    <div class="result" id="result"></div>
+  </section>
+
+  <footer>
+    本程序只修改这个 U 盘里的文件：不选的功能文件夹移到「未选模块」（车机不会刷它），卸载的功能里放一个 uninstall.txt，信息框设置写进 dash.conf，并删掉 Mac 自动生成的隐藏文件（._ 开头的文件和 .DS_Store）。不联网、不上传任何东西。<br>
+    改装包只适用于车机版本 MH2p_CN_VWG36_P2878，其它版本刷机时会自动跳过。改装风险自负。
+  </footer>
+</div>
+
+<script>
+const T = new URLSearchParams(location.search).get('t') || '';
+const $ = id => document.getElementById(id);
+let S = null, sel = {}, dash = null, notes = {};
+const NAMES = {install:'安装', uninstall:'卸载', skip:'不处理'};
+const NOW = {install:'U 盘里现在：安装', uninstall:'U 盘里现在：卸载', skip:'U 盘里现在：不处理', missing:'U 盘里没有这个功能的文件夹', mixed:'U 盘里现在：不完整'};
+
+async function api(path, body){
+  const r = await fetch(path, {method: body ? 'POST' : 'GET', headers: {'X-Token': T, 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  if(!r.ok) throw new Error('程序没有响应（' + r.status + '）。请关掉这个网页，重新双击运行「改装设置」。');
+  return r.json();
+}
+setInterval(() => api('/api/ping').catch(()=>{}), 10000);
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const item = k => S.catalogue.find(i => i.key === k);
+const plain = l => l.replace('|','');
+
+function renderStatus(){
+  const v = S.vol, st = [];
+  const where = S.os === 'windows' ? (v.mount || S.root) : (v.mount || S.root);
+  st.push(v.isRoot ? `<span class="pill ok">✓ 在 U 盘根目录（${esc(where)}）</span>` : `<span class="pill warn">⚠ 不在 U 盘根目录</span>`);
+  if (v.fs) st.push(v.fat ? `<span class="pill ok">✓ 格式 ${esc(v.fs)}</span>` : `<span class="pill bad">✗ 格式 ${esc(v.fs)}，车机不认</span>`);
+  if (v.totalGB) st.push(`<span class="pill ${v.totalGB > 33 ? 'warn' : ''}">容量 ${v.totalGB} GB</span>`);
+  if (S.macJunk) st.push(`<span class="pill warn">Mac 隐藏文件 ${S.macJunk} 个，保存时清理</span>`);
+  $('status').innerHTML = st.join('');
+  const al = [];
+  (S.errors || []).forEach(e => al.push(`<div class="msg bad">${esc(e)}</div>`));
+  if (!v.isRoot) al.push(`<div class="msg warn">改装包现在在「${esc(S.root)}」，不在 U 盘根目录。车机只认 U 盘根目录下的 Data、Meta、Mods。可以先在这里设置好，再把这个文件夹里的<b>全部内容</b>复制到 U 盘根目录${S.os === 'darwin' ? '；Mac 复制到 U 盘后请在 U 盘里再运行一次本程序并保存，用来清理复制时产生的隐藏文件' : ''}。</div>`);
+  if (v.fs && !v.fat) al.push(`<div class="msg bad">这个 U 盘是 ${esc(v.fs)} 格式，车机只认 FAT32。请先把 U 盘格式化成 FAT32（Windows：右键 U 盘 → 格式化；Mac：磁盘工具 → 抹掉 → MS-DOS (FAT)，会清空 U 盘），再复制改装包。</div>`);
+  if (v.fat && v.totalGB > 33) al.push(`<div class="msg warn">U 盘大于 32GB，部分车机不认。刷机没反应的话换一个 32GB 以内的 U 盘。</div>`);
+  if (S.dash.unknown && S.dash.unknown.length) al.push(`<div class="msg warn">原来的 dash.conf 里有不认识的项目，已忽略：${esc(S.dash.unknown.join('、'))}</div>`);
+  $('alerts').innerHTML = al.join('');
+}
+
+function setFeat(id, v){
+  notes = {};
+  sel[id] = v;
+  if (id === 'cluster' && v === 'install' && sel.hud !== 'install') { sel.hud = 'install'; notes.hud = ['info', '「仪表地图 + 信息框」需要它，已同时选为安装。']; }
+  if (id === 'hud' && v === 'uninstall' && sel.cluster !== 'uninstall') { sel.cluster = 'uninstall'; notes.cluster = ['info', '卸载「导航上 HUD」时它也要一起卸载，已同时选为卸载。']; }
+  if (id === 'hud' && v === 'skip' && sel.cluster === 'install') { sel.cluster = 'skip'; notes.cluster = ['info', '它需要「导航上 HUD」一起装，已同时改为不处理。']; }
+  renderAll();
+}
+
+function featNotes(id){
+  const out = [];
+  if (notes[id]) out.push(notes[id]);
+  if (id === 'fullscreen' && sel.fullscreen === 'uninstall') {
+    if (S.fullBackup === 'usb') out.push(['info', '会用这个 U 盘当初安装时留下的备份恢复原厂界面。']);
+    else if (S.fullBackup === 'stock') out.push(['info', '这个 U 盘里没有当初的备份，会用改装包里自带的原厂文件（Stock 文件夹）恢复。']);
+    else out.push(['bad', '找不到原厂文件（U 盘备份和 Stock 文件夹都没有），卸载会跳过这一项。请用完整的新版改装包。']);
+  }
+  if (id === 'carplay' && sel.carplay === 'uninstall' && sel.aa !== 'uninstall') out.push(['warn', '无线 CarPlay 和 Android Auto 共用一部分授权，只卸载 CarPlay 可能让 Android Auto 也失效。如果卸载后 Android Auto 不能用，再刷一次只把 Android Auto 选为安装。']);
+  if (id === 'aa' && sel.aa === 'uninstall' && sel.carplay === 'skip') out.push(['warn', 'Android Auto 和无线 CarPlay 共用一部分授权，只卸载 Android Auto 可能影响 CarPlay；建议把无线 CarPlay 同时选为安装（会重新写入授权）。']);
+  if (S.states[id] === 'missing') out.push(['warn', 'U 盘里没有这个功能的文件夹，只能选「不处理」。']);
+  return out;
+}
+
+function renderFeats(){
+  $('feats').innerHTML = S.features.map(f => {
+    const missing = S.states[f.id] === 'missing';
+    const btns = ['install','uninstall','skip'].map(v => `<button class="${v}${sel[f.id] === v ? ' on' : ''}" data-f="${f.id}" data-v="${v}" ${missing && v !== 'skip' ? 'disabled' : ''}>${NAMES[v]}</button>`).join('');
+    const ns = featNotes(f.id).map(([k, t]) => `<div class="fnote ${k}">${esc(t)}</div>`).join('');
+    return `<div class="feat"><div><div class="t">${esc(f.name)}<span class="now">${esc(NOW[S.states[f.id]] || '')}</span></div><div class="d">${esc(f.desc)}</div></div><div class="seg">${btns}</div>${ns}</div>`;
+  }).join('');
+}
+
+function sizeClass(n){ return n <= 6 ? 0 : n <= 8 ? 1 : 2; }
+const SZ = [ // same metrics as dash.c / gen_dash_font.py
+  {row:52, pad:12, val:40, lab:26, unit:22, top:18, bot:23, name:'大字'},
+  {row:40, pad:12, val:32, lab:22, unit:18, top:15, bot:19, name:'中字'},
+  {row:32, pad:10, val:26, lab:18, unit:15, top:13, bot:15, name:'小字'}];
+
+function renderDash(){
+  const on = sel.cluster === 'install';
+  $('dash').classList.toggle('off', !on);
+  $('show').checked = dash.show;
+  const n = dash.items.length, full = n >= S.maxRows;
+  const groups = [];
+  S.catalogue.forEach(i => { let g = groups.find(x => x.name === i.group); if (!g) groups.push(g = {name: i.group, items: []}); g.items.push(i); });
+  $('cat').innerHTML = groups.map(g => `<div class="grp"><div class="gt">${esc(g.name)}${['自启动起','自上次加油起','累计'].includes(g.name) ? '（行驶数据存储器）' : ''}</div><div class="chips">${g.items.map(i => {
+    const ix = dash.items.indexOf(i.key);
+    const lab = i.label.includes('|') ? i.label.split('|')[1] : i.label;
+    return `<button class="chip${ix >= 0 ? ' sel' : ''}" data-k="${i.key}" title="${esc(i.note || '')}" ${ix < 0 && full ? 'disabled' : ''}>${ix >= 0 ? `<span class="ix">${ix + 1}</span>` : ''}${esc(lab)}</button>`;
+  }).join('')}</div></div>`).join('');
+  const sc = SZ[sizeClass(n)];
+  $('count').innerHTML = n ? `<b>${n}</b> / ${S.maxRows} 项 · ${sc.name}${n >= 9 ? '（偏小，建议不超过 8 项）' : ''}` : `0 / ${S.maxRows} 项`;
+  $('order').innerHTML = n ? dash.items.map((k, ix) => {
+    const i = item(k);
+    return `<li draggable="true" data-ix="${ix}"><span class="grip" title="拖动排序">⠿</span><span class="oi">${ix + 1}</span><span class="oname">${esc(plain(i.label))}${i.unit ? ` <span style="color:var(--mute);font-size:12px">${esc(i.unit)}</span>` : ''}</span><button class="ib" data-up="${ix}" title="上移" ${ix === 0 ? 'disabled' : ''}>↑</button><button class="ib" data-down="${ix}" title="下移" ${ix === n - 1 ? 'disabled' : ''}>↓</button><button class="ib" data-del="${ix}" title="去掉">✕</button></li>`;
+  }).join('') : `<li class="empty" style="border:0">还没有选项目，点左边的项目加入。</li>`;
+  // preview
+  const pv = $('pv');
+  if (!dash.show || !n) { pv.style.cssText = 'padding:12px 16px;background:rgba(16,18,22,.5)'; pv.innerHTML = `<div style="grid-column:1/-1;color:#ccc;font-size:13px">${dash.show ? '（没有选项目）' : '（信息框不显示）'}</div>`; }
+  else {
+    pv.style.cssText = `padding:${sc.pad}px 18px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});grid-auto-rows:${sc.row}px`;
+    pv.innerHTML = dash.items.map(k => {
+      const i = item(k);
+      const lab = i.label.includes('|') ? `<div class="l2"><span class="m" style="font-size:${sc.top}px">${esc(i.label.split('|')[0])}</span><span class="l" style="font-size:${sc.bot}px">${esc(i.label.split('|')[1])}</span></div>` : `<div class="l" style="font-size:${sc.lab}px">${esc(i.label)}</div>`;
+      let val = i.sample;
+      if (k === 'fuel' && !dash.tank_l) val = '46';
+      const unit = k === 'fuel' && !dash.tank_l ? '%' : i.unit;
+      return `${lab}<div class="v" style="font-size:${sc.val}px">${esc(val)}</div><div class="u" style="font-size:${sc.unit}px">${esc(unit)}</div>`;
+    }).join('');
+  }
+  $('x').value = dash.x; $('y').value = dash.y; $('alpha').value = dash.alpha; $('alphav').textContent = dash.alpha; $('tank').value = dash.tank_l; $('latflip').checked = !!dash.lat_flip;
+}
+
+function renderSummary(){
+  const by = {install: [], uninstall: [], skip: []};
+  S.features.forEach(f => by[sel[f.id]].push(f.name));
+  const lines = [];
+  if (by.install.length) lines.push(`<div>安装 / 升级：<b>${esc(by.install.join('、'))}</b></div>`);
+  if (by.uninstall.length) lines.push(`<div>卸载（恢复原车）：<b>${esc(by.uninstall.join('、'))}</b></div>`);
+  if (by.skip.length) lines.push(`<div>不处理：${esc(by.skip.join('、'))}</div>`);
+  if (sel.cluster === 'install') lines.push(`<div>信息框：${dash.show ? (dash.items.length ? esc(dash.items.map(k => plain(item(k).label)).join('、')) : '<span style="color:var(--bad)">还没有选项目</span>') : '不显示'}</div>`);
+  $('summary').innerHTML = lines.join('');
+  $('save').disabled = !!(S.errors && S.errors.length) || (sel.cluster === 'install' && dash.show && !dash.items.length);
+}
+
+function renderAll(){ renderFeats(); renderDash(); renderSummary(); }
+
+// ---- events ----
+document.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  if (b.dataset.f) return setFeat(b.dataset.f, b.dataset.v);
+  if (b.dataset.k) { const k = b.dataset.k, ix = dash.items.indexOf(k); if (ix >= 0) dash.items.splice(ix, 1); else if (dash.items.length < S.maxRows) dash.items.push(k); renderDash(); renderSummary(); return; }
+  if (b.dataset.up !== undefined) { const i = +b.dataset.up; [dash.items[i - 1], dash.items[i]] = [dash.items[i], dash.items[i - 1]]; renderDash(); renderSummary(); return; }
+  if (b.dataset.down !== undefined) { const i = +b.dataset.down; [dash.items[i + 1], dash.items[i]] = [dash.items[i], dash.items[i + 1]]; renderDash(); renderSummary(); return; }
+  if (b.dataset.del !== undefined) { dash.items.splice(+b.dataset.del, 1); renderDash(); renderSummary(); return; }
+  if (b.dataset.preset !== undefined) { dash.items = b.dataset.preset ? b.dataset.preset.split(',') : []; renderDash(); renderSummary(); return; }
+});
+$('show').addEventListener('change', e => { dash.show = e.target.checked; renderDash(); renderSummary(); });
+const num = (id, key, lo, hi) => $(id).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dash[key] = Math.max(lo, Math.min(hi, v)); if (id === 'alpha') { $('alphav').textContent = dash.alpha; } renderDashPreviewOnly(); } });
+function renderDashPreviewOnly(){ const a = document.activeElement && document.activeElement.id; renderDash(); if (a && $(a)) $(a).focus(); }
+num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); num('tank', 'tank_l', 0, 200);
+$('latflip').addEventListener('change', e => { dash.lat_flip = e.target.checked ? 1 : 0; });
+
+// drag to reorder
+let dragIx = -1;
+$('order').addEventListener('dragstart', e => { const li = e.target.closest('li'); if (!li) return; dragIx = +li.dataset.ix; li.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragIx)); });
+$('order').addEventListener('dragend', e => { dragIx = -1; document.querySelectorAll('#order li').forEach(l => l.classList.remove('drag', 'over')); });
+$('order').addEventListener('dragover', e => { const li = e.target.closest('li[data-ix]'); if (!li || dragIx < 0) return; e.preventDefault(); document.querySelectorAll('#order li').forEach(l => l.classList.toggle('over', l === li)); });
+$('order').addEventListener('drop', e => { const li = e.target.closest('li[data-ix]'); if (!li || dragIx < 0) return; e.preventDefault(); const to = +li.dataset.ix; const [m] = dash.items.splice(dragIx, 1); dash.items.splice(to, 0, m); dragIx = -1; renderDash(); renderSummary(); });
+
+$('save').addEventListener('click', async () => {
+  const btn = $('save'); btn.disabled = true; btn.textContent = '正在保存…';
+  try {
+    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip}});
+    if (!r.ok) { $('result').innerHTML = `<div class="msg bad">没有保存：${esc(r.error)}</div>`; return; }
+    const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip';
+    $('result').innerHTML = `<div class="msg ok"><b>已保存。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>
+      <b>接下来：</b><ol class="steps">
+        <li>${S.os === 'darwin' ? '在访达左侧点 U 盘旁边的 ⏏ 推出 U 盘' : '在任务栏右下角「安全删除硬件」里弹出 U 盘'}，再拔下来。</li>
+        <li>到车上<b>发动车辆</b>，插入 U 盘。约 10 秒后车机自动重启并开始刷机，过程几分钟，会重启几次、可能出现红色工程界面，<b>期间不要操作车机</b>。</li>
+        <li>屏幕提示移除介质时拔出 U 盘，车机重启后就生效了。</li>
+      </ol>
+      ${keepNote ? '<p class="hint" style="margin-top:8px">刷机时会把原厂文件备份到这个 U 盘，建议保留这个 U 盘，平时不要插在车上（插着会再次进入刷机）。</p>' : ''}
+      <button class="btn" id="quit">完成，退出程序</button>`;
+    S = await api('/api/state'); renderStatus();
+  } catch (err) {
+    $('result').innerHTML = `<div class="msg bad">${esc(err.message)}</div>`;
+  } finally { btn.disabled = false; btn.textContent = '保存到 U 盘'; renderSummary(); }
+});
+document.addEventListener('click', async e => { if (e.target.id === 'quit') { await api('/api/quit').catch(()=>{}); document.body.innerHTML = '<div class="wrap"><h1>途锐改装设置</h1><p class="lead">程序已退出，可以关闭这个网页了。</p></div>'; } });
+
+(async () => {
+  try {
+    S = await api('/api/state');
+  } catch (err) { document.body.innerHTML = `<div class="wrap"><h1>途锐改装设置</h1><div class="msg bad">${esc(err.message)}</div></div>`; return; }
+  $('ver').textContent = S.version;
+  $('maxrows').textContent = S.maxRows;
+  S.features.forEach(f => { const s = S.states[f.id]; sel[f.id] = s === 'missing' ? 'skip' : (s === 'mixed' ? 'install' : s); });
+  if (sel.cluster === 'install' && sel.hud !== 'install') sel.hud = 'install';
+  if (sel.hud === 'uninstall' && sel.cluster !== 'uninstall') sel.cluster = 'uninstall';
+  dash = Object.assign({}, S.dash, {items: (S.dash.items || []).slice()});
+  renderStatus(); renderAll();
+})();
+</script>
+</body>
+</html>

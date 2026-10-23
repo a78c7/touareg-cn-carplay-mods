@@ -21,18 +21,11 @@ public class Activator implements BundleActivator {
         } catch (Throwable t) {
             Log.log("dash start error: " + t);
         }
-        try {
-            Perf.start();
-            Log.log("perf thread started");
-        } catch (Throwable t) {
-            Log.log("perf start error: " + t);
-        }
     }
 
     public void stop(BundleContext ctx) throws Exception {
         try {
             RGGate.stop = true;
-            Perf.stop = true;
             Dash.stop = true;
             Rebind.stop = true;
             Bridge.stopThread();

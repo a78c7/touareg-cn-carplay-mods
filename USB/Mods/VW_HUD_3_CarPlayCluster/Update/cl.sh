@@ -1,12 +1,13 @@
 #!/bin/ksh
-# CarPlay cluster helper (v15). Live: va N | ui N | idr | zoomin N | zoomout N
+# CarPlay cluster helper (v15, v17: no mv in /tmp). Live: va N | ui N | idr | zoomin N | zoomout N
 # Next connect: tall H [croptop]   (writes /tmp/cl.conf, then reconnect CarPlay)
 # Other: st (status) | save (make /tmp/cl.conf permanent) | reset (forget /tmp/cl.conf) | log
 D=/mnt/app/eso/bin/apps/cluster
 T=/tmp/cl.conf
 conf_set() { # key value
     [ -f $T ] || cp $D/cl.conf $T 2>/dev/null || : > $T
-    grep -v "^$1=" $T > $T.n; echo "$1=$2" >> $T.n; mv -f $T.n $T; chmod 644 $T
+    # /tmp on this unit has no rename: rewrite the file in place
+    grep -v "^$1=" $T > $T.n; echo "$1=$2" >> $T.n; cat $T.n > $T; rm -f $T.n; chmod 644 $T
 }
 case "$1" in
     va|ui|idr|zoomin|zoomout|replay) echo "$*" > /tmp/cl_alt_cmd; sleep 1; cat /tmp/cl_status ;;

@@ -20,6 +20,8 @@ import org.dsi.ifc.carvehiclestates.VehicleInfoViewOptions;
 import org.dsi.ifc.global.CarViewOption;
 
 /**
+ * Development only (not in the release jar since v17; to use it, copy it back to ../vwcn/ and start it from
+ * Activator with Perf.start()).
  * Read-only probe: while /tmp/perf_on exists, subscribes to DSICarVehicleStates
  * (view options 12/13/16, data 14/15/17) and logs to /tmp/perf.log.
  * Latest high-frequency sample also goes to /tmp/perf.state (overwritten).
