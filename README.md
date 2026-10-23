@@ -27,7 +27,7 @@
 ## 安装（5 步）
 
 1. **准备 U 盘**：找一个 32GB 以内的 U 盘，格式化为 **FAT32**（Windows：右键 U 盘 → 格式化；Mac：磁盘工具 → 抹掉 → MS-DOS (FAT)）。
-2. **复制文件**：点本页绿色 **Code → Download ZIP**，解压，把 `USB` 文件夹**里面的全部内容**（`Data`、`Meta`、`Logs`、`Mods` 和两个「改装设置」程序）复制到 U 盘根目录。
+2. **复制文件**：到 [**Releases**](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) 下载 `touareg-cn-carplay-mods-版本号.zip`，解压，把**里面的全部内容**（`Data`、`Meta`、`Logs`、`Mods` 和两个「改装设置」程序）复制到 U 盘根目录。
 3. **选择功能**：双击 U 盘里的 **「改装设置（Windows）.exe」** 或 **「改装设置（Mac）.command」**，浏览器里会打开设置页面：每个功能选「安装 / 卸载 / 不处理」，仪表信息框勾选要显示的项目、拖动排序，点 **「保存到 U 盘」**。程序会自动处理依赖关系、检查 U 盘格式，并清掉 Mac 复制时产生的隐藏文件（不联网，只改这个 U 盘里的文件）。全部默认安装的话这一步可以跳过（Mac 用户仍建议运行一次，用来清理隐藏文件）。
    - Windows 如果提示"Windows 已保护你的电脑"：点"更多信息" → "仍要运行"。
    - Mac 第一次打开会提示"无法验证开发者"：打开 系统设置 → 隐私与安全性，在下面点"仍要打开"，再双击一次（macOS 14 及以前也可以右键 → 打开）。
@@ -137,7 +137,7 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 
 ✅ Verified on a 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ The USB install of `VW_HUD_3` has not yet been tested end-to-end on an unmodified car (the test car had the same binaries installed by hand); only tested on iOS 27. Upgrading from the earlier touareg-cn-carplay-fullscreen package: flash this drive over it; this package can also uninstall it. Logs may contain your phone name and street names — review before posting.
 
-**Install**: FAT32 drive ≤ 32 GB → copy everything inside `USB` to the root → double-click `改装设置（Windows）.exe` / `改装设置（Mac）.command` on the drive to choose install / uninstall / skip per mod and the info-box rows in a local web page (it also removes macOS `._*` files) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. Full-screen CarPlay ships no VW file: `vhpatch` checks the car's own `skin3/viewhandler.zip` and changes 38 bytes listed in `fullscreen.patch` (reverted the same way on uninstall).
+**Install**: FAT32 drive ≤ 32 GB → download the zip from [Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) and copy everything in it to the root → double-click `改装设置（Windows）.exe` / `改装设置（Mac）.command` on the drive to choose install / uninstall / skip per mod and the info-box rows in a local web page (it also removes macOS `._*` files) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. Full-screen CarPlay ships no VW file: `vhpatch` checks the car's own `skin3/viewhandler.zip` and changes 38 bytes listed in `fullscreen.patch` (reverted the same way on uninstall).
 
 **Cluster map**: put the cluster on its navigation map page (VIEW button); the phone's map appears 1–3 s after CarPlay connects, also right after boot. Remaining distance and arrival time are shown by the cluster itself (stock style). The car icon is placed under the cluster clock near the bottom: the phone is told the cluster is 1920x960 and only rows 230–869 are shown; per-app safe areas (AMap / Apple Maps / Baidu behave differently, AMap also shifts the car ~210 px toward the next turn, which is compensated from the route-guidance maneuver type) are switched automatically by app name. Settings: `/mnt/app/eso/bin/apps/cluster/cl.conf`. Side gauges can be hidden in the cluster settings.
 
