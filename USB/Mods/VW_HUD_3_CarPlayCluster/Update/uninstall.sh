@@ -16,8 +16,8 @@ else
     echo "json: cl_probe.so not present"
 fi
 mount -uw /mnt/app
-rm -fv $D/cl_probe.so $D/cl_render $D/clusterd $D/disable $D/cl.conf $D/cl.conf.default $D/cl.sh
-rm -rf $D/bak_v14 $D/v15
+rm -fv $D/cl_probe.so $D/cl_render $D/clusterd $D/disable $D/cl.conf $D/cl.conf.default $D/cl.sh $D/dash.conf
+rm -rf $D/bak_v14 $D/bak_v15 $D/v15 $D/dm
 rmdir $D 2>/dev/null
 rm -rf /mnt/ota/modkit/Mods/VW_CarPlayCluster 2>/dev/null
 sync

@@ -1,6 +1,6 @@
 # Noto Sans CJK SC — SIL Open Font License 1.1
 
-Used by `src/cl_render/dash_font.h`: glyph bitmaps for the cluster info box (功率/扭矩/G 值/转速/机油/变速箱, digits and units),
+Used by `src/cl_render/dash_font.h`: glyph bitmaps for the cluster info box (row labels such as 功率/扭矩/G 值, digits and units, two sizes),
 pre-rendered from Noto Sans CJK SC (Regular, Medium, Bold) with `src/cl_render/gen_dash_font.py`.
 The font software itself is not included. Source: https://github.com/notofonts/noto-cjk
 

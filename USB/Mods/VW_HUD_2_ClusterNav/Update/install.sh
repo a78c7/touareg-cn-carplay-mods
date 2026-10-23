@@ -1,6 +1,6 @@
 #!/bin/ksh
 # VW Touareg CN (MH2p_CN_VWG36_P2878): CarPlay route guidance -> instrument cluster + HUD, step 2.
-# The jar keeps the file name VWClusterNav_v6.jar; content is v16 (also used by VW_HUD_3_CarPlayCluster: display switching, info box data).
+# The jar keeps the file name VWClusterNav_v6.jar; content is v17 (also used by VW_HUD_3_CarPlayCluster: display switching, info box data).
 # Needs step 1 (VW_HUD_1_RouteGuidance: dio_cluster.so preloaded into dio_manager) already installed.
 # - copies VWClusterNav_v6.jar (Java 1.4 class files, version 48) to /mnt/app/eso/hmi/lsd/jars/, removes older versions
 # - registers it as HMI bundle 97, started LAST in the Lateload group (61,62,95,97)

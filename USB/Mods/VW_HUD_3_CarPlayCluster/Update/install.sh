@@ -5,6 +5,7 @@
 #                 (altScreen), receives + decrypts the 2nd video stream -> /cluster_h264_shm
 # - cl_render   : H.264 decoder/renderer for the cluster window (based on fifthBro/mh2p-cluster cluster.c, CC BY-NC-SA 4.0)
 # - clusterd    : starts cl_render while the stream is live, switches the cluster back to the stock map when it ends
+# - dash.conf   : info box on the cluster map (which values, order, position)
 # - the cluster display switching used by clusterd lives in VWClusterNav_v6.jar (installed by VW_HUD_2_ClusterNav)
 # smartphone_integrator.json is backed up to the USB first; uninstall.sh removes only our LD_PRELOAD entry.
 D=/mnt/app/eso/bin/apps/cluster
@@ -42,6 +43,8 @@ done
 cp -v $MOD_PATH/cl.conf $D/cl.conf.default && chmod 644 $D/cl.conf.default
 [[ ! -f $D/cl.conf ]] && cp -v $MOD_PATH/cl.conf $D/cl.conf && chmod 644 $D/cl.conf
 [[ -f $MOD_PATH/cl.sh ]] && cp -v $MOD_PATH/cl.sh $D/cl.sh && chmod 755 $D/cl.sh
+# info box items/order/position (v17): the USB copy is the owner's choice, always installed
+[[ -f $MOD_PATH/dash.conf ]] && cp -v $MOD_PATH/dash.conf $D/dash.conf && chmod 644 $D/dash.conf
 rm -f $D/disable
 ls -l $D
 

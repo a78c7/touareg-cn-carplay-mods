@@ -7,16 +7,18 @@ import de.vw.mib.asl.internal.car.abstractclasses.dsiadapter.DSICarVehicleStates
 import java.io.File;
 import java.io.FileWriter;
 import org.dsi.ifc.base.DSIListener;
+import org.dsi.ifc.carkombi.BCShortTermGeneralData;
 import org.dsi.ifc.carkombi.BCTankLevel;
 import org.dsi.ifc.carkombi.DSICarKombi;
 import org.dsi.ifc.carvehiclestates.DSICarVehicleStates;
 import org.dsi.ifc.carvehiclestates.DynamicVehicleInfoHighFrequent;
 import org.dsi.ifc.carvehiclestates.DynamicVehicleInfoMidFrequent;
 import org.dsi.ifc.global.CarBCConsumption;
+import org.dsi.ifc.global.CarBCCurrentRange;
 import org.dsi.ifc.global.CarBCTemperature;
 
 /**
- * v16: data for the cluster info box (drawn by cl_render on the CarPlay map).
+ * v16/v17: data for the cluster info box (drawn by cl_render on the CarPlay map).
  * Subscribes to vehicle states (power, torque, acceleration, gear, gearbox oil temperature) and the kombi
  * board computer (engine oil and coolant temperature, current consumption, tank level) only while the
  * CarPlay map is held on the cluster (Rebind.hold != null), and writes one line to /tmp/dash.state about
@@ -29,9 +31,10 @@ public final class Dash implements Runnable {
     static final String TMP = "/tmp/dash.state.new";
     static final String OFF = "/tmp/vwcn_dash_off";
     static final int[] VS_ATTRS = new int[] {14, 15};
-    // kombi: 4 view options, 6 current consumption 1, 11 short-term ("since start") average consumption 1,
-    // 23 tank level 1, 63 coolant, 64 oil temperature value
-    static final int[] KO_ATTRS = new int[] {4, 6, 11, 23, 63, 64};
+    // kombi: 4 view options, 6 current consumption 1, 8 current range 1, 11 short-term ("since start") average
+    // consumption 1, 13 short-term general (distance, average speed, time), 17 cycle ("since refuel") average
+    // consumption 1, 23 tank level 1, 63 coolant, 64 oil temperature value, 65 outside temperature
+    static final int[] KO_ATTRS = new int[] {4, 6, 8, 11, 13, 17, 23, 63, 64, 65};
 
     private DSICarVehicleStates vs;
     private DSICarKombi ko;
@@ -43,7 +46,10 @@ public final class Dash implements Runnable {
 
     // latest values (written by DSI callbacks, read by the writer thread)
     volatile float power = Float.NaN, gxS = Float.NaN, gyS = Float.NaN, consumption = Float.NaN, tripAvg = Float.NaN;
-    volatile int rpm = Integer.MIN_VALUE;
+    volatile int rpm = Integer.MIN_VALUE, pedal = Integer.MIN_VALUE, steer = Integer.MIN_VALUE, range = Integer.MIN_VALUE;
+    volatile int tripMin = Integer.MIN_VALUE, refuelUnit = Integer.MIN_VALUE;
+    volatile float speed = Float.NaN, brake = Float.NaN, outside = Float.NaN, refuelAvg = Float.NaN;
+    volatile float tripDist = Float.NaN, tripSpeed = Float.NaN;
     volatile int torque = Integer.MIN_VALUE, lever = Integer.MIN_VALUE, gear = Integer.MIN_VALUE;
     volatile int gbt = Integer.MIN_VALUE, consUnit = Integer.MIN_VALUE, tank = Integer.MIN_VALUE, tripUnit = Integer.MIN_VALUE;
     volatile float oil = Float.NaN, coolant = Float.NaN;
@@ -101,6 +107,10 @@ public final class Dash implements Runnable {
         if (!Float.isNaN(power)) b.append(" p=").append(round1(power));
         if (torque != Integer.MIN_VALUE) b.append(" tq=").append(torque);
         if (rpm != Integer.MIN_VALUE) b.append(" rpm=").append(rpm);
+        if (!Float.isNaN(speed)) b.append(" spd=").append(round1(speed));
+        if (pedal != Integer.MIN_VALUE) b.append(" ped=").append(pedal);
+        if (!Float.isNaN(brake)) b.append(" brk=").append(round1(brake));
+        if (steer != Integer.MIN_VALUE) b.append(" str=").append(steer);
         if (!Float.isNaN(gxS)) b.append(" gx=").append(round2(gxS));
         if (!Float.isNaN(gyS)) b.append(" gy=").append(round2(gyS));
         if (lever != Integer.MIN_VALUE) b.append(" gm=").append(lever).append(" gc=").append(gear);
@@ -109,7 +119,13 @@ public final class Dash implements Runnable {
         if (!Float.isNaN(coolant)) b.append(" cool=").append(Math.round(coolant));
         if (!Float.isNaN(consumption)) b.append(" cv=").append(round1(consumption)).append(" cu=").append(consUnit);
         if (!Float.isNaN(tripAvg)) b.append(" ca=").append(round1(tripAvg)).append(" au=").append(tripUnit);
+        if (!Float.isNaN(refuelAvg)) b.append(" cr=").append(round1(refuelAvg)).append(" cru=").append(refuelUnit);
         if (tank != Integer.MIN_VALUE) b.append(" tank=").append(tank);
+        if (!Float.isNaN(outside)) b.append(" out=").append(Math.round(outside));
+        if (range != Integer.MIN_VALUE) b.append(" rng=").append(range);
+        if (!Float.isNaN(tripDist)) b.append(" td=").append(round1(tripDist));
+        if (!Float.isNaN(tripSpeed)) b.append(" ts=").append(round1(tripSpeed));
+        if (tripMin != Integer.MIN_VALUE) b.append(" tt=").append(tripMin);
         String body = b.toString();
         long now = System.currentTimeMillis();
         if (body.equals(lastLine) && now - lastWrite < 1000) return;
@@ -151,6 +167,10 @@ public final class Dash implements Runnable {
             power = d.currentOutputPower;
             torque = d.currentTorque;
             rpm = d.engineSpeed;
+            speed = d.vehicleSpeed == null ? Float.NaN : d.vehicleSpeed.speedValue;
+            pedal = d.acceleratorPosition;
+            brake = d.brakePressure;
+            steer = d.wheelAngle;
             // longitudinal in m/s^2, lateral already in g (same as the stock SportHmi G-meter)
             // signed: longitudinal + accelerating / - braking; lateral sign as the car reports it
             float gx = d.longitudinalAcceleration / 9.81f, gy = d.lateralAcceleration;
@@ -196,6 +216,25 @@ public final class Dash implements Runnable {
                 loggedTripUnit = c.consumptionUnit;
                 Log.log("dash: trip avg " + c.consumptionValue + " unit=" + c.consumptionUnit + " state=" + c.state);
             }
+        }
+        public void updateBCOutsideTemperature(CarBCTemperature t, int s) {
+            if (t == null || s != 1) { outside = Float.NaN; return; }
+            outside = t.temperatureValue;
+        }
+        public void updateBCCurrentRange1(CarBCCurrentRange r, int s) {
+            if (r == null || s != 1) { range = Integer.MIN_VALUE; return; }
+            range = r.currentRangeValue;
+        }
+        public void updateBCCycleAverageConsumption1(CarBCConsumption c, int s) {
+            if (c == null || s != 1) { refuelAvg = Float.NaN; return; }
+            refuelAvg = c.consumptionValue;
+            refuelUnit = c.consumptionUnit;
+        }
+        public void updateBCShortTermGeneral(BCShortTermGeneralData g, int s) {
+            if (g == null || s != 1) { tripDist = Float.NaN; tripSpeed = Float.NaN; tripMin = Integer.MIN_VALUE; return; }
+            tripDist = g.distance == null ? Float.NaN : (float) g.distance.distanceValue;
+            tripSpeed = g.speed == null ? Float.NaN : g.speed.speedValue;
+            tripMin = g.timeValue == null ? Integer.MIN_VALUE : g.timeValue.timeValue;
         }
         public void updateBCTankLevel1(BCTankLevel t, int s) {
             if (t == null || s != 1) { tank = Integer.MIN_VALUE; return; }

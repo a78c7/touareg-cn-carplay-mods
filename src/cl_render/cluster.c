@@ -60,7 +60,7 @@ static const char *cl_disp_id(void) { const char *e = getenv("CL_DISPID"); retur
 #include <time.h>
 
 #ifdef USE_DASH
-#include "dash.c"                 /* v16: cluster info box (power/torque/G/gear/temps/consumption/fuel) */
+#include "dash.c"                 /* v16/v17: cluster info box, items chosen in dash.conf */
 #endif
 #ifdef USE_DASH
 static void dash_setup(int win_w, int win_h);
@@ -2173,24 +2173,34 @@ static unsigned char  *g_dash_ptr;
 static int             g_dash_stride, g_dash_x, g_dash_y, g_dash_noblend, g_dash_logged;
 static uint64_t        g_dash_poll_ms;
 
-static void dash_setup(int win_w, int win_h) {
-    static const char *paths[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
+static int dash_read_conf_file(const char *const *paths) {
     for (unsigned i = 0; i < 2; i++) {
         FILE *f = fopen(paths[i], "r"); if (!f) continue;
-        char l[128];
+        char l[512];
         while (fgets(l, sizeof l, f)) dash_read_conf_line(l);
         fclose(f);
-        break;
+        return 1;
     }
+    return 0;
+}
+
+static void dash_setup(int win_w, int win_h) {
+    /* v16 kept the info_* keys in cl.conf; v17 reads them there first, then dash.conf (items/order/position) */
+    static const char *cl[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
+    static const char *dc[] = { "/tmp/dash.conf", "/mnt/app/eso/bin/apps/cluster/dash.conf" };
+    dash_read_conf_file(cl);
+    int have = dash_read_conf_file(dc);
+    dash_layout();
+    LOG("dash: %s, %d rows, box %dx%d\n", have ? "dash.conf" : "defaults", g_nrows, g_dash_w, g_dash_h);
     g_dash_x = g_dash_conf.x;
-    g_dash_y = g_dash_conf.y < 0 ? (win_h - DASH_H) / 2 : g_dash_conf.y;
+    g_dash_y = g_dash_conf.y < 0 ? (win_h - g_dash_h) / 2 : g_dash_conf.y;
     if (g_dash_x < 0) g_dash_x = 0;
-    if (g_dash_x + DASH_W > win_w) g_dash_x = win_w - DASH_W;
+    if (g_dash_x + g_dash_w > win_w) g_dash_x = win_w - g_dash_w;
     if (g_dash_y < 0) g_dash_y = 0;
-    if (g_dash_y + DASH_H > win_h) g_dash_y = win_h - DASH_H;
+    if (g_dash_y + g_dash_h > win_h) g_dash_y = win_h - g_dash_h;
     if (!g_dash_conf.enabled) { LOG("dash: disabled in cl.conf\n"); return; }
     if (screen_create_pixmap(&g_dash_pix, g_dec.scr_ctx)) { LOG("dash: pixmap create failed errno=%d\n", errno); g_dash_pix = NULL; return; }
-    int fmt = SCREEN_FORMAT_RGBA8888, usage = SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE, size[2] = { DASH_W, DASH_H };
+    int fmt = SCREEN_FORMAT_RGBA8888, usage = SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE, size[2] = { g_dash_w, g_dash_h };
     screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_FORMAT, &fmt);
     screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_USAGE, &usage);
     screen_set_pixmap_property_iv(g_dash_pix, SCREEN_PROPERTY_BUFFER_SIZE, size);
@@ -2202,11 +2212,11 @@ static void dash_setup(int win_w, int win_h) {
     screen_get_buffer_property_pv(g_dash_buf, SCREEN_PROPERTY_POINTER, &ptr);
     screen_get_buffer_property_iv(g_dash_buf, SCREEN_PROPERTY_STRIDE, &g_dash_stride);
     g_dash_ptr = (unsigned char *)ptr;
-    if (!g_dash_ptr || g_dash_stride < DASH_W * 4) {
+    if (!g_dash_ptr || g_dash_stride < g_dash_w * 4) {
         LOG("dash: no CPU access (ptr=%p stride=%d), box disabled\n", ptr, g_dash_stride);
         screen_destroy_pixmap(g_dash_pix); g_dash_pix = NULL; return;
     }
-    LOG("dash: box %dx%d at %d,%d alpha=%d tank_l=%d stride=%d\n", DASH_W, DASH_H, g_dash_x, g_dash_y,
+    LOG("dash: box %dx%d at %d,%d alpha=%d tank_l=%d stride=%d\n", g_dash_w, g_dash_h, g_dash_x, g_dash_y,
         g_dash_conf.alpha, g_dash_conf.tank_l, g_dash_stride);
 }
 
@@ -2218,7 +2228,7 @@ static int dash_tick(void) {
     g_dash_poll_ms = now;
     int ch = dash_poll(now);
     if (ch && g_dash_have) {
-        for (int y = 0; y < DASH_H; y++) memcpy(g_dash_ptr + y * g_dash_stride, &g_dash_px[y * DASH_W], DASH_W * 4);
+        for (int y = 0; y < g_dash_h; y++) memcpy(g_dash_ptr + y * g_dash_stride, &g_dash_px[y * g_dash_w], g_dash_w * 4);
     }
     if (ch && g_dash_logged < 3) { g_dash_logged++; LOG("dash: %s %s", g_dash_have ? "show" : "hide", g_dash_line); }
     return ch;
@@ -2228,9 +2238,9 @@ static void dash_overlay(int pidx) {
     if (!g_dash_pix || !g_dash_have || pidx < 0) return;
     int a[] = {
         SCREEN_BLIT_SOURCE_X, 0, SCREEN_BLIT_SOURCE_Y, 0,
-        SCREEN_BLIT_SOURCE_WIDTH, DASH_W, SCREEN_BLIT_SOURCE_HEIGHT, DASH_H,
+        SCREEN_BLIT_SOURCE_WIDTH, g_dash_w, SCREEN_BLIT_SOURCE_HEIGHT, g_dash_h,
         SCREEN_BLIT_DESTINATION_X, g_dash_x, SCREEN_BLIT_DESTINATION_Y, g_dash_y,
-        SCREEN_BLIT_DESTINATION_WIDTH, DASH_W, SCREEN_BLIT_DESTINATION_HEIGHT, DASH_H,
+        SCREEN_BLIT_DESTINATION_WIDTH, g_dash_w, SCREEN_BLIT_DESTINATION_HEIGHT, g_dash_h,
         SCREEN_BLIT_TRANSPARENCY, SCREEN_TRANSPARENCY_SOURCE_OVER,
         SCREEN_BLIT_END
     };

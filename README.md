@@ -6,7 +6,7 @@
 - **无线 CarPlay**：开启原厂未激活的无线 CarPlay（`Mods/AppleCarPlay`，LawPaul 作品）
 - **Android Auto**：开启原厂未激活的 Android Auto，安卓手机可投屏（`Mods/AndroidAuto`，LawPaul 作品）
 - **CarPlay 导航上 HUD**：苹果地图 / 高德等 CarPlay 导航的转向箭头、到路口距离（带进度条）、路名、车道指引显示在抬头显示 HUD 上（`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`）
-- **CarPlay 地图上仪表**：手机导航 App 的地图画面显示在仪表中间（原车导航地图的位置），车标对准仪表时钟正下方、靠近底部（高德、苹果地图、百度地图分别校准，自动切换）；仪表上方显示剩余距离和到达时间（原车样式）；断开 CarPlay 自动回到原车地图；地图左侧半透明小框实时显示**功率、扭矩、G 值、转速、机油温度、变速箱油温**（`Mods/VW_HUD_3_CarPlayCluster`，需要和 HUD 两个文件夹一起装）
+- **CarPlay 地图上仪表**：手机导航 App 的地图画面显示在仪表中间（原车导航地图的位置），车标对准仪表时钟正下方、靠近底部（高德、苹果地图、百度地图分别校准，自动切换）；仪表上方显示剩余距离和到达时间（原车样式）；断开 CarPlay 自动回到原车地图；地图左侧半透明小框实时显示行车数据，**显示哪几项、什么顺序可以在 U 盘里自己选**（默认功率、扭矩、G 值、转速、机油温度、变速箱油温；共 23 项可选）（`Mods/VW_HUD_3_CarPlayCluster`，需要和 HUD 两个文件夹一起装）
 
 下载即用，已包含刷机所需的 [MH2p SD ModKit](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)，不用另外准备。
 
@@ -47,16 +47,18 @@
 - 夜间：在车机设置里切到夜间，仪表地图同步变深色。
 - 只关闭仪表地图（保留 HUD）：最简单是用"卸载"方法只卸载 `VW_HUD_3_CarPlayCluster`。
 
-### 仪表信息框说明（v16）
+### 仪表信息框说明（v16，v17 起可自定义）
 
-- 仪表显示 CarPlay 地图时，地图左侧有一个半透明小框，每行一个数，每秒刷新 5 次：
-  - **功率**（kW）、**扭矩**（Nm）：发动机当前输出，数据来自车上的发动机控制单元
-  - **G 值**：加速度合成值（纵向 + 横向），加速时带 `+`、刹车时带 `-`，只转弯或匀速时不带符号；轻度平滑，比实际慢约 0.2～0.3 秒
-  - **转速**（rpm）、**机油**温度、**变速箱**油温（°C）
-- 挡位、油量、续航仪表本身已经显示，框里不重复。
-- 只在连着 CarPlay、仪表显示地图时出现；断开或回到原车地图就消失。
-- 位置/透明度/开关：`cl.conf` 里的 `info_x`、`info_y`、`info_alpha`、`info=0`（去掉行首 `#` 再改），下次连接 CarPlay 生效。默认位置在仪表顶部导航条和左下角挡位框之间，其它车可能要重新调。
-- 数据由 Java 插件（`VW_HUD_2_ClusterNav`）读车机自己的车辆状态和行车电脑接口，不连 OBD、不改仪表编码。
+- 仪表显示 CarPlay 地图时，地图左侧有一个半透明小框，每行一个数，每秒刷新 5 次。只在连着 CarPlay、仪表显示地图时出现。
+- **自己选显示什么**：刷机前用记事本打开 U 盘 `Mods/VW_HUD_3_CarPlayCluster/Update/dash.conf`，改 `items=` 这一行，按想要的顺序写项目名（英文或中文都行，英文逗号分隔），例如：
+  `items=功率,扭矩,G值,转速,车速,油量`
+  可选的 23 项（文件里有完整说明）：功率、扭矩、G值、纵向G、横向G、转速、车速、油门、刹车、方向盘、挡位、变速箱（油温）、机油（温度）、冷却液、外温、瞬时油耗、本程油耗（自启动起）、加油后油耗（自加油起）、油量（升）、续航、本程里程、平均车速、行驶时间。
+  - 最多 10 项；7 项及以上自动换小字号。默认位置刚好放下 8 项小字号，再多会挡到仪表左下角的挡位框，可以改 `y=` 往上挪（导航时会被仪表顶部导航条挡住）。
+  - 不想要信息框：`show=0`。位置 `x=`、`y=`，背景透明度 `alpha=`（0～255），油箱容积 `tank_l=`（默认 90 升）。
+  - `dash.conf` 每次刷 U 盘都会覆盖车上的同名文件（`cl.conf` 不会被覆盖，那是车标位置的校准）。
+- **G 值**：加速度合成值（纵向 + 横向），加速时带 `+`、刹车时带 `-`，只转弯或匀速时不带符号；轻度平滑，比实际慢约 0.2～0.3 秒。要分开看可选"纵向G""横向G"。
+- 单位按公制（km/h、°C、L/100km）显示；瞬时油耗停车时自动变成 L/h。
+- 数据由 Java 插件（`VW_HUD_2_ClusterNav`）读车机自己的车辆状态和行车电脑接口，不连 OBD、不改仪表编码。功率/扭矩/加速度/转速/油温已在作者车上实测；车速、油门、刹车、方向盘、外温、续航、行程数据为同一接口，v17 实测见开发文档。
 
 ### 排查日志
 
@@ -126,7 +128,7 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 
 **Cluster map**: put the cluster on its navigation map page (VIEW button); the phone's map appears 1–3 s after CarPlay connects, also right after boot. Remaining distance and arrival time are shown by the cluster itself (stock style). The car icon is placed under the cluster clock near the bottom: the phone is told the cluster is 1920x960 and only rows 230–869 are shown; per-app safe areas (AMap / Apple Maps / Baidu behave differently, AMap also shifts the car ~210 px toward the next turn, which is compensated from the route-guidance maneuver type) are switched automatically by app name. Settings: `/mnt/app/eso/bin/apps/cluster/cl.conf`. Side gauges can be hidden in the cluster settings.
 
-**Info box (v16)**: while the CarPlay map is on the cluster, a translucent box left of the map shows power (kW), torque (Nm), G (total of longitudinal + lateral; `+` accelerating, `-` braking), rpm, engine oil and gearbox oil temperature, 5 updates/s. Data comes from the head unit's own vehicle-state / board-computer DSI services (Java bundle `vwcn.Dash`), no OBD or cluster coding. `cl.conf`: `info=0` hides it, `info_x` / `info_y` / `info_alpha` move it / set the background opacity.
+**Info box (v16, configurable since v17)**: while the CarPlay map is on the cluster, a translucent box left of the map shows live values, 5 updates/s. Choose the rows and their order in `Mods/VW_HUD_3_CarPlayCluster/Update/dash.conf` before flashing (`items=power,torque,g,rpm,oil,gearbox` is the default; 23 items: power, torque, g, glong, glat, rpm, speed, pedal, brake, steer, gear, gearbox, oil, coolant, outside, cons, trip, refuel, fuel, range, tripdist, tripspeed, triptime — Chinese names work too; up to 10 rows, 7+ switch to a compact font). `show=0` hides it; `x`, `y`, `alpha`, `tank_l` in the same file. G = total of longitudinal + lateral, `+` accelerating, `-` braking. Metric units assumed. Data comes from the head unit's own vehicle-state / board-computer DSI services (Java bundle `vwcn.Dash`), no OBD or cluster coding.
 
 **Uninstall**: empty `uninstall.txt` in each mod folder to remove, flash again. Remove the three HUD folders together.
 
