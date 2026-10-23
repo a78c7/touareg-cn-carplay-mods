@@ -1,0 +1,46 @@
+{
+  "Manifest": "1.0.0",
+  "ChecksumAlgorithm": "SHA1",
+  "PackageChecksumList": [
+    {
+      "PackageName": "ExceptionList",
+      "PackageVersion": "9999.0.0",
+      "CheckSumSize": 524288,
+      "Checksum": [
+        "1bdc0dd0dc6ebf10ea4434e05e2ec2ab87119b41"
+      ]
+    },
+    {
+      "PackageName": "ExceptionList.fec",
+      "PackageVersion": "9999.0.0",
+      "CheckSumSize": 524288,
+      "Checksum": [
+        "6676f59b64fb9618209d0523fafc2522c48efd91"
+      ]
+    },
+    {
+      "PackageName": "MMX2P_POSTSCRIPT",
+      "PackageVersion": "1.0.0",
+      "CheckSumSize": 524288,
+      "Checksum": [
+        "20d8b598b45254de4a6bcdfc84d64e0456e3d53c"
+      ]
+    },
+    {
+      "PackageName": "MMX2P_POSTSCRIPT.script",
+      "PackageVersion": "1.0.0",
+      "CheckSumSize": 524288,
+      "Checksum": [
+        "e12b7cb12284aa9d44a1790fbe34184a9128ebf7"
+      ]
+    },
+    {
+      "PackageName": "MH2p_SD_ModKit",
+      "PackageVersion": "2998.1.0",
+      "CheckSumSize": 524288,
+      "Checksum": [
+        "f8c88f7178c419339bd7798b360750bbd2f4d9b6"
+      ]
+    }
+  ] 
+}

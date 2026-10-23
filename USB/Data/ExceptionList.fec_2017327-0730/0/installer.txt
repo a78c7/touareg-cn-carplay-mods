@@ -1,0 +1,55 @@
+{
+  "Type": "filecopy",
+  "PermissionFile": "755",
+  "Mountpoint": "/mnt/persist_new",
+  "Created-By": "mnfc 0.32",
+  "Operations": [
+    {
+      "Type": "Copy",
+      "Destination": "/mnt/persist_new",
+      "TotalSize": 1192790,
+      "Files": [
+        {
+          "Source": "fecswap",
+          "FileSize": 347900,
+          "CheckSumSize": 524288,
+          "CheckSum": [
+            "2e7ed478baf70a4dcb48a6afe60e82df1c001c52"
+          ]
+        },
+        {
+          "Source": "modkit_install.sh",
+          "FileSize": 5552,
+          "CheckSumSize": 524288,
+          "CheckSum": [
+            "29c36008ae2542f1ab7b983d84999a63c9451e56"
+          ]
+        },
+        {
+          "Source": "modkit_persist.sh",
+          "FileSize": 4339,
+          "CheckSumSize": 524288,
+          "CheckSum": [
+            "019f5d91b7b3da49cbb4bbda59c29dcee382bdd0"
+          ]
+        },
+        {
+          "Source": "servicemgrmibhigh.sh",
+          "FileSize": 194,
+          "CheckSumSize": 524288,
+          "CheckSum": [
+            "e6e3cd67ed19017385c4650f59024c0b0ef6410b"
+          ]
+        },
+        {
+          "Source": "splashscreen.jpg",
+          "FileSize": 114055,
+          "CheckSumSize": 524288,
+          "CheckSum": [
+            "c6de22fc941b73c86f33f9edfee0fc92da0bd427"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+# 途锐中国版 CarPlay 改装合集：全屏 + 无线 + Android Auto + 导航上 HUD + CarPlay 地图上仪表
+
+让中国版大众途锐（MH2p 车机）用一个 U 盘一次刷入五项改装：
+
+- **全屏 CarPlay**：去掉黑边，铺满整个中控屏（`Mods/VW_FullScreenCarPlay`）
+- **无线 CarPlay**：开启原厂未激活的无线 CarPlay（`Mods/AppleCarPlay`，LawPaul 作品）
+- **Android Auto**：开启原厂未激活的 Android Auto，安卓手机可投屏（`Mods/AndroidAuto`，LawPaul 作品）
+- **CarPlay 导航上 HUD**：苹果地图 / 高德等 CarPlay 导航的转向箭头、到路口距离（带进度条）、路名、车道指引显示在抬头显示 HUD 上（`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`）
+- **CarPlay 地图上仪表**：手机导航 App 的地图画面显示在仪表中间（原车导航地图的位置），车标对准仪表时钟正下方、靠近底部（高德、苹果地图、百度地图分别校准，自动切换）；仪表上方显示剩余距离和到达时间（原车样式）；断开 CarPlay 自动回到原车地图（`Mods/VW_HUD_3_CarPlayCluster`，需要和 HUD 两个文件夹一起装）
+
+下载即用，已包含刷机所需的 [MH2p SD ModKit](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)，不用另外准备。
+
+**只适用于车机版本 `MH2p_CN_VWG36_P2878`**，其它版本脚本会自动退出，不改动任何东西。
+
+✅ 已在作者的 2023 款途锐（P2878）上验证：全屏、无线、HUD（箭头、距离、路名）、仪表 CarPlay 地图（无线/有线 CarPlay，高德、苹果地图、百度地图：出图、按 VIEW 切换、断开自动恢复、车机设置切夜间后仪表同步变深色）。
+⚠️ **仪表地图模块（VW_HUD_3）的 U 盘安装流程尚未在未改装的车上完整实测**（作者车上是调试时手动装的，程序与本包相同）。另外只在 iOS 27 上测试过。遇到问题请按下面"排查日志"收集日志并提 Issue。
+
+**装过作者旧版本（touareg-cn-carplay-fullscreen，已下线）的车主**：可以直接用本仓库的新 U 盘覆盖刷入，脚本会识别已装状态。但**以后卸载全屏 CarPlay 要用当初的旧 U 盘**（全屏的原厂备份只存在旧 U 盘里）；HUD 和仪表地图用新 U 盘也能卸载干净。
+
+## 安装（4 步）
+
+1. **准备 U 盘**：找一个 32GB 以内的 U 盘，格式化为 **FAT32**（Windows：右键 U 盘 → 格式化；Mac：磁盘工具 → 抹掉 → MS-DOS (FAT)）。
+2. **复制文件**：点本页绿色 **Code → Download ZIP**，解压，把 `USB` 文件夹**里面的全部内容**（`Data`、`Meta`、`Logs`、`Mods`）复制到 U 盘根目录。
+   Mac 用户复制完在终端运行 `find /Volumes/你的U盘名 -name '._*' -delete`，清掉隐藏文件，否则车机报错。
+3. **车上刷入**：**发动车辆**，插入 U 盘。约 10 秒后车机自动重启并开始安装，过程几分钟，会重启几次、可能出现红色工程界面，**期间不要操作车机**。
+4. **拔掉 U 盘**：屏幕提示移除介质时拔出 U 盘，车机重启后连接 CarPlay 即可。无线连接：iPhone 设置 → 通用 → CarPlay → 选择车辆，或在车机里添加手机。如果仍有黑边，在 iPhone 上"忘记此车辆"后重新连接。
+
+只想要其中几项：把不要的文件夹从 U 盘 `Mods` 里删掉再刷。依赖关系：`VW_HUD_1` + `VW_HUD_2` 要一起；`VW_HUD_3`（仪表地图）需要 HUD_1、HUD_2 也在。
+
+### CarPlay 导航上 HUD 说明
+
+- 装好后连 CarPlay，在苹果地图或高德里开始导航，**等约 1 分钟**（车机开机后组件要等界面完全启动），HUD 出现箭头、距离和路名。
+- 路名会自动去掉"进入"等前缀；没有名字的路显示"无名道路"（HUD 和仪表顶部同一行）。
+- 车道指引只在地图有车道数据的路口出现（大路口、高架、高速出入口）。
+- 只装 HUD 不装仪表地图时，仪表中间会显示"导航已在移动设备上激活"，这是原车行为；装了仪表地图后这条提示会被去掉。
+- 临时关闭：U 盘根目录放一个名为 `vwcn_off` 的空文件插在车上即可，拔掉恢复。
+
+### CarPlay 地图上仪表说明
+
+- 仪表切到**导航地图页**（方向盘 VIEW 键切换），连上 CarPlay 后约 1～3 秒，仪表中间显示手机 App 的地图（开机后 CarPlay 一连上就会出图）。
+- 断开 CarPlay 后约 3 秒，仪表自动回到原车地图，HUD 和仪表上的导航信息同时清除。
+- 仪表两侧的表盘可以在仪表设置里隐藏，地图会铺满整个仪表。
+- 导航时仪表上方显示**剩余距离**和**到达时间**（仪表原车样式，数据来自手机导航）。
+- **车标位置**：默认对准仪表时钟正下方、靠近底部。三个 App 摆车标的规则不同，已分别校准并按 App 名自动切换：苹果地图按设定居中；百度导航时车标比设定点偏右约 165 像素，已补偿；高德导航时车标固定在画面约 85% 高度，并会往**下一个路口的转弯方向**挪约 210 像素，已按下一个转向自动补偿。百度不导航时车标位置固定、不受控制。车机重启后高德要重新开始一次导航才会被识别（它只在开始导航时发 App 名字）。
+- 位置可自己改：车机上 `/mnt/app/eso/bin/apps/cluster/cl.conf`（说明写在文件里；SSH 调试时可用同目录的 `cl.sh` 实时切换，如 `cl.sh va 3`）。不同车（仪表尺寸、时钟位置）需要重新校准。
+- 仪表地图的样式、缩放、全览由手机 App 决定，车机控制不了。高德的"全览"按钮会把中控和仪表的全览状态对调（高德自身的问题）。
+- 夜间：在车机设置里切到夜间，仪表地图同步变深色。
+- 只关闭仪表地图（保留 HUD）：最简单是用"卸载"方法只卸载 `VW_HUD_3_CarPlayCluster`。
+
+### 排查日志
+
+U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟以上，日志会自动拷进去（`vwcn.log`、`dio_cluster.log`、`cl_probe.log`、`clusterd.log`）。提 Issue 时附上。注意：日志里可能有手机名称、导航路名等信息，公开前先看一遍，不想公开的删掉。
+
+安装时原版文件会备份到 U 盘（各模块文件夹的 `Update/backup/` 或 `Update/Backup/`），**请保留这个 U 盘，不要格式化**。平时不要把它插在车上，否则每次插入都会进入刷机。
+
+## 卸载（恢复原车）
+
+在要卸载的模块文件夹里新建一个空文件 `uninstall.txt`，按上面第 3、4 步再刷一次，原版恢复。全部恢复原车：在 `Mods` 下每个模块文件夹里都放一个 `uninstall.txt`。卸载 HUD 时 `VW_HUD_1`、`VW_HUD_2`、`VW_HUD_3` 三个一起卸。
+
+说明：卸载会还原所有被改的原厂文件、删除新增的程序。ModKit 自身的开机钩子（让 U 盘模块能开机运行的那部分）会留在车机里，没有模块时它什么也不做；如需彻底移除请参考 [ModKit 官网](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)。
+
+## 出问题怎么办
+
+- 插 U 盘没反应或提示"不支持更新"：U 盘不是 FAT32，或 `Data`、`Meta` 不在 U 盘根目录。
+- 刷完没变化：用电脑打开 U 盘 `Logs/` 里对应模块的 `.log` 查看原因（例如版本不匹配会写 `abort`）。
+- 无线 CarPlay 连不上：需要车上导航数据正常、有 5GHz WiFi 天线（ModKit 官网说明）。
+- Android Auto 连不上：换一根支持数据传输的手机线。
+- 仪表一直显示原车地图：确认仪表在地图页、手机 App 已开始导航；开机后等 1 分钟；按上面方法收集日志。
+- CarPlay 异常：按上面方法卸载（先卸 `VW_HUD_3`，再卸 HUD_1/2）。
+
+⚠️ 改装风险自负，可能影响保修。仪表地图只占用原车导航地图的位置，车速、警告灯等由仪表自己显示，不经过本改装。
+
+## 开发过程与源码
+
+- **[docs/开发过程.md](docs/开发过程.md)**：从零做出"导航上 HUD"和"地图上仪表"的完整过程、踩过的坑、给其他 MH2p 车型（大众/奥迪/保时捷）的参考。
+- `src/hud-java`：车机 Java 插件 VWClusterNav（HUD 数据、剩余距离/到达时间、去掉提示、仪表显示切换）
+- `src/cluster-probe`：`cl_probe.so`，注入 CarPlay 进程，向 iPhone 声明仪表屏、接收并解密第二路视频
+- `src/clusterd`：仪表守护进程，有画面时启动显示、断开时恢复原车
+- `src/cl_render`：H.264 解码显示（基于 fifthBro 的 `cluster.c` 修改，CC BY-NC-SA 4.0）
+- `src/build.sh`：交叉编译脚本；`tools/`：调试工具（macOS 网卡驱动 axbridge、截屏等）
+
+## 致谢
+
+- **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)**（[网站](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)）：让 MH2p 能用 U 盘改装的基础工具。本仓库 `USB/Data`、`USB/Meta`、`USB/Logs`、`USB/Mods/README.md` 原样来自该项目，遵循 **CC BY-NC-SA 4.0**（禁止商用），许可证见 [LICENSES/MH2p_SD_ModKit_LICENSE.md](LICENSES/MH2p_SD_ModKit_LICENSE.md)。
+- **LawPaul / MH2p CarPlay**：`USB/Mods/AppleCarPlay` 原样来自 ModKit 官网提供的模块包（CC BY-NC-SA 4.0），作用是写入 CarPlay 功能授权并开启无线。
+- **LawPaul / MH2p Android Auto**：`USB/Mods/AndroidAuto` 原样来自 ModKit 模块包（CC BY-NC-SA 4.0）；其中仅对保时捷生效的多设备修复引用了 [fifthBro/pcm5-androidauto-connect-fix](https://github.com/fifthBro/pcm5-androidauto-connect-fix)，途锐不会执行。
+- **[davecozens / touareg-carplay](https://github.com/davecozens/touareg-carplay)**：英国右舵途锐全屏方案，本补丁的几何数值参考于此。
+- **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)**（[网站](https://fifthbro.github.io)）：`dio_cluster.so` 原样来自其 v0034 版本（让 iPhone 发出路线指引数据）；仪表显示程序 `cl_render` 基于其公开的 `cluster.c` 修改。均遵循 **CC BY-NC-SA 4.0**（见 [LICENSES/fifthBro_mh2p-cluster_LICENSE.md](LICENSES/fifthBro_mh2p-cluster_LICENSE.md)）。他是 MH2p 仪表投屏的开拓者，本项目的"断开后恢复原车地图"等问题都参考了他代码里的注释。
+- **[fifthBro / mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**：开发调试用的 SSH 模块（未包含在 U 盘包里）。
+- **[luka-dev / mib2q-carplay-rgi](https://github.com/luka-dev/mib2q-carplay-rgi)**：CarPlay 路线指引和第二屏（altScreen）协议研究；**[luka-dev / jxe2jar](https://github.com/luka-dev/jxe2jar)**：车机 Java 程序转换/反编译；**[luka-dev / qnx65-armv7-toolchain](https://github.com/luka-dev/qnx65-armv7-toolchain)**：QNX 交叉编译环境。
+
+## 许可证
+
+- 本仓库新写的部分（全屏补丁脚本、`src/hud-java`、`src/cluster-probe`、`src/clusterd`、`tools/`、各模块安装脚本、文档）：**GPL-3.0**（见 [LICENSE](LICENSE)）。
+- `src/cl_render` 和 `dio_cluster.so`：fifthBro 作品及其修改版，**CC BY-NC-SA 4.0**。
+- ModKit 及 LawPaul 的模块：**CC BY-NC-SA 4.0**。
+- 因包含禁止商用的部分，**整个 U 盘包仅供个人非商业使用**。
+- 本仓库不包含任何大众或苹果的原厂程序代码；`VW_FullScreenCarPlay/Update/viewhandler.zip` 为修改后的原厂界面配置文件，仅供车主自用。
+
+---
+
+# VW Touareg (China) CarPlay mods: full-screen + wireless + Android Auto + navigation on the HUD + CarPlay map on the instrument cluster
+
+Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN_VWG36_P2878` only — other versions exit without changes):
+
+- **Full-screen CarPlay** (`Mods/VW_FullScreenCarPlay`)
+- **Wireless CarPlay** (`Mods/AppleCarPlay`, by LawPaul)
+- **Android Auto** (`Mods/AndroidAuto`, by LawPaul)
+- **CarPlay turn-by-turn on the HUD**: arrow, distance, street name, lanes (`Mods/VW_HUD_1_RouteGuidance` + `Mods/VW_HUD_2_ClusterNav`)
+- **CarPlay map on the instrument cluster**: the phone's cluster map (iPhone second video stream, "altScreen") replaces the stock navigation map in the middle of the cluster; it switches back to the stock map automatically when CarPlay disconnects (`Mods/VW_HUD_3_CarPlayCluster`, needs both HUD folders)
+
+✅ Verified on the author's 2023 Touareg (wireless and wired CarPlay; AMap, Apple Maps and Baidu on the cluster; night mode follows the head-unit setting). ⚠️ The USB install of `VW_HUD_3` has not yet been tested end-to-end on an unmodified car (same binaries were installed by hand on the author's car); only tested on iOS 27. Upgrading from the author's earlier touareg-cn-carplay-fullscreen package: flash this drive over it; keep the old drive to uninstall full-screen CarPlay (its backup lives there). Logs may contain your phone name and street names — review before posting.
+
+**Install**: FAT32 drive ≤ 32 GB → copy everything inside `USB` to the root (macOS: `find /Volumes/DRIVE -name '._*' -delete`) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. **Keep the drive** (it holds the backups); don't leave it plugged in.
+
+**Cluster map**: put the cluster on its navigation map page (VIEW button); the phone's map appears 1–3 s after CarPlay connects, also right after boot. Remaining distance and arrival time are shown by the cluster itself (stock style). The car icon is placed under the cluster clock near the bottom: the phone is told the cluster is 1920x960 and only rows 230–869 are shown; per-app safe areas (AMap / Apple Maps / Baidu behave differently, AMap also shifts the car ~210 px toward the next turn, which is compensated from the route-guidance maneuver type) are switched automatically by app name. Settings: `/mnt/app/eso/bin/apps/cluster/cl.conf`. Side gauges can be hidden in the cluster settings.
+
+**Uninstall**: empty `uninstall.txt` in each mod folder to remove, flash again. Remove the three HUD folders together.
+
+**Logs**: create `cluster_logs` on a drive, leave it plugged in while navigating for 2+ minutes.
+
+**How it was built**: see [docs/开发过程.md](docs/开发过程.md) (Chinese) — LD_PRELOAD hook into `dio_manager` advertising a second display to the iPhone, ChaCha20-Poly1305 stream decryption (libairplay 320.17.1), NvMedia H.264 decode, displaymanager layering `[58, 33]` so the stock map stays bound underneath, and the VW HMI (J9 Java) plug-in. Sources in `src/`, build script `src/build.sh`.
+
+## Credits
+
+- **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)**: `USB/Data`, `USB/Meta`, `USB/Logs`, `USB/Mods/README.md`, `USB/Mods/AppleCarPlay`, `USB/Mods/AndroidAuto` included unmodified, CC BY-NC-SA 4.0.
+- **[davecozens / touareg-carplay](https://github.com/davecozens/touareg-carplay)**: full-screen geometry values.
+- **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)**: `dio_cluster.so` (v0034, unmodified) and `cluster.c` (modified, `src/cl_render`), CC BY-NC-SA 4.0. Pioneer of MH2p cluster projection.
+- **[luka-dev](https://github.com/luka-dev)**: mib2q-carplay-rgi (CarPlay route guidance and altScreen research), jxe2jar, qnx65-armv7-toolchain.
+
+**License**: new code GPL-3.0 ([LICENSE](LICENSE)); `src/cl_render`, `dio_cluster.so`, ModKit and LawPaul mods CC BY-NC-SA 4.0. The USB bundle as a whole is for **personal, non-commercial use only**. No VW or Apple program code is included. Use at your own risk.
