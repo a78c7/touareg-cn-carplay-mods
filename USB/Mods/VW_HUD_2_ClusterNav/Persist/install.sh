@@ -45,7 +45,14 @@ while true; do
             [[ -f "$f" && "$f" != "$cur" ]] || continue
             [[ $moved = 0 ]] && mount -uw $lm 2>/dev/null
             n=${f#/tmp/drv_}; s=${n%_*}
-            if cat "$f" >> $lm/drive_logs/drive_$s.csv; then rm -f "$f"; moved=1; fi
+            # the head-unit clock starts at 1970 after every boot, so session names can repeat: the first chunk
+            # of a session picks a file name that is not on the drive yet and remembers it for this boot
+            if [[ -f /tmp/drv_map_$s ]]; then dst=$(cat /tmp/drv_map_$s); else
+                dst=drive_$s.csv; k=1
+                while [[ -e $lm/drive_logs/$dst ]]; do k=$((k + 1)); dst=drive_${s}_$k.csv; done
+                echo $dst > /tmp/drv_map_$s
+            fi
+            if cat "$f" >> $lm/drive_logs/$dst; then rm -f "$f"; moved=1; fi
         done
         [[ $moved = 1 ]] && sync
     elif [[ -e /tmp/vwcn_log_on ]]; then

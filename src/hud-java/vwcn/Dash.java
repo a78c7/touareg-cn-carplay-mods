@@ -325,7 +325,8 @@ public final class Dash implements Runnable {
 
     final class KoListener extends DSICarKombiAdapter {
         public void updateBCOilTemperatureValue(CarBCTemperature t, int s) {
-            if (t == null || s != 1) { oil = Float.NaN; return; }
+            // v18: the value's own state is 0 (and the value -3276.5) until the engine reports it
+            if (t == null || s != 1 || t.state != 1 || t.temperatureValue < -100f) { oil = Float.NaN; return; }
             oil = t.temperatureValue;
             if (t.temperatureUnit != loggedOilUnit) {
                 loggedOilUnit = t.temperatureUnit;
@@ -333,7 +334,7 @@ public final class Dash implements Runnable {
             }
         }
         public void updateBCCoolantTemperature(CarBCTemperature t, int s) {
-            if (t == null || s != 1) { coolant = Float.NaN; return; }
+            if (t == null || s != 1 || t.state != 1 || t.temperatureValue < -100f) { coolant = Float.NaN; return; }
             coolant = t.temperatureValue;
         }
         public void updateBCCurrentConsumption1(CarBCConsumption c, int s) {
@@ -358,7 +359,7 @@ public final class Dash implements Runnable {
             general(2, g == null ? null : g.distance, g == null ? null : g.speed, g == null ? null : g.timeValue, s);
         }
         public void updateBCOutsideTemperature(CarBCTemperature t, int s) {
-            if (t == null || s != 1) { outside = Float.NaN; return; }
+            if (t == null || s != 1 || t.state != 1 || t.temperatureValue < -100f) { outside = Float.NaN; return; }
             outside = t.temperatureValue;
         }
         public void updateBCCurrentRange1(CarBCCurrentRange r, int s) {
