@@ -45,9 +45,10 @@ typedef struct {
     int lat_flip;  /* 1 = invert the lateral g sign */
     int max_h;     /* space available below y before the cluster's gear box (switch to compact above it) */
     int compact;   /* font size: -1 auto (by row count), 0 normal, 1 compact, 2 small */
+    int right;     /* v18: x of the box's right edge (0 = width from the content) */
 } dash_conf_t;
 
-static dash_conf_t g_dash_conf = { 1, 40, 172, 200, 90, 5000, 0, 348, -1 };
+static dash_conf_t g_dash_conf = { 1, 40, 172, 200, 90, 5000, 0, 348, -1, 0 };
 
 /* ---- the item catalogue: config key, label (also accepted in items=), unit, sample for column width ---- */
 enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL, IT_BRAKE, IT_STEER, IT_GEAR,
@@ -161,6 +162,7 @@ static void dash_read_conf_line(const char *l) {
     else if (sscanf(l, "lat_flip = %d", &v) == 1) g_dash_conf.lat_flip = v;
     else if (sscanf(l, "max_h = %d", &v) == 1) g_dash_conf.max_h = v;
     else if (sscanf(l, "compact = %d", &v) == 1) g_dash_conf.compact = v;
+    else if (sscanf(l, "right = %d", &v) == 1) g_dash_conf.right = v;
 }
 
 static const dash_glyph *dash_find(const dash_glyph *set, int n, const char *key) {
@@ -178,39 +180,73 @@ static int dash_str_w(const char *s) {   /* width of a value string in the value
     return w;
 }
 
-static void dash_layout(void) {
-    /* sizes: row height, top/bottom padding, baseline offset of the value digits from the row middle */
-    static const int ROW_H[3] = { 52, 40, 32 }, PAD_Y[3] = { 12, 12, 10 }, BASE[3] = { 13, 11, 9 };
-    int sz = g_dash_conf.compact;
-    if (sz < 0 || sz > 2) {   /* auto: the largest size whose box fits into max_h */
-        for (sz = 0; sz < 2; sz++) if (PAD_Y[sz] * 2 + g_nrows * ROW_H[sz] <= g_dash_conf.max_h) break;
-    }
-    if (sz == 0) {
+static void dash_fonts(int sz) {   /* 0 normal 40px, 1 medium 36px (v18), 2 compact 32px, 3 small 26px */
+    if (sz == 1) {
+        L_val = dash_m_val; L_nval = DASH_M_VAL_N; L_lab = dash_m_lab; L_nlab = DASH_M_LAB_N;
+        L_unit = dash_m_unit; L_nunit = DASH_M_UNIT_N;
+    } else if (sz == 0) {
         L_val = dash_n_val; L_nval = DASH_N_VAL_N; L_lab = dash_n_lab; L_nlab = DASH_N_LAB_N;
         L_unit = dash_n_unit; L_nunit = DASH_N_UNIT_N;
-    } else if (sz == 1) {
+    } else if (sz == 2) {
         L_val = dash_c_val; L_nval = DASH_C_VAL_N; L_lab = dash_c_lab; L_nlab = DASH_C_LAB_N;
         L_unit = dash_c_unit; L_nunit = DASH_C_UNIT_N;
     } else {
         L_val = dash_s_val; L_nval = DASH_S_VAL_N; L_lab = dash_s_lab; L_nlab = DASH_S_LAB_N;
         L_unit = dash_s_unit; L_nunit = DASH_S_UNIT_N;
     }
-    L_row_h = ROW_H[sz]; L_pad_y = PAD_Y[sz]; L_base_off = BASE[sz];
-    int lab_w = 0, val_w = 0, unit_w = 0;
+}
+
+/* column widths of the chosen rows in the current font */
+static void dash_cols(int *lab_w, int *val_w, int *unit_w) {
+    *lab_w = *val_w = *unit_w = 0;
     for (int r = 0; r < g_nrows; r++) {
         const dash_item *it = &g_items[g_rows[r]];
         const dash_glyph *gl = dash_find(L_lab, L_nlab, it->label);
-        if (gl && gl->adv > lab_w) lab_w = gl->adv;
+        if (gl && gl->adv > *lab_w) *lab_w = gl->adv;
         int vw = dash_str_w(it->sample);
-        if (vw > val_w) val_w = vw;
+        if (vw > *val_w) *val_w = vw;
         const char *u = it->unit;
-        if (u && !strcmp(u, "L/100km")) u = "L/100km";   /* widest of L/100km, km/L, L/h */
-        if (u) { gl = dash_find(L_unit, L_nunit, u); if (gl && gl->adv > unit_w) unit_w = gl->adv; }
+        if (u) { gl = dash_find(L_unit, L_nunit, u); if (gl && gl->adv > *unit_w) *unit_w = gl->adv; }
     }
-    L_lab_x = DASH_PAD_X;
-    L_val_r = L_lab_x + lab_w + DASH_GAP + val_w;
-    L_unit_x = L_val_r + 8;
-    g_dash_w = L_unit_x + unit_w + DASH_PAD_X;
+}
+
+static void dash_layout(void) {
+    /* sizes: row height, top/bottom padding, baseline offset of the value digits from the row middle */
+    /* size 1 (medium, v18) keeps the normal row height: it exists for narrow boxes (right=), not short ones */
+    static const int ROW_H[4] = { 52, 52, 40, 32 }, PAD_Y[4] = { 12, 12, 12, 10 }, BASE[4] = { 13, 12, 11, 9 };
+    /* dash.conf compact=: -1 auto, 0 normal, 1 compact, 2 small (as in v17); internal sizes 0..3 */
+    int sz = g_dash_conf.compact, autosz = sz < 0 || sz > 2;
+    if (!autosz) sz = sz == 0 ? 0 : sz + 1;
+    else {   /* auto: the largest size whose box fits into max_h */
+        for (sz = 0; sz < 3; sz++) if (PAD_Y[sz] * 2 + g_nrows * ROW_H[sz] <= g_dash_conf.max_h) break;
+    }
+    /* v18: right=<x> puts the box's right edge at x (e.g. on the corner of the cluster's gear panel): the box is
+     * exactly right - x wide. Wider than needed -> the label/value gap grows; narrower -> tighter spacing, then
+     * (font size auto only) a smaller font. */
+    int target = g_dash_conf.right > g_dash_conf.x ? g_dash_conf.right - g_dash_conf.x : 0;
+    int lab_w, val_w, unit_w, pad = DASH_PAD_X, gap = DASH_GAP, ugap = 8;
+    for (;;) {
+        dash_fonts(sz);
+        dash_cols(&lab_w, &val_w, &unit_w);
+        pad = DASH_PAD_X; gap = DASH_GAP; ugap = 8;
+        int need = pad + lab_w + gap + val_w + ugap + unit_w + pad;
+        if (!target || need <= target) break;
+        pad = 12; gap = 8; ugap = 5;                                     /* tighter spacing */
+        need = pad + lab_w + gap + val_w + ugap + unit_w + pad;
+        if (need <= target || !autosz || sz == 3) break;
+        sz++;                                                            /* smaller font */
+    }
+    L_row_h = ROW_H[sz]; L_pad_y = PAD_Y[sz]; L_base_off = BASE[sz];
+    L_lab_x = pad;
+    if (target) {   /* units flush right, values right-aligned before them */
+        g_dash_w = target;
+        L_unit_x = target - pad - unit_w;
+        L_val_r = L_unit_x - ugap;
+    } else {
+        L_val_r = L_lab_x + lab_w + gap + val_w;
+        L_unit_x = L_val_r + ugap;
+        g_dash_w = L_unit_x + unit_w + pad;
+    }
     g_dash_h = L_pad_y * 2 + g_nrows * L_row_h;
     if (g_dash_w > DASH_MAX_W) g_dash_w = DASH_MAX_W;
     if (g_dash_h > DASH_MAX_H) g_dash_h = DASH_MAX_H;

@@ -27,7 +27,7 @@ LABELS = ['功率', '扭矩', 'G 值', '纵向 G', '横向 G', '转速', '车速
           '机油温度', '冷却液温度', '车外温度', '当前消耗', '燃油存量', '续驶里程'] + ['%s|%s' % (m, t) for m in MEM for t in TRIP] + ['0–100', '最大功率', '最大扭矩', '最大 G 值']
 UNITS = ['kW', 'Nm', 'g', 'rpm', 'km/h', '%', 'bar', '°', '°C', 'L/100km', 'km/L', 'L/h', 'L', 'km', 'h', 's']
 # size: value px, label px, unit px, two-line label (top px, bottom px, gap px)
-SIZES = [('n', 40, 26, 22, (18, 23, 3)), ('c', 32, 22, 18, (15, 19, 2)), ('s', 26, 18, 15, (13, 15, 1))]
+SIZES = [('n', 40, 26, 22, (18, 23, 3)), ('m', 36, 24, 20, (16, 21, 2)), ('c', 32, 22, 18, (15, 19, 2)), ('s', 26, 18, 15, (13, 15, 1))]
 TOP_DIM = 0.72   # top line of a two-line label drawn at this coverage (dimmer than the value name)
 
 def one(f, s):
