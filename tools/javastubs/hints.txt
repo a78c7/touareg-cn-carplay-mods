@@ -1,0 +1,3 @@
+de/vw/mib/asl/internal/car/abstractclasses/dsiadapter/DSICarVehicleStatesAdapter -> org/dsi/ifc/base/DSIListener
+de/vw/mib/asl/internal/car/abstractclasses/dsiadapter/DSICarKombiAdapter -> org/dsi/ifc/base/DSIListener
+de/vw/mib/asl/api/navigation/map/instrumentcluster/MapViewerClusterListenerAdapter -> de/vw/mib/asl/api/navigation/map/instrumentcluster/MapViewerClusterListener

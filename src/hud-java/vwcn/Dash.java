@@ -31,12 +31,15 @@ import org.dsi.ifc.global.CarBCTime;
  * cv=<current consumption> cu=<unit> tank=<%> ...". Board computer (VW names), per memory average + unit, distance,
  * average speed, driving time in minutes: 自启动起 ca au td ts tt, 自上次加油起 cr cru rd rs rt, 累计 cl clu ld ls lt.
  * Keys whose value is not available are left out. Off switch: /tmp/vwcn_dash_off.
+ * v18: 0-100 km/h and session maxima (Accel): t1=<last s> t1b=<best s> t1r=<running s> pmx=<kW> tqx=<Nm> gmx=<g>;
+ * drive log (DriveLog): also subscribed while /tmp/vwcn_log_on exists (USB drive with a drive_logs folder).
  */
 public final class Dash implements Runnable {
     static volatile boolean stop;
     static final String STATE = "/tmp/dash.state";
     static final String TMP = "/tmp/dash.state.new";
     static final String OFF = "/tmp/vwcn_dash_off";
+    static final String LOG_ON = "/tmp/vwcn_log_on";
     static final int[] VS_ATTRS = new int[] {14, 15};
     // kombi: 4 view options, 6 current consumption 1, 8 current range 1, 11 short-term ("since start") average
     // consumption 1, 13 short-term general (distance, average speed, time), 14/16 long-term ("累计") average
@@ -54,6 +57,13 @@ public final class Dash implements Runnable {
     private long n;
     private String lastLine = "";
     private long lastWrite;
+    private boolean logging;
+    final Accel acc = new Accel();
+    // v18: fields read by reflection (not used by v17, types unknown at build time): real speed, yaw, wheel speeds
+    private java.lang.reflect.Field fReal, fYaw;
+    private java.lang.reflect.Field[] fWheel = new java.lang.reflect.Field[0];
+    private boolean reflDone;
+    volatile float realSpeed = Float.NaN, yaw = Float.NaN, axRaw = Float.NaN, ayRaw = Float.NaN;
 
     // latest values (written by DSI callbacks, read by the writer thread)
     volatile float power = Float.NaN, gxS = Float.NaN, gyS = Float.NaN, consumption = Float.NaN;
@@ -83,10 +93,17 @@ public final class Dash implements Runnable {
             Thread.sleep(8000);
             Log.log("dash: ready");
             while (!stop) {
-                boolean want = Rebind.hold != null && !new File(OFF).exists();
+                boolean log = new File(LOG_ON).exists();
+                if (log != logging) {
+                    logging = log;
+                    if (!log) DriveLog.stop();
+                    Log.log("dash: drive log " + (log ? "on" : "off"));
+                }
+                boolean want = (Rebind.hold != null || logging) && !new File(OFF).exists();
                 if (want && !subscribed) subscribe();
                 else if (!want && subscribed) unsubscribe();
                 if (subscribed) write();
+                if (subscribed && logging) DriveLog.flush(System.currentTimeMillis());
                 Thread.sleep(subscribed ? 200 : 1000);
             }
             if (subscribed) unsubscribe();
@@ -138,6 +155,12 @@ public final class Dash implements Runnable {
         if (tank != Integer.MIN_VALUE) b.append(" tank=").append(tank);
         if (!Float.isNaN(outside)) b.append(" out=").append(Math.round(outside));
         if (range != Integer.MIN_VALUE) b.append(" rng=").append(range);
+        if (!Float.isNaN(acc.last)) b.append(" t1=").append(round2(acc.last));
+        if (!Float.isNaN(acc.best)) b.append(" t1b=").append(round2(acc.best));
+        if (!Float.isNaN(acc.running)) b.append(" t1r=").append(round1(acc.running));
+        if (!Float.isNaN(acc.pMax)) b.append(" pmx=").append(round1(acc.pMax));
+        if (acc.tqMax != Integer.MIN_VALUE) b.append(" tqx=").append(acc.tqMax);
+        if (!Float.isNaN(acc.gMax)) b.append(" gmx=").append(round2(acc.gMax));
         for (int m = 0; m < 3; m++) {
             if (!Float.isNaN(bcAvg[m])) b.append(BK[m][0]).append(round1(bcAvg[m])).append(BK[m][1]).append(bcUnit[m]);
             if (!Float.isNaN(bcDist[m])) b.append(BK[m][2]).append(round1(bcDist[m]));
@@ -202,9 +225,72 @@ public final class Dash implements Runnable {
         }
     }
 
+    /** number from a reflected field: a Number, or an object with a numeric speedValue (CarSpeed-like) */
+    private static float num(java.lang.reflect.Field f, Object o) {
+        if (f == null || o == null) return Float.NaN;
+        try {
+            Object v = f.get(o);
+            if (v instanceof Number) return ((Number) v).floatValue();
+            if (v != null) {
+                Object sv = v.getClass().getField("speedValue").get(v);
+                if (sv instanceof Number) return ((Number) sv).floatValue();
+            }
+        } catch (Throwable t) {
+        }
+        return Float.NaN;
+    }
+
+    /** first callback: log every public field once (finds the wheel-speed names) and pick the v18 extras */
+    private void reflect(Object d) {
+        reflDone = true;
+        try {
+            java.lang.reflect.Field[] fs = d.getClass().getFields();
+            StringBuffer b = new StringBuffer("dash: HF fields");
+            java.lang.reflect.Field[] w = new java.lang.reflect.Field[4];
+            int nw = 0;
+            String[] order = new String[] {"frontleft", "frontright", "rearleft", "rearright"};
+            for (int i = 0; i < fs.length; i++) {
+                String n = fs[i].getName(), l = n.toLowerCase();
+                Object v = null;
+                try { v = fs[i].get(d); } catch (Throwable t) {}
+                b.append(' ').append(n).append('=').append(v);
+                if (n.equals("realVehicleSpeed")) fReal = fs[i];
+                else if (n.equals("yawRate")) fYaw = fs[i];
+                else if (l.indexOf("wheel") >= 0 && (l.indexOf("velocity") >= 0 || l.indexOf("speed") >= 0)) {
+                    for (int k = 0; k < 4; k++) if (l.endsWith(order[k]) && w[k] == null) { w[k] = fs[i]; nw++; }
+                }
+            }
+            Log.log(b.toString());
+            if (nw == 4) fWheel = w;
+            Log.log("dash: real speed " + (fReal != null) + ", yaw " + (fYaw != null) + ", wheel speeds " + nw);
+        } catch (Throwable t) {
+            Log.log("dash: reflect failed " + t);
+        }
+    }
+
+    private static String f1(float v) { return Float.isNaN(v) ? "" : round1(v); }
+    private static String f2(float v) { return Float.isNaN(v) ? "" : round2(v); }
+    private static String i0(int v) { return v == Integer.MIN_VALUE ? "" : String.valueOf(v); }
+
+    private void logLine(long now, Object d) {
+        StringBuffer b = new StringBuffer(200);
+        b.append(now).append(',').append(f1(speed)).append(',').append(f1(realSpeed)).append(',').append(i0(rpm))
+         .append(',').append(f1(power)).append(',').append(i0(torque)).append(',').append(i0(pedal))
+         .append(',').append(f1(brake)).append(',').append(i0(steer)).append(',').append(f1(yaw))
+         .append(',').append(f2(axRaw)).append(',').append(f2(ayRaw)).append(',').append(i0(lever))
+         .append(',').append(i0(gear)).append(',').append(i0(gbt)).append(',').append(Float.isNaN(oil) ? "" : String.valueOf(Math.round(oil)))
+         .append(',').append(Float.isNaN(coolant) ? "" : String.valueOf(Math.round(coolant)))
+         .append(',').append(f1(consumption)).append(',').append(i0(consUnit)).append(',').append(i0(tank))
+         .append(',').append(Float.isNaN(outside) ? "" : String.valueOf(Math.round(outside))).append(',').append(i0(range));
+        for (int k = 0; k < 4; k++) b.append(',').append(k < fWheel.length ? f1(num(fWheel[k], d)) : "");
+        DriveLog.add(b.toString());
+    }
+
     final class VsListener extends DSICarVehicleStatesAdapter {
         public void updateDynamicVehicleInfoHighFrequent(DynamicVehicleInfoHighFrequent d, int s) {
             if (d == null || s != 1) return;
+            long now = System.currentTimeMillis();
+            if (!reflDone) reflect(d);
             power = d.currentOutputPower;
             torque = d.currentTorque;
             rpm = d.engineSpeed;
@@ -218,6 +304,16 @@ public final class Dash implements Runnable {
             float px = gxS, py = gyS;
             gxS = Float.isNaN(px) ? gx : px + 0.5f * (gx - px);
             gyS = Float.isNaN(py) ? gy : py + 0.5f * (gy - py);
+            axRaw = d.longitudinalAcceleration;
+            ayRaw = d.lateralAcceleration;
+            realSpeed = num(fReal, d);
+            yaw = num(fYaw, d);
+            // v18: time 0-100 on the real (unscaled) speed when the car reports it
+            acc.speed(now, Float.isNaN(realSpeed) ? speed : realSpeed);
+            acc.power(power);
+            acc.torque(torque);
+            acc.g(gxS, gyS);
+            if (logging) logLine(now, d);
         }
         public void updateDynamicVehicleInfoMidFrequent(DynamicVehicleInfoMidFrequent d, int s) {
             if (d == null || s != 1) return;

@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -46,6 +47,7 @@ type stateResp struct {
 	Dash      dashConf          `json:"dash"`
 	DashFound bool              `json:"dashFound"`
 	MacJunk   int               `json:"macJunk"`
+	UsbMode   string            `json:"usbMode"` // "flash" (Data/Meta: inserting it flashes) or "record" (_Data/_Meta + drive_logs)
 	Errors    []string          `json:"errors"`
 }
 
@@ -67,6 +69,9 @@ func checkRoot(root string) error {
 	if isDir(filepath.Join(root, "Data")) && isDir(filepath.Join(root, "Meta")) {
 		return nil
 	}
+	if isDir(filepath.Join(root, "_Data")) && isDir(filepath.Join(root, "_Meta")) { // drive-log mode
+		return nil
+	}
 	if isDir(filepath.Join(root, "USB", "Data")) {
 		return fmt.Errorf("这里是下载解压出来的整个文件夹。请把其中「USB」文件夹里面的全部内容复制到 U 盘根目录，再运行 U 盘里的这个程序")
 	}
@@ -85,6 +90,7 @@ func (p pkg) state() stateResp {
 	}
 	s.Dash, s.DashFound = p.readDash()
 	s.MacJunk = len(p.macJunk())
+	s.UsbMode = p.usbMode()
 	return s
 }
 
@@ -168,6 +174,24 @@ func main() {
 			for _, l := range log {
 				fmt.Println("  " + l)
 			}
+		}
+		json.NewEncoder(w).Encode(resp)
+	})
+	api("/api/usbmode", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Mode string `json:"mode"`
+		}
+		if r.Method != http.MethodPost || json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		log, err := p.setUsbMode(req.Mode)
+		resp := map[string]any{"ok": err == nil, "log": log, "mode": p.usbMode()}
+		if err != nil {
+			resp["error"] = err.Error()
+			fmt.Println("切换失败：", err)
+		} else {
+			fmt.Println("U 盘用途：", strings.Join(log, "；"))
 		}
 		json.NewEncoder(w).Encode(resp)
 	})

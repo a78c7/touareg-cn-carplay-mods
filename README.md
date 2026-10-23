@@ -1,7 +1,11 @@
 # 途锐中国版 CarPlay 改装合集：全屏 + 无线 + Android Auto + 导航上 HUD + CarPlay 地图上仪表 + 自定义仪表信息框
 
-让中国版大众途锐（MH2p 车机）用一个 U 盘一次刷入五项改装。**当前版本 v17**。
+让中国版大众途锐（MH2p 车机）用一个 U 盘一次刷入五项改装。**当前版本 v18**（尚未上车实测）。
 
+> **v18 新增**
+> - **0–100 计时和本次最大值**：信息框可选「0–100」（起步后显示计时，过 100 km/h 显示成绩）、「最大功率」「最大扭矩」「最大 G 值」（车机开机以来）。
+> - **行车记录**：「改装设置」里一键把 U 盘改成「行车记录 U 盘」一直插在车上，每次开车把功率、扭矩、转速、车速、油门、刹车、方向盘、加速度、挡位、油温、油耗等约 10 次/秒记到 U 盘（CSV，每小时约 5 MB），不连 OBD。
+>
 > **v17 新增**
 > - **仪表信息框可自定义**：30 项行车数据任选，最多 10 项，**自己定显示顺序**；名称和大众行车电脑一致（当前消耗、续驶里程、自启动起 / 自上次加油起 / 累计的平均消耗、行驶里程、平均车速、行驶时间等），选得越多字号自动越小，不会挡住仪表上的挡位。
 > - **「改装设置」程序**：U 盘里双击就能打开（Windows / Mac 都有），在网页里勾选每个功能"安装 / 卸载 / 不处理"、点选信息框项目并**拖动排序**，带效果预览，点保存即可，不用改文件、不用敲命令。
@@ -56,7 +60,7 @@
 - 夜间：在车机设置里切到夜间，仪表地图同步变深色。
 - 只关闭仪表地图（保留 HUD）：最简单是用"卸载"方法只卸载 `VW_HUD_3_CarPlayCluster`。
 
-### 仪表信息框说明（v16，v17 起可自定义）
+### 仪表信息框说明（v16，v17 起可自定义，v18 加性能项）
 
 - 仪表显示 CarPlay 地图时，地图左侧有一个半透明小框，每行一个数，每秒刷新 5 次。只在连着 CarPlay、仪表显示地图时出现。
 - **自己选显示什么**：刷机前运行 U 盘里的「改装设置」程序，在"仪表信息框"里点选项目、拖动排序，页面上有效果示意；改完要重新刷一次 U 盘。（也可以手改 `Mods/VW_HUD_3_CarPlayCluster/Update/dash.conf` 的 `items=` 行，文件里有说明。）
@@ -64,15 +68,24 @@
   - **最多 10 项**，第 11 项起不显示。字号按项数自动选：1～6 项大字，7～8 项中字，9～10 项小字（都不会挡到仪表左下角的挡位框；小字在仪表上偏小，建议不超过 8 项）。
   - 不想要信息框、位置、背景透明度、油箱容积（默认 90 升）也在程序里设置。
   - `dash.conf` 每次刷 U 盘都会覆盖车上的同名文件（`cl.conf` 不会被覆盖，那是车标位置的校准）。
+- **0–100 和最大值（v18）**：「0–100」从静止起步才计时，起步后实时显示已用时间，过 100 km/h 显示成绩并保留到下一次；中途松油门/刹车（车速比最高点低 3 km/h）或超过 30 秒就作废。起步和到 100 的时刻在两次数据之间插值，不受数据间隔（约 0.1 秒）限制；用车上的真实车速（不是表显车速，表显一般偏高几个百分点）。「最大功率 / 最大扭矩 / 最大 G 值」从车机开机起算，熄火后车机关机就重新开始。
 - **G 值**：加速度合成值（纵向 + 横向），加速时带 `+`、刹车时带 `-`，只转弯或匀速时不带符号；轻度平滑，比实际慢约 0.2～0.3 秒。要分开看可选"纵向G""横向G"。
 - 单位按公制（km/h、°C、L/100km）显示；当前消耗停车时自动变成 L/h。
 - 数据由 Java 插件（`VW_HUD_2_ClusterNav`）读车机自己的车辆状态和行车电脑接口，不连 OBD、不改仪表编码。功率/扭矩/加速度/转速/油温已在 2023 款途锐上实测；车速、油门、刹车、方向盘、外温、续航和行车电脑数据走同一接口，**v17 尚未上车验证**。
+
+### 行车记录（v18）
+
+- 刷完 v18 后，运行 U 盘里的「改装设置」，在「U 盘用途」点 **改成行车记录 U 盘**（会把 `Data`、`Meta` 改名为 `_Data`、`_Meta`，并新建 `drive_logs` 文件夹），之后这个 U 盘可以一直插在车上，不会刷机。要再刷机时点 **改回刷机 U 盘**。也可以用任何一个空 U 盘，只要根目录有 `drive_logs` 文件夹（不能有 `Data`、`Meta`）。
+- 每次车机启动生成一个 `drive_logs/drive_<日期-时间>.csv`，约 10 行/秒，每小时约 5 MB。列：时间（毫秒）、车速、真实车速、转速、功率、扭矩、油门、制动压力、转向角、横摆角速度、纵向加速度（m/s²）、横向加速度（g）、挡位、变速箱油温、机油温度、冷却液温度、当前消耗、油量、车外温度、续驶里程、四轮轮速。没有的值留空。用 Excel 或 Numbers 能直接打开。
+- 车机每 10 秒存一次，熄火时最后不到 10 秒的数据可能没存上。拔 U 盘前最好等车机熄屏。
+- 没有 ECU 内部数据（增压、点火角、爆震、空燃比、进气温度），这些要用诊断工具读。
+- 只需要「导航上 HUD」（`VW_HUD_2_ClusterNav`）是 v18，不需要连 CarPlay。
 
 ### 排查日志
 
 U 盘根目录新建 `cluster_logs` 文件夹，插在车上开导航 2 分钟以上，日志会自动拷进去（`vwcn.log`、`dio_cluster.log`、`cl_probe.log`、`clusterd.log`）。提 Issue 时附上。注意：日志里可能有手机名称、导航路名等信息，公开前先看一遍，不想公开的删掉。
 
-安装时原版文件会备份到 U 盘（各模块文件夹的 `Update/backup/` 或 `Update/Backup/`），建议保留这个 U 盘。平时不要把它插在车上，否则每次插入都会进入刷机。
+安装时原版文件会备份到 U 盘（各模块文件夹的 `Update/backup/` 或 `Update/Backup/`），建议保留这个 U 盘。平时不要把它插在车上，否则每次插入都会进入刷机（改成「行车记录 U 盘」后可以一直插着）。
 
 ### 全屏 CarPlay 是怎么改的
 
@@ -140,6 +153,8 @@ Five mods in one flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN
 **Install**: FAT32 drive ≤ 32 GB → download the zip from [Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) and copy everything in it to the root → double-click `改装设置（Windows）.exe` / `改装设置（Mac）.command` on the drive to choose install / uninstall / skip per mod and the info-box rows in a local web page (it also removes macOS `._*` files) → start the engine, insert the drive, wait (several reboots) → remove the drive when prompted. Full-screen CarPlay ships no VW file: `vhpatch` checks the car's own `skin3/viewhandler.zip` and changes 38 bytes listed in `fullscreen.patch` (reverted the same way on uninstall).
 
 **Cluster map**: put the cluster on its navigation map page (VIEW button); the phone's map appears 1–3 s after CarPlay connects, also right after boot. Remaining distance and arrival time are shown by the cluster itself (stock style). The car icon is placed under the cluster clock near the bottom: the phone is told the cluster is 1920x960 and only rows 230–869 are shown; per-app safe areas (AMap / Apple Maps / Baidu behave differently, AMap also shifts the car ~210 px toward the next turn, which is compensated from the route-guidance maneuver type) are switched automatically by app name. Settings: `/mnt/app/eso/bin/apps/cluster/cl.conf`. Side gauges can be hidden in the cluster settings.
+
+**v18**: info-box rows `t100` (0–100 km/h: elapsed while running, then the result; start and finish interpolated between samples, real vehicle speed), `pmax`, `tqmax`, `gmax` (maxima since the head unit started); **drive log**: a USB drive with a `drive_logs` folder (and no `Data`/`Meta`, the 改装设置 program can switch a drive between flash and log mode) gets one CSV per head-unit start, ~10 rows/s of speed, rpm, power, torque, pedal, brake, steering, yaw, accelerations, gear, temperatures, consumption, tank, range and wheel speeds. Not yet verified on the car.
 
 **Info box (v16, configurable since v17)**: while the CarPlay map is on the cluster, a translucent box left of the map shows live values, 5 updates/s. Choose the rows and their order in `Mods/VW_HUD_3_CarPlayCluster/Update/dash.conf` before flashing (`items=power,torque,g,rpm,oil,gearbox` is the default; 30 items: power, torque, g, glong, glat, rpm, speed, pedal, brake, steer, gear, gearbox, oil, coolant, outside, cons, fuel, range, plus average consumption / distance / average speed / driving time for each of the three VW board-computer memories — since start `trip…`, since refuelling `refuel…`, long term `total…` — Chinese names work too; up to 10 rows; the font shrinks for 7–8 and 9–10 rows so the box never covers the gear indicator). v17 is not yet verified on the car. `show=0` hides it; `x`, `y`, `alpha`, `tank_l` in the same file. G = total of longitudinal + lateral, `+` accelerating, `-` braking. Metric units assumed. Data comes from the head unit's own vehicle-state / board-computer DSI services (Java bundle `vwcn.Dash`), no OBD or cluster coding.
 

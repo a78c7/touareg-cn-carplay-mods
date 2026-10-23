@@ -31,6 +31,27 @@ while true; do
         fi
     fi
     if [[ ! -e /tmp/vwcn_seen && -f /tmp/vwcn.log ]]; then : > /tmp/vwcn_seen; echo "t=$t /tmp/vwcn.log appeared" >> $PL; fi
+    # v18 drive log: a USB drive with a "drive_logs" folder switches it on (the Java plugin writes 10 s
+    # chunks /tmp/drv_<session>_<seq>.csv); finished chunks are appended to drive_logs/drive_<session>.csv
+    lm=""
+    for m in /fs/usb0_0 /fs/usb1_0 /fs/sda0 /fs/sdb0; do
+        [[ -d $m/drive_logs ]] && { lm=$m; break; }
+    done
+    if [[ -n "$lm" ]]; then
+        [[ ! -e /tmp/vwcn_log_on ]] && { : > /tmp/vwcn_log_on; chmod 666 /tmp/vwcn_log_on; echo "t=$t drive log on ($lm)" >> $PL; }
+        cur=$(cat /tmp/drv_cur 2>/dev/null)
+        moved=0
+        for f in /tmp/drv_*.csv; do
+            [[ -f "$f" && "$f" != "$cur" ]] || continue
+            [[ $moved = 0 ]] && mount -uw $lm 2>/dev/null
+            n=${f#/tmp/drv_}; s=${n%_*}
+            if cat "$f" >> $lm/drive_logs/drive_$s.csv; then rm -f "$f"; moved=1; fi
+        done
+        [[ $moved = 1 ]] && sync
+    elif [[ -e /tmp/vwcn_log_on ]]; then
+        rm -f /tmp/vwcn_log_on
+        echo "t=$t drive log off (no drive_logs folder)" >> $PL
+    fi
     for m in /fs/usb0_0 /fs/usb1_0 /fs/sda0 /fs/sdb0; do
         if [[ -d $m/cluster_logs ]]; then
             D=$m/cluster_logs

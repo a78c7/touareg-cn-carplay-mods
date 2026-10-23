@@ -24,8 +24,8 @@ VALUE_CHARS = list('0123456789.-+:PRNDSMEB')
 MEM = ['自启动起', '自上次加油起', '累计']
 TRIP = ['平均消耗', '行驶里程', '平均车速', '行驶时间']
 LABELS = ['功率', '扭矩', 'G 值', '纵向 G', '横向 G', '转速', '车速', '油门', '制动压力', '转向角', '挡位', '变速箱油温',
-          '机油温度', '冷却液温度', '车外温度', '当前消耗', '燃油存量', '续驶里程'] + ['%s|%s' % (m, t) for m in MEM for t in TRIP]
-UNITS = ['kW', 'Nm', 'g', 'rpm', 'km/h', '%', 'bar', '°', '°C', 'L/100km', 'km/L', 'L/h', 'L', 'km', 'h']
+          '机油温度', '冷却液温度', '车外温度', '当前消耗', '燃油存量', '续驶里程'] + ['%s|%s' % (m, t) for m in MEM for t in TRIP] + ['0–100', '最大功率', '最大扭矩', '最大 G 值']
+UNITS = ['kW', 'Nm', 'g', 'rpm', 'km/h', '%', 'bar', '°', '°C', 'L/100km', 'km/L', 'L/h', 'L', 'km', 'h', 's']
 # size: value px, label px, unit px, two-line label (top px, bottom px, gap px)
 SIZES = [('n', 40, 26, 22, (18, 23, 3)), ('c', 32, 22, 18, (15, 19, 2)), ('s', 26, 18, 15, (13, 15, 1))]
 TOP_DIM = 0.72   # top line of a two-line label drawn at this coverage (dimmer than the value name)

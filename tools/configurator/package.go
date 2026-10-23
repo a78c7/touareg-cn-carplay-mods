@@ -50,6 +50,10 @@ var catalogue = []item{
 	{"g", "G 值", "g", "+0.22", "加速度", "合成加速度，加速带 +、刹车带 -"},
 	{"glong", "纵向 G", "g", "+0.21", "加速度", "+ 加速 / - 刹车"},
 	{"glat", "横向 G", "g", "+0.08", "加速度", "转弯"},
+	{"t100", "0–100", "s", "6.8", "性能", "百公里加速：起步后显示计时，过 100 km/h 显示成绩"},
+	{"pmax", "最大功率", "kW", "212", "性能", "车机开机以来的最大值"},
+	{"tqmax", "最大扭矩", "Nm", "448", "性能", "车机开机以来的最大值"},
+	{"gmax", "最大 G 值", "g", "0.62", "性能", "车机开机以来的最大合成加速度"},
 	{"speed", "车速", "km/h", "86", "行驶", ""},
 	{"steer", "转向角", "°", "-12", "行驶", "方向盘转角"},
 	{"gear", "挡位", "", "D6", "行驶", "仪表左下角本来就有"},
@@ -461,6 +465,58 @@ func (p pkg) apply(r applyReq) ([]string, error) {
 	}
 	if n > 0 {
 		log = append(log, fmt.Sprintf("清理了 %d 个 Mac 隐藏文件（._* / .DS_Store）", n))
+	}
+	return log, nil
+}
+
+// ---- USB mode (v18 drive log) ----
+// "flash": Data/Meta present, inserting the drive in the car starts the ModKit update.
+// "record": Data/Meta renamed to _Data/_Meta (ModKit ignores the drive) and a drive_logs folder exists: the drive can
+// stay plugged in and the car appends a CSV per trip to drive_logs (needs VW_HUD_2 v18 on the car).
+
+const logDir = "drive_logs"
+
+func (p pkg) usbMode() string {
+	if isDir(p.path("_Data")) && isDir(p.path("_Meta")) && !isDir(p.path("Data")) {
+		return "record"
+	}
+	return "flash"
+}
+
+func (p pkg) setUsbMode(mode string) ([]string, error) {
+	var log []string
+	swap := func(from, to string) error {
+		if isDir(p.path(from)) && !isDir(p.path(to)) {
+			if err := os.Rename(p.path(from), p.path(to)); err != nil {
+				return fmt.Errorf("把 %s 改名为 %s 失败：%v", from, to, err)
+			}
+			log = append(log, from+" → "+to)
+		}
+		return nil
+	}
+	switch mode {
+	case "record":
+		for _, n := range []string{"Data", "Meta"} {
+			if err := swap(n, "_"+n); err != nil {
+				return log, err
+			}
+		}
+		if !isDir(p.path(logDir)) {
+			if err := os.Mkdir(p.path(logDir), 0o755); err != nil {
+				return log, err
+			}
+			log = append(log, "新建 "+logDir+" 文件夹")
+		}
+		log = append(log, "现在是行车记录 U 盘：插在车上不会刷机，行车数据记到 "+logDir)
+	case "flash":
+		for _, n := range []string{"Data", "Meta"} {
+			if err := swap("_"+n, n); err != nil {
+				return log, err
+			}
+		}
+		log = append(log, "现在是刷机 U 盘：插到车上会开始刷机（"+logDir+" 里的记录保留）")
+	default:
+		return nil, errors.New("unknown mode")
 	}
 	return log, nil
 }

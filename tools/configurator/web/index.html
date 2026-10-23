@@ -125,6 +125,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
             <span class="hint" style="margin:6px 4px 0 0">快速选择：</span>
             <button class="btn" data-preset="power,torque,g,rpm,oil,gearbox">默认（动力）</button>
             <button class="btn" data-preset="trip,tripdist,tripspeed,triptime,cons,range">行驶数据</button>
+            <button class="btn" data-preset="t100,pmax,tqmax,gmax,power,torque">性能</button>
             <button class="btn" data-preset="oil,gearbox,coolant,outside">温度</button>
             <button class="btn" data-preset="">清空</button>
           </div>
@@ -156,6 +157,15 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
     <div class="summary" id="summary"></div>
     <button class="primary" id="save">保存到 U 盘</button>
     <div class="result" id="result"></div>
+  </section>
+
+  <section class="card" id="usbcard">
+    <h2><span class="num">4</span>U 盘用途：刷机 / 行车记录</h2>
+    <p class="hint">刷完改装后，可以把这个 U 盘改成「行车记录 U 盘」一直插在车上：车机不会再刷机，每次开车把功率、扭矩、车速、油温等约 10 次/秒记到 U 盘的 drive_logs 文件夹（每次车机启动一个 CSV 文件，每小时约 5 MB）。需要车上已装 v18 的「导航上 HUD」。要再刷机时改回「刷机 U 盘」。</p>
+    <div class="summary" id="usbnow"></div>
+    <button class="btn" id="torecord">改成行车记录 U 盘</button>
+    <button class="btn" id="toflash">改回刷机 U 盘</button>
+    <div class="result" id="usbresult"></div>
   </section>
 
   <footer>
@@ -280,7 +290,21 @@ function renderSummary(){
   $('save').disabled = !!(S.errors && S.errors.length) || (sel.cluster === 'install' && dash.show && !dash.items.length);
 }
 
-function renderAll(){ renderFeats(); renderDash(); renderSummary(); }
+function renderUsb(){
+  const rec = S.usbMode === 'record';
+  $('usbnow').innerHTML = rec ? '现在是 <b>行车记录 U 盘</b>（Data、Meta 已改名为 _Data、_Meta，插在车上不会刷机）。'
+                              : '现在是 <b>刷机 U 盘</b>（插到车上会开始刷机）。';
+  $('torecord').classList.toggle('hidden', rec); $('toflash').classList.toggle('hidden', !rec);
+}
+async function usbMode(mode){
+  const r = await api('/api/usbmode', {mode});
+  $('usbresult').innerHTML = r.ok ? '<div class="msg ok">' + (r.log || []).map(esc).join('<br>') + '</div>'
+                                  : '<div class="msg bad">' + esc(r.error || '失败') + '</div>';
+  S = await api('/api/state'); renderStatus(); renderUsb();
+}
+$('torecord').onclick = () => usbMode('record');
+$('toflash').onclick = () => usbMode('flash');
+function renderAll(){ renderFeats(); renderDash(); renderSummary(); renderUsb(); }
 
 // ---- events ----
 document.addEventListener('click', e => {

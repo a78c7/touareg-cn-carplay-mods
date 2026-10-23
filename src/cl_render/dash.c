@@ -12,6 +12,8 @@
  * key=value pairs to /tmp/dash.state about 5 times a second while the CarPlay map is on the cluster.
  * The panel is drawn on the CPU into an RGBA pixmap and screen_blit'ed (source-over) onto every frame that
  * goes to the cluster window. Portable C, no QNX dependencies in this file (host-testable).
+ * v18: 0–100 km/h (elapsed while running, then the result) and maxima since the head unit started
+ * (power, torque, total G); computed by the Java side (vwcn.Accel) at the DSI callback rate.
  * Glyphs: dash_font.h, pre-rendered from Noto Sans CJK SC (SIL Open Font License 1.1).
  * Units assume the car is set to metric (km/h, degC, L/100km).
  */
@@ -53,6 +55,7 @@ enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL,
        IT_S_AVG, IT_S_DIST, IT_S_SPD, IT_S_TIME,      /* board computer memory 自启动起 (since start) */
        IT_R_AVG, IT_R_DIST, IT_R_SPD, IT_R_TIME,      /* 自上次加油起 (since refuelling) */
        IT_L_AVG, IT_L_DIST, IT_L_SPD, IT_L_TIME,      /* 累计 (long term) */
+       IT_T100, IT_PMAX, IT_TQMAX, IT_GMAX,           /* v18: 0-100 km/h, maxima since the head unit started */
        IT_N };
 typedef struct { const char *key; const char *label; const char *unit; const char *sample; } dash_item;
 /* label "A|B" = two lines (A small on top). In items= the label is matched without '|' and spaces. */
@@ -87,6 +90,10 @@ static const dash_item g_items[IT_N] = {
     { "totaldist",    "累计|行驶里程",          "km",      "8888" },
     { "totalspeed",   "累计|平均车速",          "km/h",    "188" },
     { "totaltime",    "累计|行驶时间",          "h",       "88:88" },
+    { "t100",         "0–100",                  "s",       "88.8" },
+    { "pmax",         "最大功率",               "kW",      "888" },
+    { "tqmax",        "最大扭矩",               "Nm",      "8888" },
+    { "gmax",         "最大 G 值",              "g",       "8.88" },
 };
 static int g_rows[DASH_MAX_ROWS] = { IT_POWER, IT_TORQUE, IT_G, IT_RPM, IT_OIL, IT_GEARBOX };
 static int g_nrows = 6;
@@ -96,6 +103,8 @@ typedef struct {
     long  n;
     float p, gx, gy, cv, spd, brk;
     float avg[3], dist[3], bspd[3];
+    float t1, t1r, pmx, gmx;   /* v18: last 0-100 s, running 0-100 s, max kW, max g */
+    int   tqx;
     int   tq, gm, gc, gbt, oil, cool, cu, tank, rpm, ped, str, out, rng;
     int   avgu[3], btime[3];
 } dash_vals_t;
@@ -125,7 +134,8 @@ static void dash_parse_items(const char *v) {
         for (char *p = s; *p && tl < 63; p++) if (*p != ' ' && *p != '\t') tok[tl++] = *p;
         tok[tl] = 0;
         if (tl) {
-            for (int i = 0; i < IT_N; i++) {
+            if (!strcmp(tok, "0-100")) { g_rows[n++] = IT_T100; tl = 0; }   /* ASCII hyphen for the 0–100 label */
+            for (int i = 0; tl && i < IT_N; i++) {
                 char lab[64]; int ll = 0;
                 for (const char *p = g_items[i].label; *p && ll < 63; p++) if (*p != ' ' && *p != '|') lab[ll++] = *p;
                 lab[ll] = 0;
@@ -212,6 +222,7 @@ static void dash_parse(const char *line, dash_vals_t *o) {
     o->p = o->gx = o->gy = o->cv = o->spd = o->brk = nanv;
     o->tq = o->gm = o->gc = o->gbt = o->oil = o->cool = o->cu = o->tank = o->rpm = o->ped = o->str = o->out = o->rng = -999;
     for (int m = 0; m < 3; m++) { o->avg[m] = o->dist[m] = o->bspd[m] = nanv; o->avgu[m] = o->btime[m] = -999; }
+    o->t1 = o->t1r = o->pmx = o->gmx = nanv; o->tqx = -999;
     /* board computer keys per memory: average + unit, distance, speed, time (minutes) */
     static const char *BK[3][5] = { { "ca", "au", "td", "ts", "tt" }, { "cr", "cru", "rd", "rs", "rt" },
                                     { "cl", "clu", "ld", "ls", "lt" } };
@@ -245,6 +256,11 @@ static void dash_parse(const char *line, dash_vals_t *o) {
         else if (!strcmp(key, "str"))  o->str = di;
         else if (!strcmp(key, "out"))  o->out = di;
         else if (!strcmp(key, "rng"))  o->rng = di;
+        else if (!strcmp(key, "t1"))   o->t1 = (float)d;
+        else if (!strcmp(key, "t1r"))  o->t1r = (float)d;
+        else if (!strcmp(key, "pmx"))  o->pmx = (float)d;
+        else if (!strcmp(key, "tqx"))  o->tqx = di;
+        else if (!strcmp(key, "gmx"))  o->gmx = (float)d;
         else {
             for (int m = 0; m < 3; m++) {
                 if      (!strcmp(key, BK[m][0])) o->avg[m] = (float)d;
@@ -371,6 +387,13 @@ static void dash_item_value(int it, const dash_vals_t *v, char *o, const char **
         else { snprintf(o, 16, "%d", v->tank); *unit = "%"; }
         break;
     case IT_RANGE:   I(v->rng == -999, "%d", v->rng); break;
+    case IT_T100:    /* while a run is in progress: elapsed time, otherwise the last result */
+        if (!DASH_NAN(v->t1r)) snprintf(o, 16, "%.1f", v->t1r);
+        else I(DASH_NAN(v->t1), "%.1f", v->t1);
+        break;
+    case IT_PMAX:    I(DASH_NAN(v->pmx), "%d", dash_round(v->pmx)); break;
+    case IT_TQMAX:   I(v->tqx == -999, "%d", v->tqx); break;
+    case IT_GMAX:    I(DASH_NAN(v->gmx), "%.2f", v->gmx); break;
     default:
         if (it >= IT_S_AVG && it <= IT_L_TIME) {   /* board computer: memory m, value k */
             int m = (it - IT_S_AVG) / 4, k = (it - IT_S_AVG) % 4;
