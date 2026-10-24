@@ -96,11 +96,11 @@ type dashConf struct {
 	// v19.2: car icon on the CarPlay cluster map (read by cl_render / clusterd from dash.conf)
 	CarUp    int `json:"car_up"`    // rows the map is always moved up (0-90)
 	AccUp    int `json:"acc_up"`    // extra rows while adaptive cruise control is on (0-90)
-	AmapTurn int `json:"amap_turn"` // AMap turn compensation: 0 off (default since v19.4), 1 on, 2 auto (off once lane data is seen)
+	AmapTurn int `json:"amap_turn"` // AMap turn compensation: 0 off (default since v19.4), 1 on, 2 auto (off once lane data is seen), 3 from the picture (v19.4, trial)
 }
 
 func defaultDash() dashConf {
-	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 0, AccUp: 80, AmapTurn: 0}
+	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 35, AccUp: 80, AmapTurn: 0}
 }
 
 type pkg struct{ Root string }
@@ -309,7 +309,7 @@ func (p pkg) writeDash(d dashConf) error {
 		{"r_show", strconv.Itoa(rshow)},
 		{"car_up", strconv.Itoa(clamp(d.CarUp, 0, 90))},
 		{"acc_up", strconv.Itoa(clamp(d.AccUp, 0, 90))},
-		{"amap_turn", strconv.Itoa(clamp(d.AmapTurn, 0, 2))},
+		{"amap_turn", strconv.Itoa(clamp(d.AmapTurn, 0, 3))},
 	}
 	aliases := map[string]string{"info": "show", "info_x": "x", "info_y": "y", "info_alpha": "alpha"}
 	done := map[string]bool{}

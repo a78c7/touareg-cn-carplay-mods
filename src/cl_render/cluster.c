@@ -2440,6 +2440,103 @@ static void apply_stage_signals(void) {
  *   2. Read YV12 planes directly from post_buf CPU pointer
  *   3. Upload Y/V/U to 3 GL textures
  *   4. YUV→RGB shader → eglSwapBuffers → display 33 */
+#ifdef USE_SCREEN_BLIT
+/* v19.4: AMap car icon position for clusterd (amap_turn=3). While /tmp/cl_det_on exists, once a second: blit the
+ * band under the map centre from the decoded frame at half size into a CPU-readable pixmap (the GPU scales), copy it
+ * out, and let a worker thread do the template search (~10 ms on a PC, more on the head unit; kept off the frame
+ * path). Result: /tmp/cl_car = "<seq> <x> <y> <score*1000> <croptop>", x/y in cluster pixels. */
+#include <pthread.h>
+#include "carpos.c"
+static screen_pixmap_t g_cp_pix;
+static screen_buffer_t g_cp_buf;
+static unsigned char  *g_cp_ptr;
+static int             g_cp_stride, g_cp_state;        /* 0 = not set up, 1 = ready, -1 = off for this run */
+static uint64_t        g_cp_ms;
+static unsigned char   g_cp_copy[CARPOS_W * CARPOS_H * 4];
+static volatile int    g_cp_busy;
+static int             g_cp_crop;
+static pthread_mutex_t g_cp_mx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  g_cp_cv = PTHREAD_COND_INITIALIZER;
+
+static void *carpos_worker(void *arg) {
+    (void)arg;
+    sigset_t all; sigfillset(&all); pthread_sigmask(SIG_BLOCK, &all, NULL);   /* daemon signals stay on the main thread */
+    unsigned seq = 0;
+    for (;;) {
+        pthread_mutex_lock(&g_cp_mx);
+        while (!g_cp_busy) pthread_cond_wait(&g_cp_cv, &g_cp_mx);
+        pthread_mutex_unlock(&g_cp_mx);
+        int x, y; double s;
+        uint64_t t0 = now_us();
+        carpos_find(g_cp_copy, CARPOS_W * 4, &x, &y, &s);
+        int ms = (int)((now_us() - t0) / 1000ULL);
+        char b[96];
+        int n = snprintf(b, sizeof b, "%u %d %d %d %d\n", ++seq, x, y, (int)(s * 1000), g_cp_crop);
+        int fd = open("/tmp/cl_car.new", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (fd >= 0) { write(fd, b, n); close(fd); rename("/tmp/cl_car.new", "/tmp/cl_car"); }
+        if (seq <= 3 || seq % 600 == 0) LOG("carpos: #%u x=%d y=%d score=%.2f (%d ms)\n", seq, x, y, s, ms);
+        g_cp_busy = 0;
+    }
+    return NULL;
+}
+
+static int carpos_setup(void) {
+    int rc = screen_create_pixmap(&g_cp_pix, g_dec.scr_ctx);
+    if (rc) { LOG("carpos: pixmap create failed errno=%d\n", errno); return -1; }
+    int fmt = SCREEN_FORMAT_RGBA8888, usage = SCREEN_USAGE_READ | SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE;
+    int size[2] = { CARPOS_W, CARPOS_H };
+    screen_set_pixmap_property_iv(g_cp_pix, SCREEN_PROPERTY_FORMAT, &fmt);
+    screen_set_pixmap_property_iv(g_cp_pix, SCREEN_PROPERTY_USAGE, &usage);
+    screen_set_pixmap_property_iv(g_cp_pix, SCREEN_PROPERTY_BUFFER_SIZE, size);
+    do { rc = screen_create_pixmap_buffer(g_cp_pix); } while (rc < 0 && errno == EINTR);
+    if (rc) { LOG("carpos: pixmap buffer failed errno=%d\n", errno); return -1; }
+    screen_get_pixmap_property_pv(g_cp_pix, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)&g_cp_buf);
+    void *p = NULL;
+    screen_get_buffer_property_pv(g_cp_buf, SCREEN_PROPERTY_POINTER, &p);
+    screen_get_buffer_property_iv(g_cp_buf, SCREEN_PROPERTY_STRIDE, &g_cp_stride);
+    g_cp_ptr = (unsigned char *)p;
+    if (!g_cp_ptr || g_cp_stride < CARPOS_W * 4) { LOG("carpos: no CPU access (ptr=%p stride=%d)\n", p, g_cp_stride); return -1; }
+    pthread_t th;
+    if (pthread_create(&th, NULL, carpos_worker, NULL)) { LOG("carpos: thread failed\n"); return -1; }
+    pthread_detach(th);
+    LOG("carpos: ready, %dx%d stride %d\n", CARPOS_W, CARPOS_H, g_cp_stride);
+    return 1;
+}
+
+/* called after the frame blit; didx = decode buffer of this frame */
+static void carpos_tick(int didx) {
+    if (g_cp_state < 0 || didx < 0) return;
+    uint64_t now = now_us() / 1000ULL;
+    if (now - g_cp_ms < 1000) return;
+    g_cp_ms = now;
+    if (access("/tmp/cl_det_on", F_OK) != 0 || g_cp_busy) return;
+    /* the band is in cluster pixels: only for the tall 1920-wide stream (Touareg), shown 1:1 from g_crop_top */
+    if (g_dec.width != 1920 || !g_post_h || g_dec.height <= g_post_h + 16) return;
+    if (!g_cp_state) { g_cp_state = carpos_setup(); if (g_cp_state < 0) return; }
+    int sy = g_crop_top + CARPOS_Y0;
+    if (sy + CARPOS_BH > g_dec.height) return;
+    int a[] = {
+        SCREEN_BLIT_SOURCE_X, CARPOS_X0, SCREEN_BLIT_SOURCE_Y, sy,
+        SCREEN_BLIT_SOURCE_WIDTH, CARPOS_BW, SCREEN_BLIT_SOURCE_HEIGHT, CARPOS_BH,
+        SCREEN_BLIT_DESTINATION_X, 0, SCREEN_BLIT_DESTINATION_Y, 0,
+        SCREEN_BLIT_DESTINATION_WIDTH, CARPOS_W, SCREEN_BLIT_DESTINATION_HEIGHT, CARPOS_H,
+        SCREEN_BLIT_END
+    };
+    /* screen_flush_blits looked up at run time: a symbol missing from the car's libscreen must not stop the renderer */
+    static int (*flush_blits)(screen_context_t, int) = NULL; static int looked = 0;
+    if (!looked) { looked = 1; flush_blits = (int (*)(screen_context_t, int))dlsym(RTLD_DEFAULT, "screen_flush_blits"); }
+    int rc = screen_blit(g_dec.scr_ctx, g_cp_buf, g_dec.decode_bufs[didx], a);
+    if (!rc) rc = flush_blits ? flush_blits(g_dec.scr_ctx, SCREEN_WAIT_IDLE) : screen_flush_context(g_dec.scr_ctx, SCREEN_WAIT_IDLE);
+    if (rc) { LOG("carpos: blit failed rc=%d errno=%d, off\n", rc, errno); g_cp_state = -1; return; }
+    for (int y = 0; y < CARPOS_H; y++) memcpy(g_cp_copy + y * CARPOS_W * 4, g_cp_ptr + y * g_cp_stride, CARPOS_W * 4);
+    g_cp_crop = g_crop_top;
+    pthread_mutex_lock(&g_cp_mx);
+    g_cp_busy = 1;
+    pthread_cond_signal(&g_cp_cv);
+    pthread_mutex_unlock(&g_cp_mx);
+}
+#endif
+
 static int cb_display_picture(void* user, void* disp_info) {
     g_dec.frames_displayed++;
 
@@ -2558,6 +2655,7 @@ static int cb_display_picture(void* user, void* disp_info) {
     };
     int mr = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx],
                          g_dec.decode_bufs[didx], blit_attribs);
+    carpos_tick(didx);
 #ifdef USE_DASH
     dash_tick();
     dash_overlay(pidx);
