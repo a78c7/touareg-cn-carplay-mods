@@ -19,6 +19,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include "cl_chacha.h"
 #include "aeabi_shim.h"
 
@@ -168,7 +170,7 @@ static void init_once(void) {
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
+    plog("cl_alt v19.3 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -385,6 +387,8 @@ static void shm_write(const uint8_t *d, uint32_t n) {
 /* ---------- stream 111 receiver ---------- */
 static int g_lsock = -1, g_port;
 static volatile int g_rx_stop, g_rx_running;
+static volatile long long g_last_rx_ms;   /* CLOCK_MONOTONIC ms of the last packet on stream 111 (keep-alive hold) */
+static long long mono_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return (long long)t.tv_sec * 1000 + t.tv_nsec / 1000000; }
 static pthread_mutex_t g_rx_lk = PTHREAD_MUTEX_INITIALIZER;
 static int read_exact(int fd, uint8_t *p, size_t n) {
     while (n) {
@@ -456,6 +460,7 @@ static void *rx_thread(void *arg) {
             shm_write(ab, w); gop_add(ab, w);
         }
         clock_gettime(CLOCK_MONOTONIC, &t);
+        g_last_rx_ms = (long long)t.tv_sec * 1000 + t.tv_nsec / 1000000;
         long el = t.tv_sec - t0.tv_sec;
         st_frames = frames;
         if (!ui_sent && idr > 0) {
@@ -566,6 +571,54 @@ static void clear_rg_state(const char *why) {
 }
 
 /* ---------- interposers ---------- */
+
+/* v19.3: CarPlay dropped every 30 s while the head unit showed its own screen.
+ * When the main screen stream is torn down ("Modes changed: screen accessory"), libairplay starts
+ * _IdleStateKeepAliveThread (thread name "AirPlayKeepAliveReceiver"): select() on the keep-alive socket with a
+ * 30 s timeout; on timeout it ends the session (kTimeoutErr -6722, "session ended: Dur=30 seconds") and
+ * dio_manager reconnects. The phone sends those beacons only when it has no stream running - but the cluster
+ * stream 111 (handled here, unknown to libairplay) keeps running, so no beacon ever came. Seen on the car:
+ * frames kept arriving on 111 for the whole 30 s before each drop.
+ * Fix: in that thread only, wait in 5 s slices and restart the countdown while stream 111 packets arrive
+ * (the phone is demonstrably alive). Without cluster packets the original timeout runs as before, so a phone
+ * that really left is still detected. Every other select() caller goes straight through. */
+typedef int (*fn_select_t)(int, fd_set *, fd_set *, fd_set *, struct timeval *);
+EXPORT int select(int n, fd_set *r, fd_set *w, fd_set *e, struct timeval *tv) {
+    static fn_select_t real;
+    if (!real) real = (fn_select_t)dlsym(RTLD_NEXT, "select");
+    if (!real) { errno = ENOSYS; return -1; }
+    if (!tv || tv->tv_sec < 20 || !g_alt) return real(n, r, w, e, tv);
+    char nm[48] = "";
+    if (pthread_getname_np(pthread_self(), nm, sizeof nm) != 0 || strcmp(nm, "AirPlayKeepAliveReceiver")) return real(n, r, w, e, tv);
+    if (access("/mnt/app/eso/bin/apps/cluster/ka_off", F_OK) == 0) return real(n, r, w, e, tv);   /* switch: old behaviour */
+    fd_set r0, w0, e0;
+    if (r) r0 = *r;
+    if (w) w0 = *w;
+    if (e) e0 = *e;
+    long long total = (long long)tv->tv_sec * 1000 + tv->tv_usec / 1000, left = total, start = mono_ms();
+    int held = 0;
+    for (;;) {
+        long long slice = left < 5000 ? left : 5000;
+        struct timeval t = { (time_t)(slice / 1000), (long)(slice % 1000) * 1000 };
+        if (r) *r = r0;
+        if (w) *w = w0;
+        if (e) *e = e0;
+        int rc = real(n, r, w, e, &t);
+        if (rc != 0) {
+            if (held) plog("keepalive: idle wait ended rc=%d after %lld ms (held by cluster stream)", rc, mono_ms() - start);
+            return rc;
+        }
+        left -= slice;
+        if (g_rx_running && mono_ms() - g_last_rx_ms < 3000) {
+            if (!held) plog("keepalive: no beacon from the phone, cluster stream alive -> idle timeout held");
+            held = 1; left = total;
+        }
+        if (left <= 0) {
+            plog("keepalive: no beacon and no cluster packets for %lld ms -> timeout (session ends)", total);
+            return 0;
+        }
+    }
+}
 typedef void *(*fn4_t)(void *, void *, void *, void *);
 static void *resolve(const char *name) { return dlsym(RTLD_NEXT, name); }
 
