@@ -71,10 +71,14 @@ static int pick_va(char *app, int appcap, int *nav) {
     else if (last_app[0]) { strncpy(app, last_app, appcap - 1); app[appcap - 1] = 0; }
     if (read_file("/tmp/cl.conf", cf, sizeof cf) < 0 && read_file("/mnt/app/eso/bin/apps/cluster/cl.conf", cf, sizeof cf) < 0) return -1;
     int def = -1;
+    /* v19.2: amap_turn=0 in dash.conf (改装设置) switches the turn compensation off (AMap lane-level guidance does not
+     * move the car toward the turn, so the compensation would push it off-centre) */
+    char dc[8192];
+    int turn_on = !(read_file("/mnt/app/eso/bin/apps/cluster/dash.conf", dc, sizeof dc) > 0 && strstr(dc, "\namap_turn=0"));
     for (char *l = strtok(cf, "\n"); l; l = strtok(NULL, "\n")) {
         while (*l == ' ') l++;
         if (!strncmp(l, "va=", 3)) { def = atoi(l + 3); continue; }
-        if (!strncmp(l, "turn=", 5) && *nav && side) {
+        if (!strncmp(l, "turn=", 5) && *nav && side && turn_on) {
             char *a = l + 5, *c1 = strchr(a, ','); if (!c1) continue;
             char *c2 = strchr(c1 + 1, ','); if (!c2) continue;
             *c1 = 0;
