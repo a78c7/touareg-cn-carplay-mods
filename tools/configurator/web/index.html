@@ -157,11 +157,11 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
       </details>
       <details id="carpos">
         <summary>仪表地图的车标位置（被仪表底部的图标挡住时调这里）</summary>
-        <p class="hint" style="margin:8px 0 0">地图上移：车标被仪表底部的驾驶辅助图案挡住时调大。两项加起来最多 90 行。高德开了"车道级导航"、或车标总偏向一边时，关掉高德转向补偿。</p>
+        <p class="hint" style="margin:8px 0 0">地图上移：车标被仪表底部的驾驶辅助图案挡住时调大。两项加起来最多 90 行。高德转向补偿：高德导航时会把车标往下一个路口的方向挪，补偿把它拉回中间；开了"车道级导航"的高德不挪，补偿反而推偏。"自动"＝导航中收到车道信息就不补偿；判断错了再手动选开或关。</p>
         <div class="adv">
           <label>地图上移 <span id="carupv"></span> 行<input type="range" id="carup" min="0" max="90" step="5"></label>
           <label>开 ACC（自适应巡航）时再上移 <span id="accupv"></span> 行<input type="range" id="accup" min="0" max="90" step="5"></label>
-          <label class="cb"><input type="checkbox" id="amapturn"> 高德转向补偿</label>
+          <label>高德转向补偿<select id="amapturn"><option value="2">自动（推荐）</option><option value="1">开</option><option value="0">关</option></select></label>
         </div>
       </details>
     </div>
@@ -300,7 +300,7 @@ function renderDash(){
   // preview: both boxes (left, right)
   pvBox($('pv'), dash.show, dash.items, 'l'); pvBox($('pv2'), dash.r_show, dash.r_items, 'r');
   $('x').value = dash.x; $('y').value = dash.y; $('alpha').value = dash.alpha; $('alphav').textContent = dash.alpha; $('tank').value = dash.tank_l; $('latflip').checked = !!dash.lat_flip;
-  $('carup').value = dash.car_up; $('carupv').textContent = dash.car_up; $('accup').value = dash.acc_up; $('accupv').textContent = dash.acc_up; $('amapturn').checked = !!dash.amap_turn;
+  $('carup').value = dash.car_up; $('carupv').textContent = dash.car_up; $('accup').value = dash.acc_up; $('accupv').textContent = dash.acc_up; $('amapturn').value = String(dash.amap_turn == null ? 2 : dash.amap_turn);
 }
 
 function renderSummary(){
@@ -352,7 +352,7 @@ num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); nu
 $('latflip').addEventListener('change', e => { dash.lat_flip = e.target.checked ? 1 : 0; });
 $('carup').addEventListener('input', e => { dash.car_up = +e.target.value; $('carupv').textContent = dash.car_up; });
 $('accup').addEventListener('input', e => { dash.acc_up = +e.target.value; $('accupv').textContent = dash.acc_up; });
-$('amapturn').addEventListener('change', e => { dash.amap_turn = e.target.checked ? 1 : 0; });
+$('amapturn').addEventListener('change', e => { dash.amap_turn = +e.target.value; });
 
 // drag to reorder
 let dragIx = -1;
