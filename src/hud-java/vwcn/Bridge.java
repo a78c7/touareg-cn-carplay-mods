@@ -275,8 +275,12 @@ public final class Bridge implements Runnable {
         if (street == null) {
             street = "";
         }
+        fullName = new File(HUD_FULL).exists();
         street = shortName(street);
         String sign = exitInfo == null ? "" : exitInfo;
+        if (sign.length() == 0 && street.length() > 0 && new File(HUD_SIGN).exists()) {
+            sign = street;   // HUD layout test: also send the road name as the sign-post text
+        }
 
         long now = System.currentTimeMillis();
         boolean beat = now - lastHeartbeat >= HEARTBEAT_MS;
@@ -516,6 +520,12 @@ public final class Bridge implements Runnable {
     private static final String YAN = "\u6cbf";                                                    // 沿
     private static final String[] SUFFIXES = new String[] { "\u9ad8\u901f\u516c\u8def", "\u516c\u8def" };
     private static final int MAX_CHARS = 5;
+    /* v19.4 HUD layout tests (switch files, take effect within a few seconds, no restart): the stock navigation sends
+     * the full road name (up to 76 chars) and sign-post text; we send at most 5 chars and no sign. Whether the HUD
+     * arranges the line differently with that data is unknown. */
+    private static final String HUD_FULL = "/tmp/vwcn_hud_full";   // do not cut the road name to 5 chars
+    private static final String HUD_SIGN = "/tmp/vwcn_hud_sign";   // send the road name as sign-post text too
+    private static volatile boolean fullName;
     private static final String UNNAMED = "\u65e0\u540d\u9053\u8def";
 
     /** HUD shows ~5 chars: keep the road name after the action words, drop spaces and long suffixes; unnamed roads. */
@@ -558,7 +568,7 @@ public final class Bridge implements Runnable {
             || t.equals("\u672a\u547d\u540d\u9053\u8def") || t.equals("\u672a\u547d\u540d\u8def")) {
             return UNNAMED;
         }
-        if (t.length() > MAX_CHARS) {
+        if (t.length() > MAX_CHARS && !fullName) {
             for (int i = 0; i < SUFFIXES.length; i++) {
                 if (t.endsWith(SUFFIXES[i]) && t.length() > SUFFIXES[i].length()) {
                     t = t.substring(0, t.length() - SUFFIXES[i].length());
@@ -566,7 +576,7 @@ public final class Bridge implements Runnable {
                 }
             }
         }
-        if (t.length() > MAX_CHARS) {
+        if (t.length() > MAX_CHARS && !fullName) {
             t = t.substring(0, MAX_CHARS);
         }
         return t;
