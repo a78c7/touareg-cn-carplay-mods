@@ -96,11 +96,11 @@ type dashConf struct {
 	// v19.2: car icon on the CarPlay cluster map (read by cl_render / clusterd from dash.conf)
 	CarUp    int `json:"car_up"`    // rows the map is always moved up (0-90)
 	AccUp    int `json:"acc_up"`    // extra rows while adaptive cruise control is on (0-90)
-	AmapTurn int `json:"amap_turn"` // AMap turn compensation: 0 off, 1 on, 2 auto (off once lane data is seen)
+	AmapTurn int `json:"amap_turn"` // AMap turn compensation: 0 off (default since v19.4), 1 on, 2 auto (off once lane data is seen)
 }
 
 func defaultDash() dashConf {
-	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 0, AccUp: 80, AmapTurn: 2}
+	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 0, AccUp: 80, AmapTurn: 0}
 }
 
 type pkg struct{ Root string }
