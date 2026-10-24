@@ -415,7 +415,8 @@ static void *rx_thread(void *arg) {
     unsigned long frames = 0, bytes = 0, idr = 0, badnal = 0, cfg = 0, opc[256] = {0}, small0 = 0; uint64_t nonce = 0;
     static const uint8_t sc[4] = {0, 0, 0, 1};
     struct timespec t0, t; clock_gettime(CLOCK_MONOTONIC, &t0); time_t lastrep = t0.tv_sec;
-    int kf1 = 0, kf2 = 0, ui_sent = 0, cmd_seen = 0, kf_retry = 0; time_t last_cmd_poll = 0, last_cmd_mtime = 0, last_status = 0;
+    int kf1 = 0, kf2 = 0, ui_sent = 0, cmd_seen = 0, kf_retry = 0; time_t last_cmd_mtime = 0, last_status = 0;
+    long long last_cmd_poll_ms = 0; char last_cb[64] = "";
     while (!g_rx_stop) {
         if (read_exact(fd, hdr, 128)) break;
         uint32_t bs = hdr[0] | hdr[1] << 8 | hdr[2] << 16 | (uint32_t)hdr[3] << 24;
@@ -471,14 +472,21 @@ static void *rx_thread(void *arg) {
         }
         if (t.tv_sec - last_status >= 2) { last_status = t.tv_sec; write_status("rx"); }
         (void)kf1; (void)kf2;
-        /* command file: written by root, never deleted by us (uid 1037 cannot); act on mtime change */
-        if (t.tv_sec != last_cmd_poll) {
-            struct stat st; last_cmd_poll = t.tv_sec;
-            if (stat("/tmp/cl_alt_cmd", &st) == 0 && st.st_mtime != last_cmd_mtime) {
+        /* command file: written by root / the HMI plug-in, never deleted by us (uid 1037 cannot).
+         * v19.2: polled every 100 ms and acted on when its content or mtime changes (writers add "#<seq>" so repeated
+         * commands differ); before, once a second on mtime only (1 s resolution), which made steering-wheel zoom laggy */
+        long long now_ms = (long long)t.tv_sec * 1000 + t.tv_nsec / 1000000;
+        if (now_ms - last_cmd_poll_ms >= 100) {
+            struct stat st; last_cmd_poll_ms = now_ms;
+            char cb[64] = "";
+            if (stat("/tmp/cl_alt_cmd", &st) == 0) {
+                int cf = open("/tmp/cl_alt_cmd", O_RDONLY);
+                if (cf >= 0) { int k = read(cf, cb, sizeof cb - 1); if (k > 0) cb[k] = 0; close(cf); }
+            }
+            if (cb[0] && (st.st_mtime != last_cmd_mtime || strcmp(cb, last_cb))) {
                 int first = (last_cmd_mtime == 0 && cmd_seen == 0);
                 last_cmd_mtime = st.st_mtime; cmd_seen = 1;
-                char cb[64] = ""; int cf = open("/tmp/cl_alt_cmd", O_RDONLY);
-                if (cf >= 0) { int k = read(cf, cb, sizeof cb - 1); if (k > 0) cb[k] = 0; close(cf); }
+                strncpy(last_cb, cb, sizeof last_cb - 1);
                 if (first && el < 2) { plog("cmd file present at start, ignoring: %s", cb); }
                 else {
                     int n = 1; char w[16] = ""; sscanf(cb, "%15s %d", w, &n); if (n < 1) n = 1; if (n > 10) n = 10;
@@ -493,7 +501,10 @@ static void *rx_thread(void *arg) {
                         send_cmd("showUI", CLUSTER_URL); write_status("ui");
                     }
                     else if (!strcmp(w, "zoomin") || !strcmp(w, "zoomout"))
-                        for (int z = 0; z < n; z++) { send_cmd_ex("changeMapZoomLevel", NULL, "zoomDirection", w[4] == 'i' ? 0 : 1, NULL, 0, 0); usleep(300000); }
+                        for (int z = 0; z < n; z++) {   /* v19.2: no 300 ms stall of this receive loop per step */
+                            if (z) usleep(60000);
+                            send_cmd_ex("changeMapZoomLevel", NULL, "zoomDirection", w[4] == 'i' ? 0 : 1, NULL, 0, 0);
+                        }
                     else if (!strcmp(w, "replay")) {
                         if (g_gop_valid && g_gopn) {
                             uint32_t off = 0; while (off < g_gopn) { uint32_t c = g_gopn - off > 65536 ? 65536 : g_gopn - off; shm_write(g_gop + off, c); off += c; }
