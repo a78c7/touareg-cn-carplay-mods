@@ -61,12 +61,18 @@ static int pick_va(char *app, int appcap, int *nav) {
         p = strstr(st, "\nsource_name:s:");
         if (p) { p += 15; int i = 0; while (p[i] && p[i] != '\n' && i < appcap - 1) { app[i] = p[i]; i++; } app[i] = 0; }
     }
-    /* the phone sends the app name only at the start of a guidance session: keep the last one we saw */
+    /* the phone sends the app name only at the start of a guidance session: keep the last one we saw.
+     * v19.2: also across head-unit restarts (/mnt/ota survives them, /tmp does not): after a restart CarPlay
+     * reconnects and a guidance that was already running continues without a name, so the app rules (and the AMap
+     * turn compensation) did not apply until the guidance was restarted. Written only when the app changes. */
     static char last_app[64];
-    if (!last_app[0]) read_file("/tmp/cl_last_app", last_app, sizeof last_app);
+    if (!last_app[0] && read_file("/tmp/cl_last_app", last_app, sizeof last_app) < 0)
+        read_file("/mnt/ota/modkit/cl_last_app", last_app, sizeof last_app);
     if (app[0] && strcmp(app, last_app)) {
         strncpy(last_app, app, sizeof last_app - 1);
         int fd = open("/tmp/cl_last_app", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (fd >= 0) { write(fd, last_app, strlen(last_app)); close(fd); }
+        fd = open("/mnt/ota/modkit/cl_last_app", O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd >= 0) { write(fd, last_app, strlen(last_app)); close(fd); }
     }
     else if (last_app[0]) { strncpy(app, last_app, appcap - 1); app[appcap - 1] = 0; }
