@@ -49,7 +49,7 @@ static int turn_side(int t) {
 }
 static int pick_va(char *app, int appcap, int *nav) {
     char st[4096], cf[2048];
-    int side = 0;
+    int side = 0, lanes = 0;
     app[0] = 0; *nav = 0;
     if (read_file("/tmp/cluster_cp.state", st, sizeof st) > 0) {
         int sess = strstr(st, "session_active:b:true") != NULL, rs = -1, rg = -1;
@@ -57,6 +57,7 @@ static int pick_va(char *app, int appcap, int *nav) {
         p = strstr(st, "\nsource_supports_rg:n:"); if (p) rg = atoi(p + 22);
         *nav = sess && rs >= 1 && rs != 2 && rg != 0;
         p = strstr(st, "\nslot_0_type:n:"); if (p) side = turn_side(atoi(p + 15));
+        lanes = strstr(st, "\nlane_active:b:true") || strstr(st, "\nlane_active:n:1");
         p = strstr(st, "\nsource_name:s:");
         if (p) { p += 15; int i = 0; while (p[i] && p[i] != '\n' && i < appcap - 1) { app[i] = p[i]; i++; } app[i] = 0; }
     }
@@ -71,10 +72,19 @@ static int pick_va(char *app, int appcap, int *nav) {
     else if (last_app[0]) { strncpy(app, last_app, appcap - 1); app[appcap - 1] = 0; }
     if (read_file("/tmp/cl.conf", cf, sizeof cf) < 0 && read_file("/mnt/app/eso/bin/apps/cluster/cl.conf", cf, sizeof cf) < 0) return -1;
     int def = -1;
-    /* v19.2: amap_turn=0 in dash.conf (改装设置) switches the turn compensation off (AMap lane-level guidance does not
-     * move the car toward the turn, so the compensation would push it off-centre) */
+    /* v19.2: amap_turn in dash.conf (改装设置): 0 off, 1 on, 2 auto (default). AMap lane-level guidance does not move the
+     * car toward the next turn, so the compensation would push it off-centre. The phone does not tell us that setting;
+     * the clue is lane guidance data: two cars so far, the AMap that sends lanes is the one that does not shift the car.
+     * Auto: once lanes were seen during the current guidance, compensation stays off until guidance ends. */
     char dc[8192];
-    int turn_on = !(read_file("/mnt/app/eso/bin/apps/cluster/dash.conf", dc, sizeof dc) > 0 && strstr(dc, "\namap_turn=0"));
+    int mode = 2;
+    if (read_file("/mnt/app/eso/bin/apps/cluster/dash.conf", dc, sizeof dc) > 0) {
+        char *m = strstr(dc, "\namap_turn="); if (m) mode = atoi(m + 11);
+    }
+    static int lanes_seen = 0;
+    if (!*nav) lanes_seen = 0;
+    else if (lanes && !lanes_seen) { lanes_seen = 1; FILE *lf = fopen("/tmp/clusterd.log", "a"); if (lf) { fprintf(lf, "[%ld] lane data in this guidance (amap_turn=%d): turn compensation %s\n", (long)time(NULL), mode, mode == 2 ? "off" : "unchanged"); fclose(lf); } }
+    int turn_on = mode == 1 || (mode == 2 && !lanes_seen);
     for (char *l = strtok(cf, "\n"); l; l = strtok(NULL, "\n")) {
         while (*l == ' ') l++;
         if (!strncmp(l, "va=", 3)) { def = atoi(l + 3); continue; }
