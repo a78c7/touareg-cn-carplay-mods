@@ -129,11 +129,15 @@ static int pick_va(char *app, int appcap, int *nav) {
     for (char *l = strtok(cf, "\n"); l; l = strtok(NULL, "\n")) {
         while (*l == ' ') l++;
         if (!strncmp(l, "va=", 3)) { def = atoi(l + 3); continue; }
-        if (!strncmp(l, "turn=", 5) && *nav && side && turn_on) {
+        /* v19.4: "turn=<app>,<left>,<right>[,<other>]". Seen on the car: with a straight-on next maneuver (type 3,
+         * 6.6 km ahead) AMap also kept the car ~210 px right of the centre (area 0: car at x 1170; area 14: x 960),
+         * so maneuvers that are neither left nor right use <other>, default the right-turn area. */
+        if (!strncmp(l, "turn=", 5) && *nav && turn_on) {
             char *a = l + 5, *c1 = strchr(a, ','); if (!c1) continue;
             char *c2 = strchr(c1 + 1, ','); if (!c2) continue;
+            char *c3 = strchr(c2 + 1, ',');
             *c1 = 0;
-            if (app[0] && strstr(app, a)) return side < 0 ? atoi(c1 + 1) : atoi(c2 + 1);
+            if (app[0] && strstr(app, a)) return side < 0 ? atoi(c1 + 1) : side > 0 ? atoi(c2 + 1) : atoi(c3 ? c3 + 1 : c2 + 1);
             continue;
         }
         if (strncmp(l, "rule=", 5)) continue;
