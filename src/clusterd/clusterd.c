@@ -63,6 +63,7 @@ static time_t g_sess_t;          /* start of the current cluster stream (set by 
 static int g_fresh = -1;         /* -1 no guidance yet, 0 guidance was already running at connect, 1 started here */
 static int g_prev_nav;
 static char g_last_road[96];
+static int g_mode;               /* amap_turn from dash.conf, read by pick_va */
 static int pick_va(char *app, int appcap, int *nav) {
     char st[4096], cf[2048];
     int side = 0, lanes = 0;
@@ -113,7 +114,7 @@ static int pick_va(char *app, int appcap, int *nav) {
     else if (last_app[0]) { strncpy(app, last_app, appcap - 1); app[appcap - 1] = 0; }
     if (read_file("/tmp/cl.conf", cf, sizeof cf) < 0 && read_file("/mnt/app/eso/bin/apps/cluster/cl.conf", cf, sizeof cf) < 0) return -1;
     int def = -1;
-    /* v19.4: default 0 (off). 53 cluster screenshots from one drive: AMap puts the car at the centre of the safe area or
+    /* v19.4: 3 = look at the picture (vision_va). Default 0 (off). 53 cluster screenshots from one drive: AMap puts the car at the centre of the safe area or
      * exactly ~213 px left/right of it, and the side follows the direction of the destination (the red line from the car),
      * not the next maneuver; after a reconnect it often does not shift at all. The head unit does not get the destination
      * direction, so a turn-based compensation is right only by chance. 1 = old turn-based compensation, 2 = auto as below.
@@ -129,6 +130,7 @@ static int pick_va(char *app, int appcap, int *nav) {
     static int lanes_seen = 0;
     if (!*nav) lanes_seen = 0;
     else if (lanes && !lanes_seen) { lanes_seen = 1; FILE *lf = fopen("/tmp/clusterd.log", "a"); if (lf) { fprintf(lf, "[%ld] lane data in this guidance (amap_turn=%d): turn compensation %s\n", (long)time(NULL), mode, mode == 2 ? "off" : "unchanged"); fclose(lf); } }
+    g_mode = mode;
     int turn_on = mode == 1 || (mode == 2 && !lanes_seen && g_fresh == 1);
     for (char *l = strtok(cf, "\n"); l; l = strtok(NULL, "\n")) {
         while (*l == ' ') l++;
@@ -149,6 +151,72 @@ static int pick_va(char *app, int appcap, int *nav) {
         if (ok_app && (nv < 0 || nv == *nav)) return atoi(c2 + 1);
     }
     return def;
+}
+
+/* v19.4 amap_turn=3: put AMap's car under the clock by looking at the picture. The renderer finds the car icon once a
+ * second while /tmp/cl_det_on exists and writes /tmp/cl_car ("seq x y score*1000 croptop", cluster pixels). AMap puts
+ * the car at the centre of the safe area or ~213 px left/right of it (the side follows the destination direction, which
+ * the head unit does not get), and keeps doing that when the safe area changes. So s = round((x - centre) / 213) tells
+ * which of the three AMap is using, and the area whose centre is 213*s the other way puts the car back under the clock:
+ * s = 0 the normal area (rule), s = -1 the "left turn" area of the turn= line, s = +1 the "right turn" area.
+ * Switch only after 3 matching results in a row, ignore 4 s after a switch (the phone redraws), and stop for the rest
+ * of the guidance after 6 switches within 90 s (would mean AMap reacts to the area change itself). */
+static int area_centre(int idx) {
+    char cf[2048]; int i = 0;
+    if (read_file("/tmp/cl.conf", cf, sizeof cf) < 0 && read_file("/mnt/app/eso/bin/apps/cluster/cl.conf", cf, sizeof cf) < 0) return -1;
+    for (char *l = strtok(cf, "\n"); l; l = strtok(NULL, "\n")) {
+        while (*l == ' ') l++;
+        if (strncmp(l, "area=", 5)) continue;
+        if (i++ == idx) { int x, y, w, h; if (sscanf(l + 5, "%d,%d,%d,%d", &x, &y, &w, &h) == 4) return x + w / 2; return -1; }
+    }
+    return -1;
+}
+static int turn_areas(const char *app, int *left, int *right) {
+    char cf[2048];
+    if (!app[0]) return 0;
+    if (read_file("/tmp/cl.conf", cf, sizeof cf) < 0 && read_file("/mnt/app/eso/bin/apps/cluster/cl.conf", cf, sizeof cf) < 0) return 0;
+    for (char *l = strtok(cf, "\n"); l; l = strtok(NULL, "\n")) {
+        while (*l == ' ') l++;
+        if (strncmp(l, "turn=", 5)) continue;
+        char *a = l + 5, *c1 = strchr(a, ','); if (!c1) continue;
+        *c1 = 0;
+        if (strstr(app, a) && sscanf(c1 + 1, "%d,%d", left, right) == 2) return 1;
+    }
+    return 0;
+}
+static int vision_va(const char *app, int nav, int base, int cur) {
+    static unsigned last_seq; static int want = -1, cnt, frozen, nsw; static time_t sw_t[6], last_sw;
+    int on = g_mode == 3 && nav && app[0] && strstr(app, "高德");
+    if (!on) {
+        if (access("/tmp/cl_det_on", F_OK) == 0) unlink("/tmp/cl_det_on");
+        if (!nav) { want = -1; cnt = 0; frozen = 0; nsw = 0; }
+        return base;
+    }
+    if (access("/tmp/cl_det_on", F_OK) != 0) { int fd = open("/tmp/cl_det_on", O_WRONLY | O_CREAT, 0666); if (fd >= 0) close(fd); }
+    if (frozen || cur < 0) return base;
+    char b[96]; unsigned seq; int x, y, sc, crop;
+    if (read_file("/tmp/cl_car", b, sizeof b) <= 0 || sscanf(b, "%u %d %d %d %d", &seq, &x, &y, &sc, &crop) != 5 || seq == last_seq) return cur;
+    last_seq = seq;
+    time_t now = time(NULL);
+    if (now - last_sw < 4) return cur;
+    int L, R, c = area_centre(cur);
+    if (c < 0 || !turn_areas(app, &L, &R)) return cur;
+    if (sc < 620) { cnt = 0; return cur; }                      /* no icon (cruise dot, map panned, other icon) */
+    int d = x - c, s = d > 106 ? 1 : d < -106 ? -1 : 0;
+    if (d - 213 * s > 40 || d - 213 * s < -40) { cnt = 0; return cur; }   /* not one of AMap's three spots */
+    int w = s == 0 ? base : s < 0 ? L : R;
+    if (w == cur) { cnt = 0; want = -1; return cur; }
+    if (w != want) { want = w; cnt = 0; }
+    if (++cnt < 3) return cur;
+    char m[160];
+    snprintf(m, sizeof m, "car icon at x=%d (area %d centre %d, side %d, score %d): area %d", x, cur, c, s, sc, w);
+    logs(m);
+    cnt = 0; want = -1; last_sw = now;
+    int recent = 0;
+    sw_t[nsw++ % 6] = now;
+    for (int i = 0; i < 6 && i < nsw; i++) if (now - sw_t[i] <= 90) recent++;
+    if (recent >= 6) { frozen = 1; logs("car icon: 6 area changes within 90 s, back to the normal area until this guidance ends"); return base; }
+    return w;
 }
 
 int main(int argc, char **argv) {
@@ -220,6 +288,7 @@ int main(int argc, char **argv) {
                 auto_va = -1; last_auto = time(NULL);
             } else if (stage == 3 && time(NULL) - last_auto >= 1) {
                 int nav, v = pick_va(app, sizeof app, &nav);
+                v = vision_va(app, nav, v, auto_va);
                 last_auto = time(NULL);
                 if (v >= 0 && v != auto_va) {
                     char b[32]; snprintf(b, sizeof b, "va %d", v); send_cmd(b);
