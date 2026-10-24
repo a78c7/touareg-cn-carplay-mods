@@ -92,10 +92,14 @@ type dashConf struct {
 	// v19: right box (keys r_show / r_items in dash.conf; position r_x / r_y / r_right stays as in the file)
 	RShow  bool     `json:"r_show"`
 	RItems []string `json:"r_items"`
+	// v19.2: car icon on the CarPlay cluster map (read by cl_render / clusterd from dash.conf)
+	CarUp    int `json:"car_up"`    // rows the map is always moved up (0-90)
+	AccUp    int `json:"acc_up"`    // extra rows while adaptive cruise control is on (0-90)
+	AmapTurn int `json:"amap_turn"` // 1 = AMap turn compensation on
 }
 
 func defaultDash() dashConf {
-	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}}
+	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 0, AccUp: 80, AmapTurn: 1}
 }
 
 type pkg struct{ Root string }
@@ -258,6 +262,18 @@ func (p pkg) readDash() (dashConf, bool) {
 			if nerr == nil {
 				d.LatFlip = n
 			}
+		case "car_up":
+			if nerr == nil {
+				d.CarUp = n
+			}
+		case "acc_up":
+			if nerr == nil {
+				d.AccUp = n
+			}
+		case "amap_turn":
+			if nerr == nil {
+				d.AmapTurn = n
+			}
 		}
 	}
 	return d, true
@@ -290,6 +306,9 @@ func (p pkg) writeDash(d dashConf) error {
 		{"lat_flip", strconv.Itoa(clamp(d.LatFlip, 0, 1))},
 		{"r_items", strings.Join(d.RItems, ",")},
 		{"r_show", strconv.Itoa(rshow)},
+		{"car_up", strconv.Itoa(clamp(d.CarUp, 0, 90))},
+		{"acc_up", strconv.Itoa(clamp(d.AccUp, 0, 90))},
+		{"amap_turn", strconv.Itoa(clamp(d.AmapTurn, 0, 1))},
 	}
 	aliases := map[string]string{"info": "show", "info_x": "x", "info_y": "y", "info_alpha": "alpha"}
 	done := map[string]bool{}

@@ -149,10 +149,19 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
         <summary>高级：左边框位置、透明度、油箱容积</summary>
         <div class="adv">
           <label>左边距 x（仪表画面像素）<input type="number" id="x" min="0" max="1500"></label>
-          <label>上边距 y（默认 172，刚好在导航条和挡位框之间）<input type="number" id="y" min="0" max="600"></label>
+          <label>上边距 y（默认 164，刚好在导航条和挡位框之间）<input type="number" id="y" min="0" max="600"></label>
           <label>背景不透明度 <span id="alphav"></span><input type="range" id="alpha" min="0" max="255"></label>
           <label>油箱容积（升，"燃油存量"用；0 = 显示百分比）<input type="number" id="tank" min="0" max="200"></label>
           <label class="cb"><input type="checkbox" id="latflip"> 横向 G 正负号反过来</label>
+        </div>
+      </details>
+      <details id="carpos">
+        <summary>仪表地图的车标位置（被仪表底部的图标挡住时调这里）</summary>
+        <p class="hint" style="margin:8px 0 0">地图上移：车标被仪表底部的驾驶辅助图案挡住时调大。两项加起来最多 90 行。高德开了"车道级导航"、或车标总偏向一边时，关掉高德转向补偿。</p>
+        <div class="adv">
+          <label>地图上移 <span id="carupv"></span> 行<input type="range" id="carup" min="0" max="90" step="5"></label>
+          <label>开 ACC（自适应巡航）时再上移 <span id="accupv"></span> 行<input type="range" id="accup" min="0" max="90" step="5"></label>
+          <label class="cb"><input type="checkbox" id="amapturn"> 高德转向补偿</label>
         </div>
       </details>
     </div>
@@ -291,6 +300,7 @@ function renderDash(){
   // preview: both boxes (left, right)
   pvBox($('pv'), dash.show, dash.items, 'l'); pvBox($('pv2'), dash.r_show, dash.r_items, 'r');
   $('x').value = dash.x; $('y').value = dash.y; $('alpha').value = dash.alpha; $('alphav').textContent = dash.alpha; $('tank').value = dash.tank_l; $('latflip').checked = !!dash.lat_flip;
+  $('carup').value = dash.car_up; $('carupv').textContent = dash.car_up; $('accup').value = dash.acc_up; $('accupv').textContent = dash.acc_up; $('amapturn').checked = !!dash.amap_turn;
 }
 
 function renderSummary(){
@@ -340,6 +350,9 @@ const num = (id, key, lo, hi) => $(id).addEventListener('input', e => { const v 
 function renderDashPreviewOnly(){ const a = document.activeElement && document.activeElement.id; renderDash(); if (a && $(a)) $(a).focus(); }
 num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); num('tank', 'tank_l', 0, 200);
 $('latflip').addEventListener('change', e => { dash.lat_flip = e.target.checked ? 1 : 0; });
+$('carup').addEventListener('input', e => { dash.car_up = +e.target.value; $('carupv').textContent = dash.car_up; });
+$('accup').addEventListener('input', e => { dash.acc_up = +e.target.value; $('accupv').textContent = dash.acc_up; });
+$('amapturn').addEventListener('change', e => { dash.amap_turn = e.target.checked ? 1 : 0; });
 
 // drag to reorder
 let dragIx = -1;
@@ -351,7 +364,7 @@ $('order').addEventListener('drop', e => { const li = e.target.closest('li[data-
 $('save').addEventListener('click', async () => {
   const btn = $('save'); btn.disabled = true; btn.textContent = '正在保存…';
   try {
-    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip}});
+    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn}});
     if (!r.ok) { $('result').innerHTML = `<div class="msg bad">没有保存：${esc(r.error)}</div>`; return; }
     const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip';
     $('result').innerHTML = `<div class="msg ok"><b>已保存。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>

@@ -1322,7 +1322,7 @@ static int g_post_w = 0, g_post_h = 0;
  * car icon sits. The Java plug-in writes acc=0/1 into /tmp/dash.state; we then show rows acc_up lower in the tall
  * frame (= the whole map moves up by acc_up), stepping a few rows per frame. Works for every app because it only
  * changes which rows of the phone's frame are shown. cl.conf: acc_up=<rows> (0 = off). */
-static int g_crop_base = 0, g_crop_target = 0, g_acc_up = 80, g_acc_on = 0;
+static int g_crop_base = 0, g_crop_target = 0, g_acc_up = 80, g_car_up = 0, g_acc_on = 0;
 static uint64_t g_acc_poll_ms = 0;
 static void read_crop_conf(void) {
     static const char *paths[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
@@ -1334,7 +1334,17 @@ static void read_crop_conf(void) {
             else if (sscanf(l, " acc_up = %d", &v) == 1) g_acc_up = v < 0 ? 0 : v;
         }
         fclose(f);
-        return;
+        break;
+    }
+    /* v19.2: dash.conf (refreshed by every USB install, edited by 改装设置) wins: car_up = always, acc_up = with ACC */
+    FILE *f = fopen("/mnt/app/eso/bin/apps/cluster/dash.conf", "r");
+    if (f) {
+        char l[128]; int v;
+        while (fgets(l, sizeof l, f)) {
+            if (sscanf(l, " car_up = %d", &v) == 1) g_car_up = v < 0 ? 0 : v;
+            else if (sscanf(l, " acc_up = %d", &v) == 1) g_acc_up = v < 0 ? 0 : v;
+        }
+        fclose(f);
     }
 }
 /* acc=1 in a dash.state that is still being written: the Java side rewrites it at least once a second with an
@@ -1363,7 +1373,7 @@ static void crop_tick(int dec_h, int out_h) {
         int on = read_acc_flag(now);
         if (on != g_acc_on) { g_acc_on = on; LOG("acc %s: map %s %d rows\n", on ? "on" : "off", on ? "up" : "back", g_acc_up); }
     }
-    g_crop_target = g_crop_base + (g_acc_on ? g_acc_up : 0);
+    g_crop_target = g_crop_base + g_car_up + (g_acc_on ? g_acc_up : 0);
     if (g_crop_target > max) g_crop_target = max;
     if (g_crop_target < 0) g_crop_target = 0;
     if (g_crop_top < g_crop_target) g_crop_top = g_crop_top + 4 > g_crop_target ? g_crop_target : g_crop_top + 4;
@@ -1665,9 +1675,9 @@ static int setup_screen(int width, int height) {
         read_crop_conf();
         if (g_crop_top < 0) g_crop_top = 0;
         if (g_crop_top > height - g_h264_args.yres) g_crop_top = height - g_h264_args.yres;
-        g_crop_base = g_crop_target = g_crop_top;
-        if (g_crop_base + g_acc_up > height - g_h264_args.yres)
-            LOG("acc_up %d limited to %d rows by the tall frame\n", g_acc_up, height - g_h264_args.yres - g_crop_base);
+        g_crop_base = g_crop_top;
+        g_crop_top = g_crop_target = g_crop_base + g_car_up > height - g_h264_args.yres ? height - g_h264_args.yres : g_crop_base + g_car_up;
+        LOG("car_up %d, acc_up %d (room for %d rows above croptop)\n", g_car_up, g_acc_up, height - g_h264_args.yres - g_crop_base);
         LOG("tall stream %dx%d: post window %dx%d, showing rows %d..%d\n", width, height,
             width, g_h264_args.yres, g_crop_top, g_crop_top + g_h264_args.yres - 1);
         height = g_h264_args.yres;
