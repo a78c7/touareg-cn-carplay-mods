@@ -46,9 +46,10 @@ typedef struct {
     int max_h;     /* space available below y before the cluster's gear box (switch to compact above it) */
     int compact;   /* font size: -1 auto (by row count), 0 normal, 1 compact, 2 small */
     int right;     /* v18: x of the box's right edge (0 = width from the content) */
+    double trip_base; /* v19.2: odometer reading (km) where the cluster's Trip was last reset; Trip = odometer - this */
 } dash_conf_t;
 
-static dash_conf_t g_dash_conf = { 1, 5, 164, 200, 90, 5000, 0, 348, -1, 300 };
+static dash_conf_t g_dash_conf = { 1, 5, 164, 200, 90, 5000, 0, 348, -1, 300, 0 };
 
 /* ---- the item catalogue: config key, label (also accepted in items=), unit, sample for column width ---- */
 enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL, IT_BRAKE, IT_STEER, IT_GEAR,
@@ -57,6 +58,7 @@ enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL,
        IT_R_AVG, IT_R_DIST, IT_R_SPD, IT_R_TIME,      /* 自上次加油起 (since refuelling) */
        IT_L_AVG, IT_L_DIST, IT_L_SPD, IT_L_TIME,      /* 累计 (long term) */
        IT_T100, IT_PMAX, IT_TQMAX, IT_GMAX,           /* v18: 0-100 km/h, maxima since the head unit started */
+       IT_TRIPKM,                                     /* v19.2: Trip = odometer - trip_base (dash.conf) */
        IT_N };
 typedef struct { const char *key; const char *label; const char *unit; const char *sample; } dash_item;
 /* label "A|B" = two lines (A small on top). In items= the label is matched without '|' and spaces. */
@@ -95,6 +97,7 @@ static const dash_item g_items[IT_N] = {
     { "pmax",         "最大功率",               "kW",      "888" },
     { "tqmax",        "最大扭矩",               "Nm",      "8888" },
     { "gmax",         "最大 G 值",              "g",       "8.88" },
+    { "tripkm",       "Trip",                   "km",      "8888.8" },
 };
 static int g_rows[DASH_MAX_ROWS] = { IT_POWER, IT_TORQUE, IT_G, IT_RPM, IT_OIL, IT_GEARBOX };
 static int g_nrows = 6;
@@ -105,6 +108,7 @@ typedef struct {
     float p, gx, gy, cv, spd, brk;
     float avg[3], dist[3], bspd[3];
     float t1, t1r, pmx, gmx;   /* v18: last 0-100 s, running 0-100 s, max kW, max g */
+    double odo;                /* v19.2: odometer km */
     int   tqx;
     int   tq, gm, gc, gbt, oil, cool, cu, tank, rpm, ped, str, out, rng;
     int   avgu[3], btime[3];
@@ -114,7 +118,10 @@ typedef struct {
 static const dash_glyph *L_val, *L_lab, *L_unit;
 static int L_nval, L_nlab, L_nunit, L_row_h, L_base_off, L_pad_y;
 static int g_dash_w = 300, g_dash_h = 100, L_lab_x, L_val_r, L_unit_x;
-static int L_sz, g_dash_min_sz = -1;   /* v19: size used by dash_layout; both boxes use at least g_dash_min_sz */
+static int L_sz, g_dash_min_sz = -1;   /* v19: row size (from the number of rows) of dash_layout; both boxes use at
+                                         * least g_dash_min_sz. v19.2: only the row size is shared; a box that is too
+                                         * narrow for its labels takes a smaller font but keeps the shared row height,
+                                         * so the other box keeps its font and both keep their height */
 
 static char      g_dash_line[1024];
 static int       g_dash_have;
@@ -195,6 +202,7 @@ static void dash_read_conf_line1(const char *l) {
     else if (sscanf(l, "info_y = %d", &v) == 1 || sscanf(l, "y = %d", &v) == 1) g_dash_conf.y = v;
     else if (sscanf(l, "info_alpha = %d", &v) == 1 || sscanf(l, "alpha = %d", &v) == 1) g_dash_conf.alpha = v < 0 ? 0 : v > 255 ? 255 : v;
     else if (sscanf(l, "tank_l = %d", &v) == 1) g_dash_conf.tank_l = v;
+    else if (sscanf(l, "trip_base = %lf", &g_dash_conf.trip_base) == 1) ;
     else if (sscanf(l, "lat_flip = %d", &v) == 1) g_dash_conf.lat_flip = v;
     else if (sscanf(l, "max_h = %d", &v) == 1) g_dash_conf.max_h = v;
     else if (sscanf(l, "compact = %d", &v) == 1) g_dash_conf.compact = v;
@@ -210,7 +218,8 @@ static void dash_read_conf_line(const char *l) {
     int v, cur = g_box_cur;
     dash_read_conf_line1(l);
     /* settings that belong to the data, not to a box: copy to the other box too */
-    if (sscanf(l, "tank_l = %d", &v) == 1 || sscanf(l, "lat_flip = %d", &v) == 1 ||
+    double dv;
+    if (sscanf(l, "tank_l = %d", &v) == 1 || sscanf(l, "lat_flip = %d", &v) == 1 || sscanf(l, "trip_base = %lf", &dv) == 1 ||
         sscanf(l, "alpha = %d", &v) == 1 || sscanf(l, "info_alpha = %d", &v) == 1) {   /* r_alpha after it still wins */
         dash_use(1 - cur); dash_read_conf_line1(l); dash_use(cur);
     }
@@ -275,6 +284,7 @@ static void dash_layout(void) {
      * exactly right - x wide. Wider than needed -> the label/value gap grows; narrower -> tighter spacing, then
      * (font size auto only) a smaller font. */
     if (g_dash_min_sz > sz) sz = g_dash_min_sz;
+    int szh = sz;                                                        /* row size: rows decide it, not width */
     int target = g_dash_conf.right > g_dash_conf.x ? g_dash_conf.right - g_dash_conf.x : 0;
     int lab_w, val_w, unit_w, pad = DASH_PAD_X, gap = DASH_GAP, ugap = 8;
     for (;;) {
@@ -288,7 +298,7 @@ static void dash_layout(void) {
         if (need <= target || !autosz || sz == 3) break;
         sz++;                                                            /* smaller font */
     }
-    L_row_h = ROW_H[sz]; L_pad_y = PAD_Y[sz]; L_base_off = BASE[sz]; L_sz = sz;
+    L_row_h = ROW_H[szh]; L_pad_y = PAD_Y[szh]; L_base_off = BASE[sz]; L_sz = szh;
     L_lab_x = pad;
     if (target) {   /* units flush right, values right-aligned before them */
         g_dash_w = target;
@@ -310,7 +320,7 @@ static void dash_parse(const char *line, dash_vals_t *o) {
     o->p = o->gx = o->gy = o->cv = o->spd = o->brk = nanv;
     o->tq = o->gm = o->gc = o->gbt = o->oil = o->cool = o->cu = o->tank = o->rpm = o->ped = o->str = o->out = o->rng = -999;
     for (int m = 0; m < 3; m++) { o->avg[m] = o->dist[m] = o->bspd[m] = nanv; o->avgu[m] = o->btime[m] = -999; }
-    o->t1 = o->t1r = o->pmx = o->gmx = nanv; o->tqx = -999;
+    o->t1 = o->t1r = o->pmx = o->gmx = nanv; o->tqx = -999; o->odo = nanv;
     /* board computer keys per memory: average + unit, distance, speed, time (minutes) */
     static const char *BK[3][5] = { { "ca", "au", "td", "ts", "tt" }, { "cr", "cru", "rd", "rs", "rt" },
                                     { "cl", "clu", "ld", "ls", "lt" } };
@@ -349,6 +359,7 @@ static void dash_parse(const char *line, dash_vals_t *o) {
         else if (!strcmp(key, "pmx"))  o->pmx = (float)d;
         else if (!strcmp(key, "tqx"))  o->tqx = di;
         else if (!strcmp(key, "gmx"))  o->gmx = (float)d;
+        else if (!strcmp(key, "odo"))  o->odo = d;
         else {
             for (int m = 0; m < 3; m++) {
                 if      (!strcmp(key, BK[m][0])) o->avg[m] = (float)d;
@@ -482,6 +493,11 @@ static void dash_item_value(int it, const dash_vals_t *v, char *o, const char **
     case IT_PMAX:    I(DASH_NAN(v->pmx), "%d", dash_round(v->pmx)); break;
     case IT_TQMAX:   I(v->tqx == -999, "%d", v->tqx); break;
     case IT_GMAX:    I(DASH_NAN(v->gmx), "%.2f", v->gmx); break;
+    case IT_TRIPKM: {
+        double t = v->odo - g_dash_conf.trip_base;
+        I(v->odo != v->odo || g_dash_conf.trip_base <= 0 || t < 0 || t >= 100000, t < 10000 ? "%.1f" : "%.0f", t);
+        break;
+    }
     default:
         if (it >= IT_S_AVG && it <= IT_L_TIME) {   /* board computer: memory m, value k */
             int m = (it - IT_S_AVG) / 4, k = (it - IT_S_AVG) % 4;

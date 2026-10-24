@@ -76,6 +76,7 @@ var catalogue = []item{
 	{"totaldist", "累计|行驶里程", "km", "1933", "累计", ""},
 	{"totalspeed", "累计|平均车速", "km/h", "51", "累计", ""},
 	{"totaltime", "累计|行驶时间", "h", "37:51", "累计", ""},
+	{"tripkm", "Trip", "km", "546.3", "行驶", "仪表 Trip 里程（用总里程推算，需在 dash.conf 设 trip_base＝Trip 清零时的总里程）"},
 }
 
 const maxRows = 10

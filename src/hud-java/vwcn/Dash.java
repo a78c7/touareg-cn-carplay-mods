@@ -45,7 +45,8 @@ public final class Dash implements Runnable {
     // consumption 1, 13 short-term general (distance, average speed, time), 14/16 long-term ("累计") average
     // consumption 1 / general, 17/19 cycle ("since refuel") average consumption 1 / general, 23 tank level 1,
     // 63 coolant, 64 oil temperature value, 65 outside temperature
-    static final int[] KO_ATTRS = new int[] {4, 6, 8, 11, 13, 14, 16, 17, 19, 23, 63, 64, 65};
+    // v19.2: + 10 total distance (odometer; the info box derives the cluster's Trip from it)
+    static final int[] KO_ATTRS = new int[] {4, 6, 8, 10, 11, 13, 14, 16, 17, 19, 23, 63, 64, 65};
     // board computer memories: 0 自启动起 (short term), 1 自上次加油起 (cycle), 2 累计 (long term)
     static final String[][] BK = new String[][] {
         {" ca=", " au=", " td=", " ts=", " tt="}, {" cr=", " cru=", " rd=", " rs=", " rt="}, {" cl=", " clu=", " ld=", " ls=", " lt="}};
@@ -77,6 +78,8 @@ public final class Dash implements Runnable {
     volatile int torque = Integer.MIN_VALUE, lever = Integer.MIN_VALUE, gear = Integer.MIN_VALUE;
     volatile int gbt = Integer.MIN_VALUE, consUnit = Integer.MIN_VALUE, tank = Integer.MIN_VALUE;
     volatile float oil = Float.NaN, coolant = Float.NaN;
+    volatile double odo = Double.NaN;
+    private boolean odoLogged;
     // board computer, index = memory (BK)
     final float[] bcAvg = new float[] {Float.NaN, Float.NaN, Float.NaN};
     final int[] bcUnit = new int[] {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
@@ -161,6 +164,7 @@ public final class Dash implements Runnable {
         if (!Float.isNaN(outside)) b.append(" out=").append(Math.round(outside));
         if (range != Integer.MIN_VALUE) b.append(" rng=").append(range);
         if (accOn != Integer.MIN_VALUE) b.append(" acc=").append(accOn);
+        if (!Double.isNaN(odo)) b.append(" odo=").append(Math.floor(odo * 10.0 + 0.5) / 10.0);
         if (!Float.isNaN(acc.last)) b.append(" t1=").append(round2(acc.last));
         if (!Float.isNaN(acc.best)) b.append(" t1b=").append(round2(acc.best));
         if (!Float.isNaN(acc.running)) b.append(" t1r=").append(round1(acc.running));
@@ -406,6 +410,11 @@ public final class Dash implements Runnable {
         public void updateBCCurrentRange1(CarBCCurrentRange r, int s) {
             if (r == null || s != 1) { range = Integer.MIN_VALUE; return; }
             range = r.currentRangeValue;
+        }
+        public void updateBCTotalDistance(org.dsi.ifc.global.CarBCDistance d, int s) {
+            if (d == null || s != 1 || d.distanceValue <= 0) { odo = Double.NaN; return; }
+            odo = d.distanceValue;
+            if (!odoLogged) { odoLogged = true; Log.log("dash: odometer " + d.distanceValue + " unit=" + d.distanceUnit + " state=" + d.distanceValueState); }
         }
         public void updateBCTankLevel1(BCTankLevel t, int s) {
             if (t == null || s != 1) { tank = Integer.MIN_VALUE; return; }
