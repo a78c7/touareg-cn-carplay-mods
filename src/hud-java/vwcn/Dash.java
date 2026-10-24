@@ -63,6 +63,11 @@ public final class Dash implements Runnable {
     private java.lang.reflect.Field fReal, fYaw;
     private java.lang.reflect.Field[] fWheel = new java.lang.reflect.Field[0];
     private boolean reflDone;
+    // v19.2: adaptive cruise control active (mid-frequent "aCCIsActive", reflection); cl_render moves the map up while
+    // it is on so the car icon clears the ACC symbol the cluster draws at the bottom centre
+    private java.lang.reflect.Field fAcc;
+    private boolean mfReflDone;
+    volatile int accOn = Integer.MIN_VALUE;
     volatile float realSpeed = Float.NaN, yaw = Float.NaN, axRaw = Float.NaN, ayRaw = Float.NaN;
 
     // latest values (written by DSI callbacks, read by the writer thread)
@@ -155,6 +160,7 @@ public final class Dash implements Runnable {
         if (tank != Integer.MIN_VALUE) b.append(" tank=").append(tank);
         if (!Float.isNaN(outside)) b.append(" out=").append(Math.round(outside));
         if (range != Integer.MIN_VALUE) b.append(" rng=").append(range);
+        if (accOn != Integer.MIN_VALUE) b.append(" acc=").append(accOn);
         if (!Float.isNaN(acc.last)) b.append(" t1=").append(round2(acc.last));
         if (!Float.isNaN(acc.best)) b.append(" t1b=").append(round2(acc.best));
         if (!Float.isNaN(acc.running)) b.append(" t1r=").append(round1(acc.running));
@@ -240,6 +246,37 @@ public final class Dash implements Runnable {
         return Float.NaN;
     }
 
+    /** 1 / 0 from a reflected boolean or number field, MIN_VALUE when unknown */
+    private static int flag(java.lang.reflect.Field f, Object o) {
+        if (f == null || o == null) return Integer.MIN_VALUE;
+        try {
+            Object v = f.get(o);
+            if (v instanceof Boolean) return ((Boolean) v).booleanValue() ? 1 : 0;
+            if (v instanceof Number) return ((Number) v).intValue() != 0 ? 1 : 0;
+        } catch (Throwable t) {
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    /** first mid-frequent callback: log every public field once (gear / ACC research) and find the ACC flag */
+    private void reflectMf(Object d) {
+        mfReflDone = true;
+        try {
+            java.lang.reflect.Field[] fs = d.getClass().getFields();
+            StringBuffer b = new StringBuffer("dash: MF fields");
+            for (int i = 0; i < fs.length; i++) {
+                Object v = null;
+                try { v = fs[i].get(d); } catch (Throwable t) {}
+                b.append(' ').append(fs[i].getName()).append('=').append(v);
+                if (fs[i].getName().equalsIgnoreCase("aCCIsActive")) fAcc = fs[i];
+            }
+            Log.log(b.toString());
+            Log.log("dash: acc flag " + (fAcc != null));
+        } catch (Throwable t) {
+            Log.log("dash: MF reflect failed " + t);
+        }
+    }
+
     /** first callback: log every public field once (finds the wheel-speed names) and pick the v18 extras */
     private void reflect(Object d) {
         reflDone = true;
@@ -283,6 +320,7 @@ public final class Dash implements Runnable {
          .append(',').append(f1(consumption)).append(',').append(i0(consUnit)).append(',').append(i0(tank))
          .append(',').append(Float.isNaN(outside) ? "" : String.valueOf(Math.round(outside))).append(',').append(i0(range));
         for (int k = 0; k < 4; k++) b.append(',').append(k < fWheel.length ? f1(num(fWheel[k], d)) : "");
+        b.append(',').append(i0(accOn));
         DriveLog.add(b.toString());
     }
 
@@ -310,13 +348,15 @@ public final class Dash implements Runnable {
             yaw = num(fYaw, d);
             // v18: time 0-100 on the real (unscaled) speed when the car reports it
             acc.speed(now, Float.isNaN(realSpeed) ? speed : realSpeed);
-            acc.power(power);
-            acc.torque(torque);
+            acc.power(now, power);
+            acc.torque(now, torque);
             acc.g(gxS, gyS);
             if (logging) logLine(now, d);
         }
         public void updateDynamicVehicleInfoMidFrequent(DynamicVehicleInfoMidFrequent d, int s) {
             if (d == null || s != 1) return;
+            if (!mfReflDone) reflectMf(d);
+            accOn = flag(fAcc, d);
             gear = d.currentGear;
             lever = d.automaticGearShiftTransMode;
             gbt = d.gearboxOilTemperature;
@@ -338,7 +378,8 @@ public final class Dash implements Runnable {
             coolant = t.temperatureValue;
         }
         public void updateBCCurrentConsumption1(CarBCConsumption c, int s) {
-            if (c == null || s != 1) { consumption = Float.NaN; return; }
+            // v19.2: 32770 (and similar) = no value while stopped
+            if (c == null || s != 1 || c.consumptionValue < 0f || c.consumptionValue > 1000f) { consumption = Float.NaN; return; }
             consumption = c.consumptionValue;
             consUnit = c.consumptionUnit;
             if (c.consumptionUnit != loggedConsUnit) {

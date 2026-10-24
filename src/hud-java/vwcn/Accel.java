@@ -68,13 +68,50 @@ final class Accel {
         vPrev = v;
     }
 
-    /** plausibility limits keep a single bad sample from sticking as the maximum */
-    void power(float kw) {
-        if (!Float.isNaN(kw) && kw >= 0f && kw < 600f && (Float.isNaN(pMax) || kw > pMax)) pMax = kw;
+    /**
+     * v19.2: power / torque maxima are the highest values held for at least HOLD_MS (the lowest sample of a window
+     * that spans HOLD_MS), so a single-sample spike at tip-in or during a shift does not stick as the maximum.
+     * Plausibility limits as before.
+     */
+    static final long HOLD_MS = 300L;
+    private final long[] pT = new long[16], qT = new long[16];
+    private final float[] pV = new float[16], qV = new float[16];
+    private int pN, qN;
+
+    void power(long t, float kw) {
+        if (Float.isNaN(kw) || kw < 0f || kw >= 600f) return;
+        pN = push(pT, pV, pN, t, kw);
+        float h = held(pT, pV, pN, t);
+        if (!Float.isNaN(h) && (Float.isNaN(pMax) || h > pMax)) pMax = h;
     }
 
-    void torque(int nm) {
-        if (nm > 0 && nm < 1500 && nm > tqMax) tqMax = nm;
+    void torque(long t, int nm) {
+        if (nm <= 0 || nm >= 1500) return;
+        qN = push(qT, qV, qN, t, nm);
+        float h = held(qT, qV, qN, t);
+        if (!Float.isNaN(h) && (int) h > tqMax) tqMax = (int) h;
+    }
+
+    /** append (t, v); keeps the newest 16 samples (about 1.6 s at 10 per second) */
+    private static int push(long[] ts, float[] vs, int n, long t, float v) {
+        if (n == ts.length) {
+            System.arraycopy(ts, 1, ts, 0, n - 1);
+            System.arraycopy(vs, 1, vs, 0, n - 1);
+            n--;
+        }
+        ts[n] = t;
+        vs[n] = v;
+        return n + 1;
+    }
+
+    /** lowest value over the last HOLD_MS, NaN while the samples do not span HOLD_MS yet */
+    private static float held(long[] ts, float[] vs, int n, long now) {
+        float m = Float.NaN;
+        for (int i = n - 1; i >= 0; i--) {
+            if (Float.isNaN(m) || vs[i] < m) m = vs[i];
+            if (now - ts[i] >= HOLD_MS) return m;
+        }
+        return Float.NaN;
     }
 
     void g(float gx, float gy) {

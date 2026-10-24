@@ -1318,15 +1318,56 @@ static struct h264_args g_h264_args = {
  * Active only when the decoded height is clearly larger than yres. g_post_w/h = post window size. */
 static int g_crop_top = 0;
 static int g_post_w = 0, g_post_h = 0;
+/* v19.2: while adaptive cruise control is on, the cluster draws the ACC symbol at the bottom centre, right where the
+ * car icon sits. The Java plug-in writes acc=0/1 into /tmp/dash.state; we then show rows acc_up lower in the tall
+ * frame (= the whole map moves up by acc_up), stepping a few rows per frame. Works for every app because it only
+ * changes which rows of the phone's frame are shown. cl.conf: acc_up=<rows> (0 = off). */
+static int g_crop_base = 0, g_crop_target = 0, g_acc_up = 80, g_acc_on = 0;
+static uint64_t g_acc_poll_ms = 0;
 static void read_crop_conf(void) {
     static const char *paths[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
     for (unsigned i = 0; i < 2; i++) {
         FILE *f = fopen(paths[i], "r"); if (!f) continue;
         char l[128]; int v;
-        while (fgets(l, sizeof l, f)) if (sscanf(l, " croptop = %d", &v) == 1) g_crop_top = v;
+        while (fgets(l, sizeof l, f)) {
+            if (sscanf(l, " croptop = %d", &v) == 1) g_crop_top = v;
+            else if (sscanf(l, " acc_up = %d", &v) == 1) g_acc_up = v < 0 ? 0 : v;
+        }
         fclose(f);
         return;
     }
+}
+/* acc=1 in a dash.state that is still being written: the Java side rewrites it at least once a second with an
+ * increasing n=, so an n that has not changed for 5 s means the data is stale (plug-in stopped) -> treat as off */
+static long g_acc_last_n = -1;
+static uint64_t g_acc_n_ms = 0;
+static int read_acc_flag(uint64_t now_ms) {
+    FILE *f = fopen("/tmp/dash.state", "r");
+    if (!f) f = fopen("/tmp/dash.state.new", "r");
+    if (!f) return 0;
+    char l[1024]; int on = 0; long n = -1;
+    if (fgets(l, sizeof l, f) && strchr(l, '\n')) {
+        if (sscanf(l, "n=%ld", &n) == 1 && n != g_acc_last_n) { g_acc_last_n = n; g_acc_n_ms = now_ms; }
+        const char *a = strstr(l, " acc=");
+        on = a && a[5] == '1';
+    }
+    fclose(f);
+    return on && now_ms - g_acc_n_ms < 5000;
+}
+/* once per frame in tall mode: poll every 300 ms, move g_crop_top toward its target by up to 4 rows */
+static void crop_tick(int dec_h, int out_h) {
+    int max = dec_h - out_h; if (max < 0) max = 0;
+    uint64_t now = now_us() / 1000ULL;
+    if (g_acc_up > 0 && now - g_acc_poll_ms >= 300) {
+        g_acc_poll_ms = now;
+        int on = read_acc_flag(now);
+        if (on != g_acc_on) { g_acc_on = on; LOG("acc %s: map %s %d rows\n", on ? "on" : "off", on ? "up" : "back", g_acc_up); }
+    }
+    g_crop_target = g_crop_base + (g_acc_on ? g_acc_up : 0);
+    if (g_crop_target > max) g_crop_target = max;
+    if (g_crop_target < 0) g_crop_target = 0;
+    if (g_crop_top < g_crop_target) g_crop_top = g_crop_top + 4 > g_crop_target ? g_crop_target : g_crop_top + 4;
+    else if (g_crop_top > g_crop_target) g_crop_top = g_crop_top - 4 < g_crop_target ? g_crop_target : g_crop_top - 4;
 }
 
 /* Three-stage render state for daemon-controlled h264 lifecycle:
@@ -1624,6 +1665,9 @@ static int setup_screen(int width, int height) {
         read_crop_conf();
         if (g_crop_top < 0) g_crop_top = 0;
         if (g_crop_top > height - g_h264_args.yres) g_crop_top = height - g_h264_args.yres;
+        g_crop_base = g_crop_target = g_crop_top;
+        if (g_crop_base + g_acc_up > height - g_h264_args.yres)
+            LOG("acc_up %d limited to %d rows by the tall frame\n", g_acc_up, height - g_h264_args.yres - g_crop_base);
         LOG("tall stream %dx%d: post window %dx%d, showing rows %d..%d\n", width, height,
             width, g_h264_args.yres, g_crop_top, g_crop_top + g_h264_args.yres - 1);
         height = g_h264_args.yres;
@@ -2436,7 +2480,8 @@ static int cb_display_picture(void* user, void* disp_info) {
         float dst_ar = (float)dst_w / (float)dst_h;
         const char* m = g_h264_args.mode ? g_h264_args.mode : "letter";
         if (g_post_h && g_dec.height > g_post_h + 16) {
-            /* tall stream: 1:1 rows from g_crop_top, full width */
+            /* tall stream: 1:1 rows from g_crop_top, full width (v19.2: moves up while ACC is on) */
+            crop_tick(g_dec.height, dst_h);
             sy = g_crop_top; sh = dst_h; if (sy + sh > g_dec.height) sy = g_dec.height - sh;
         } else if (strcmp(m, "stretch") == 0) {
             /* dst = full, src = full — HW scales to fill */
