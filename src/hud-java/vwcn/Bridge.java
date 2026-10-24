@@ -506,33 +506,54 @@ public final class Bridge implements Runnable {
         lastBar = bar;
     }
 
-    private static final String[] PREFIXES = new String[] {
-        "\u8fdb\u5165", "\u9a76\u5165", "\u6cbf\u7740", "\u6cbf", "\u524d\u5f80", "\u7ecf\u7531", "\u7ecf" };
+    // v19.2: action words are searched anywhere in the text (Baidu: "左转进入XX路", "向右前方行驶进入XX"), the road name
+    // is what follows the last one. Single-character 沿 / 经 are no longer stripped (沿江大道, 经三路 are road names);
+    // only the full pattern 沿XX行驶/直行 is.
+    private static final String[] ACTIONS = new String[] {
+        "\u8fdb\u5165", "\u9a76\u5165", "\u524d\u5f80", "\u6cbf\u7740", "\u7ecf\u7531" };   // 进入 驶入 前往 沿着 经由
+    private static final String[] TAILS = new String[] {
+        "\u7ee7\u7eed\u884c\u9a76", "\u884c\u9a76", "\u76f4\u884c", "\u65b9\u5411" };    // 继续行驶 行驶 直行 方向
+    private static final String YAN = "\u6cbf";                                                    // 沿
     private static final String[] SUFFIXES = new String[] { "\u9ad8\u901f\u516c\u8def", "\u516c\u8def" };
     private static final int MAX_CHARS = 5;
     private static final String UNNAMED = "\u65e0\u540d\u9053\u8def";
 
-    /** HUD shows ~5 chars: drop action prefix, spaces, unnamed roads, long suffixes. */
+    /** HUD shows ~5 chars: keep the road name after the action words, drop spaces and long suffixes; unnamed roads. */
     static String shortName(String s) {
         if (s == null) {
             return "";
         }
-        String t = s.trim();
-        for (int i = 0; i < PREFIXES.length; i++) {
-            if (t.startsWith(PREFIXES[i])) {
-                t = t.substring(PREFIXES[i].length()).trim();
-                break;
-            }
-        }
         StringBuffer b = new StringBuffer();
-        for (int i = 0; i < t.length(); i++) {
-            char c = t.charAt(i);
-            if (c != ' ' && c != '\u3000') {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c != ' ' && c != '\u3000' && c != '\t') {
                 b.append(c);
             }
         }
-        t = b.toString();
-        // v15: unnamed roads are shown as such (cluster top line + HUD) instead of an empty line
+        String t = b.toString();
+        int cut = -1;
+        for (int i = 0; i < ACTIONS.length; i++) {
+            int k = t.lastIndexOf(ACTIONS[i]);
+            if (k >= 0 && k + ACTIONS[i].length() > cut && k + ACTIONS[i].length() < t.length()) {
+                cut = k + ACTIONS[i].length();
+            }
+        }
+        if (cut > 0) {
+            t = t.substring(cut);
+        }
+        boolean tail = false;
+        for (int round = 0; round < 2; round++) {
+            for (int i = 0; i < TAILS.length; i++) {
+                if (t.endsWith(TAILS[i]) && t.length() > TAILS[i].length()) {
+                    t = t.substring(0, t.length() - TAILS[i].length());
+                    tail = true;
+                    break;
+                }
+            }
+        }
+        if (tail && t.startsWith(YAN) && t.length() > 1) {
+            t = t.substring(1);   // 沿XX路行驶 -> XX路
+        }
         if (t.length() == 0 || t.equals("\u65e0\u540d\u9053\u8def") || t.equals("\u65e0\u540d\u8def")
             || t.equals("\u672a\u547d\u540d\u9053\u8def") || t.equals("\u672a\u547d\u540d\u8def")) {
             return UNNAMED;
