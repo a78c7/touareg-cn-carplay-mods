@@ -120,6 +120,10 @@ int main(int argc, char **argv) {
     uint32_t last_total = 0; int stall = 0;
     int inactive = 0, zoom_sent = 0, zoom_n = getenv("CL_ZOOM") ? atoi(getenv("CL_ZOOM")) : 3;
     time_t started = 0, last_auto = 0; int auto_va = -1; char app[64];
+    /* v19.2: once after boot the map stayed hidden although the cluster list was [58,33] (stock map showed);
+     * restarting the renderer fixed it. So the first renderer of a boot is restarted once, 20 s after it started
+     * (a short blink); cause not found yet. */
+    time_t boot_t = time(NULL); int boot_kick = 0;
     const char *did = getenv("CL_DISPID");
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
     char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate10;st", did);   /* ours on top, native 33 kept underneath */
@@ -156,6 +160,12 @@ int main(int argc, char **argv) {
                 zoom_sent = 2;
                 logm("zoom requested", zoom_n);
                 auto_va = -1; last_auto = time(NULL);
+            } else if (!boot_kick && zoom_sent == 2 && time(NULL) - started >= 20) {
+                boot_kick = 1;
+                if (started - boot_t < 120) {
+                    kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
+                    waitpid(child, NULL, 0); logm("first renderer after boot restarted once", child); child = 0;
+                }
             } else if (zoom_sent == 2 && time(NULL) - last_auto >= 1) {
                 int nav, v = pick_va(app, sizeof app, &nav);
                 last_auto = time(NULL);
