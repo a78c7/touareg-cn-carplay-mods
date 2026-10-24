@@ -479,7 +479,7 @@ static void dash_item_value(int it, const dash_vals_t *v, char *o, const char **
     case IT_OIL:     I(v->oil == -999, "%d", v->oil); break;
     case IT_COOLANT: I(v->cool == -999, "%d", v->cool); break;
     case IT_OUTSIDE: I(v->out == -999, "%d", v->out); break;
-    case IT_CONS:    I(DASH_NAN(v->cv), "%.1f", v->cv); *unit = dash_cons_unit(v->cu); break;
+    case IT_CONS:    I(DASH_NAN(v->cv) || v->cv > 999, "%.1f", v->cv); *unit = dash_cons_unit(v->cu); break;
     case IT_FUEL:
         if (v->tank == -999) snprintf(o, 16, "-");
         else if (g_dash_conf.tank_l > 0) snprintf(o, 16, "%d", (v->tank * g_dash_conf.tank_l + 50) / 100);
@@ -501,7 +501,8 @@ static void dash_item_value(int it, const dash_vals_t *v, char *o, const char **
     default:
         if (it >= IT_S_AVG && it <= IT_L_TIME) {   /* board computer: memory m, value k */
             int m = (it - IT_S_AVG) / 4, k = (it - IT_S_AVG) % 4;
-            if (k == 0) { I(DASH_NAN(v->avg[m]) || v->avg[m] < 0, "%.1f", v->avg[m]); *unit = dash_cons_unit(v->avgu[m]); }
+            /* v19.2: right after the memory restarts (0 km) the car reports 3277.0 = no value yet */
+            if (k == 0) { I(DASH_NAN(v->avg[m]) || v->avg[m] < 0 || v->avg[m] > 999, "%.1f", v->avg[m]); *unit = dash_cons_unit(v->avgu[m]); }
             else if (k == 1) I(DASH_NAN(v->dist[m]) || v->dist[m] < 0, "%d", dash_round(v->dist[m]));
             else if (k == 2) I(DASH_NAN(v->bspd[m]) || v->bspd[m] < 0, "%d", dash_round(v->bspd[m]));
             else I(v->btime[m] == -999 || v->btime[m] < 0, "%d:%02d", v->btime[m] / 60, v->btime[m] % 60);
