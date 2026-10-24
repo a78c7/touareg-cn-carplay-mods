@@ -9,8 +9,8 @@ import java.io.FileWriter;
  * NavigationService.increment/decrementZoomIndex() for the stock cluster map. This wraps the BAP NavigationService
  * (APIFactory.navigationService, installed by RGGate like NoRGCarPlay): while the CarPlay map is on the cluster
  * (Rebind.hold != null) the zoom steps are not applied to the hidden stock map but counted, and a writer thread
- * sends them to the iPhone through the cl_probe command file (/tmp/cl_alt_cmd "zoomin N" / "zoomout N"; the
- * hook polls that file once a second by its modification time, so at most one command per second, N <= 3).
+ * sends them to the iPhone through the cl_probe command file (/tmp/cl_alt_cmd "zoomin N #seq" / "zoomout N #seq";
+ * the hook polls it every 100 ms by content). Presses within 150 ms are merged (N <= 3).
  * Everything else is passed through unchanged.
  * Which key is "in" is not known yet: increment = zoom out by default; an empty file
  * /mnt/app/eso/bin/apps/cluster/zoom_flip swaps the directions.
@@ -21,6 +21,7 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
     final de.vw.mib.bap.mqbab2.common.api.navigation.NavigationService d;
     private int pending;
     private long lastSent;
+    private int seq;
     private boolean logged;
 
     NavZoom(de.vw.mib.bap.mqbab2.common.api.navigation.NavigationService d) {
@@ -38,11 +39,11 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
     public void run() {
         while (true) {
             try {
-                Thread.sleep(100);
+                Thread.sleep(50);
                 int p;
                 long now = System.currentTimeMillis();
                 synchronized (this) {
-                    if (pending == 0 || now - lastSent < 1100) continue;
+                    if (pending == 0 || now - lastSent < 150) continue;
                     p = pending;
                     pending = 0;
                 }
@@ -51,7 +52,7 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
                 if (FLIP.exists()) out = !out;
                 int n = Math.min(Math.abs(p), 3);
                 FileWriter w = new FileWriter(CMD, false);
-                w.write((out ? "zoomout " : "zoomin ") + n + "\n");
+                w.write((out ? "zoomout " : "zoomin ") + n + " #" + (++seq) + "\n");
                 w.close();
                 lastSent = now;
                 Log.log("zoom: " + (out ? "out " : "in ") + n);
