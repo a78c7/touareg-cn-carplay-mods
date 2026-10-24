@@ -153,12 +153,18 @@ int main(int argc, char **argv) {
     shm_head_t *s = NULL;
     pid_t child = 0;
     uint32_t last_total = 0; int stall = 0;
-    int inactive = 0, zoom_sent = 0, zoom_n = getenv("CL_ZOOM") ? atoi(getenv("CL_ZOOM")) : 3;
+    int inactive = 0, zoom_n = getenv("CL_ZOOM") ? atoi(getenv("CL_ZOOM")) : 3;
     time_t started = 0, last_auto = 0; int auto_va = -1; char app[64];
-    /* v19.2: once after boot the map stayed hidden although the cluster list was [58,33] (stock map showed);
-     * restarting the renderer fixed it. v19.3: seen after a CarPlay restart too, so the first renderer of every
-     * cluster connection is restarted once, 20 s after it started (a short blink); cause not found yet. */
-    int new_stream = 1, kick_pending = 0, skip_zoom = 0;
+    /* v19.3: the map sometimes stayed hidden (stock map on the cluster although the list was [58,33]), after boot
+     * and after CarPlay reconnects; restarting the renderer fixed it. Cause, from the logs: the renderer creates
+     * its window only when the first key frame arrives, and the cluster list was set at a fixed 2 s after start.
+     * Every hidden case had the list set before the window existed (boot: list 34.618 s, key frame 34.313 s;
+     * reconnect: list 1762.205 s, key frame 1762.257 s); every good case had the key frame ~0.5-1 s earlier.
+     * displaymanager resolves the ids when the list is set, and re-setting the same list does not pick up a
+     * window created later. So the list is now set only after the renderer reports its window
+     * (/tmp/cl_render_ready = its pid); a renderer that never reports within 12 s is restarted. */
+    int new_stream = 1, stage = 0, zoomed = 0;
+    time_t shown_t = 0;
     const char *did = getenv("CL_DISPID");
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
     char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate10;st", did);   /* ours on top, native 33 kept underneath */
@@ -183,26 +189,32 @@ int main(int argc, char **argv) {
             if (child <= 0) {
                 child = fork();
                 if (child == 0) { execv(argv[1], argv + 1); _exit(127); }
-                started = time(NULL); zoom_sent = 0;
-                if (new_stream) { new_stream = 0; kick_pending = 1; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
+                started = time(NULL); stage = 0;
+                if (new_stream) { new_stream = 0; zoomed = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
                 logm("renderer started", child);
-            } else if (!zoom_sent && time(NULL) - started >= 2) {
-                send_cmd("idr");              /* renderer attached: get a fresh key frame */
-                if (strcmp(did, "33") != 0) rebind(show_seq);   /* show our own displayable on the cluster */
-                zoom_sent = 1;
+            } else if (stage == 0 && time(NULL) - started >= 2) {
+                send_cmd("idr");              /* get a fresh key frame: the renderer creates its window on it */
+                stage = 1;
                 logm("idr requested", 0);
-            } else if (zoom_sent == 1 && time(NULL) - started >= 5) {
-                if (zoom_n > 0 && !skip_zoom) { char b[32]; snprintf(b, sizeof b, "zoomin %d", zoom_n); send_cmd(b); }
-                zoom_sent = 2;
-                logm(skip_zoom ? "zoom kept (renderer restart)" : "zoom requested", zoom_n);
-                skip_zoom = 0;
+            } else if (stage == 1) {
+                char rb[32]; int ready = read_file("/tmp/cl_render_ready", rb, sizeof rb) > 0 && atoi(rb) == child;
+                if (ready) {
+                    if (strcmp(did, "33") != 0) rebind(show_seq);   /* show our own displayable on the cluster */
+                    stage = 2; shown_t = time(NULL);
+                    logm("renderer window ready, cluster list set (s after start)", (int)(shown_t - started));
+                } else if (time(NULL) - started >= 12) {
+                    kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
+                    waitpid(child, NULL, 0); logm("renderer window not ready after 12 s, restarting", child); child = 0;
+                }
+            } else if (stage == 2 && time(NULL) - shown_t >= 2) {
+                /* the phone keeps its zoom for the whole connection: zoom in once per connection, not per renderer */
+                if (zoom_n > 0 && !zoomed) { char b[32]; snprintf(b, sizeof b, "zoomin %d", zoom_n); send_cmd(b); }
+                /* set the list once more now that frames are being posted (cheap; the same list, no blink) */
+                if (strcmp(did, "33") != 0) rebind(show_seq);
+                logm(zoomed ? "zoom kept (same connection)" : "zoom requested", zoom_n);
+                zoomed = 1; stage = 3;
                 auto_va = -1; last_auto = time(NULL);
-            } else if (kick_pending && zoom_sent == 2 && time(NULL) - started >= 20) {
-                /* v19.3: also after reconnects, not only after boot (the map stayed hidden after a CarPlay restart too) */
-                kick_pending = 0; skip_zoom = 1;   /* the phone keeps its zoom: do not zoom in a second time */
-                kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
-                waitpid(child, NULL, 0); logm("renderer restarted once for this connection", child); child = 0;
-            } else if (zoom_sent == 2 && time(NULL) - last_auto >= 1) {
+            } else if (stage == 3 && time(NULL) - last_auto >= 1) {
                 int nav, v = pick_va(app, sizeof app, &nav);
                 last_auto = time(NULL);
                 if (v >= 0 && v != auto_va) {
@@ -215,7 +227,7 @@ int main(int argc, char **argv) {
         } else if (child > 0 && ++inactive >= 6) {   /* ~3 s without stream: release window 33 */
             kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
             waitpid(child, NULL, 0); logm("renderer stopped", child); child = 0;
-            new_stream = 1; kick_pending = 0; skip_zoom = 0;
+            new_stream = 1;
             usleep(500000);
             rebind(back_seq);                 /* back to native map 33, same steps as the VIEW key */
             logm("rebind requested", 0);

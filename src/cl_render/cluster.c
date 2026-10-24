@@ -2013,6 +2013,12 @@ static int setup_screen(int width, int height) {
 
     g_dec.scr_ready = 1;
     LOG("screen setup complete (Option B: direct YV12 post to displayable 33)\n");
+    /* v19.3: tell clusterd the window exists; it sets the cluster display list only after this (a list set
+     * before the window existed left the stock map showing) */
+    {
+        int rfd = open("/tmp/cl_render_ready", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (rfd >= 0) { char rb[16]; int rl = snprintf(rb, sizeof rb, "%d\n", (int)getpid()); write(rfd, rb, rl); close(rfd); }
+    }
 
     /* If a resume signal arrived BEFORE setup_screen ran (race: Java often
      * sends resume right after prepare, faster than the first NAL arrives),
