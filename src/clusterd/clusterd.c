@@ -113,12 +113,16 @@ static int pick_va(char *app, int appcap, int *nav) {
     else if (last_app[0]) { strncpy(app, last_app, appcap - 1); app[appcap - 1] = 0; }
     if (read_file("/tmp/cl.conf", cf, sizeof cf) < 0 && read_file("/mnt/app/eso/bin/apps/cluster/cl.conf", cf, sizeof cf) < 0) return -1;
     int def = -1;
-    /* v19.2: amap_turn in dash.conf (改装设置): 0 off, 1 on, 2 auto (default). AMap lane-level guidance does not move the
+    /* v19.4: default 0 (off). 53 cluster screenshots from one drive: AMap puts the car at the centre of the safe area or
+     * exactly ~213 px left/right of it, and the side follows the direction of the destination (the red line from the car),
+     * not the next maneuver; after a reconnect it often does not shift at all. The head unit does not get the destination
+     * direction, so a turn-based compensation is right only by chance. 1 = old turn-based compensation, 2 = auto as below.
+     * v19.2: amap_turn in dash.conf (改装设置): 0 off, 1 on, 2 auto. AMap lane-level guidance does not move the
      * car toward the next turn, so the compensation would push it off-centre. The phone does not tell us that setting;
      * the clue is lane guidance data: two cars so far, the AMap that sends lanes is the one that does not shift the car.
      * Auto: once lanes were seen during the current guidance, compensation stays off until guidance ends. */
     char dc[8192];
-    int mode = 2;
+    int mode = 0;
     if (read_file("/mnt/app/eso/bin/apps/cluster/dash.conf", dc, sizeof dc) > 0) {
         char *m = strstr(dc, "\namap_turn="); if (m) mode = atoi(m + 11);
     }
