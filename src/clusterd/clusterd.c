@@ -47,6 +47,22 @@ static int turn_side(int t) {
                  case 2: case 14: case 21: case 23: case 25: return 1; }
     return 0;
 }
+static void logs(const char *m) {
+    FILE *f = fopen("/tmp/clusterd.log", "a");
+    if (f) { fprintf(f, "[%ld] %s\n", (long)time(NULL), m); fclose(f); }
+}
+/* v19.3: AMap's turn shift is not reliable after a reconnect. Seen on the car (same spot, same right turn, same
+ * area 14): when CarPlay reconnected while a guidance was already running, AMap sometimes kept the car centred
+ * (no shift toward the turn), so the compensation pushed it ~210 px off; after the guidance was restarted on the
+ * phone AMap shifted again and the compensation was right. Both cases send the same data to the head unit.
+ * So the compensation applies only to a guidance that started during the current CarPlay session (app name
+ * received, or guidance went from off to on more than 10 s after the session started); a guidance that was
+ * already running when CarPlay connected gets none until a new guidance starts. Maneuver changes in that state
+ * are logged to learn whether AMap starts shifting again by itself. */
+static time_t g_sess_t;          /* start of the current cluster stream (set by main) */
+static int g_fresh = -1;         /* -1 no guidance yet, 0 guidance was already running at connect, 1 started here */
+static int g_prev_nav;
+static char g_last_road[96];
 static int pick_va(char *app, int appcap, int *nav) {
     char st[4096], cf[2048];
     int side = 0, lanes = 0;
@@ -60,7 +76,26 @@ static int pick_va(char *app, int appcap, int *nav) {
         lanes = strstr(st, "\nlane_active:b:true") || strstr(st, "\nlane_active:n:1");
         p = strstr(st, "\nsource_name:s:");
         if (p) { p += 15; int i = 0; while (p[i] && p[i] != '\n' && i < appcap - 1) { app[i] = p[i]; i++; } app[i] = 0; }
+        p = strstr(st, "\nslot_0_road:s:");
+        if (p && g_fresh == 0 && *nav) {
+            char r[96]; int i = 0; p += 15;
+            while (p[i] && p[i] != '\n' && i < (int)sizeof r - 1) { r[i] = p[i]; i++; } r[i] = 0;
+            if (strcmp(r, g_last_road)) {
+                char m[160]; snprintf(m, sizeof m, "resumed guidance: next maneuver now \"%s\" side %d", r, side);
+                if (g_last_road[0]) logs(m);
+                strcpy(g_last_road, r);
+            }
+        }
     }
+    if (!*nav) {
+        if (g_fresh != -1) logs("guidance ended");
+        g_fresh = -1; g_last_road[0] = 0;
+    } else if (g_fresh != 1 && (app[0] || (g_fresh == -1 && !g_prev_nav && time(NULL) - g_sess_t > 10))) {
+        g_fresh = 1; logs(app[0] ? "guidance started in this session (app name received): turn compensation allowed" : "guidance started in this session: turn compensation allowed");
+    } else if (g_fresh == -1) {
+        g_fresh = 0; logs("guidance was already running when CarPlay connected: no turn compensation until a new guidance starts");
+    }
+    g_prev_nav = *nav;
     /* the phone sends the app name only at the start of a guidance session: keep the last one we saw.
      * v19.2: also across head-unit restarts (/mnt/ota survives them, /tmp does not): after a restart CarPlay
      * reconnects and a guidance that was already running continues without a name, so the app rules (and the AMap
@@ -90,7 +125,7 @@ static int pick_va(char *app, int appcap, int *nav) {
     static int lanes_seen = 0;
     if (!*nav) lanes_seen = 0;
     else if (lanes && !lanes_seen) { lanes_seen = 1; FILE *lf = fopen("/tmp/clusterd.log", "a"); if (lf) { fprintf(lf, "[%ld] lane data in this guidance (amap_turn=%d): turn compensation %s\n", (long)time(NULL), mode, mode == 2 ? "off" : "unchanged"); fclose(lf); } }
-    int turn_on = mode == 1 || (mode == 2 && !lanes_seen);
+    int turn_on = mode == 1 || (mode == 2 && !lanes_seen && g_fresh == 1);
     for (char *l = strtok(cf, "\n"); l; l = strtok(NULL, "\n")) {
         while (*l == ' ') l++;
         if (!strncmp(l, "va=", 3)) { def = atoi(l + 3); continue; }
@@ -121,9 +156,9 @@ int main(int argc, char **argv) {
     int inactive = 0, zoom_sent = 0, zoom_n = getenv("CL_ZOOM") ? atoi(getenv("CL_ZOOM")) : 3;
     time_t started = 0, last_auto = 0; int auto_va = -1; char app[64];
     /* v19.2: once after boot the map stayed hidden although the cluster list was [58,33] (stock map showed);
-     * restarting the renderer fixed it. So the first renderer of a boot is restarted once, 20 s after it started
-     * (a short blink); cause not found yet. */
-    time_t boot_t = time(NULL); int boot_kick = 0;
+     * restarting the renderer fixed it. v19.3: seen after a CarPlay restart too, so the first renderer of every
+     * cluster connection is restarted once, 20 s after it started (a short blink); cause not found yet. */
+    int new_stream = 1, kick_pending = 0, skip_zoom = 0;
     const char *did = getenv("CL_DISPID");
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
     char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate10;st", did);   /* ours on top, native 33 kept underneath */
@@ -149,6 +184,7 @@ int main(int argc, char **argv) {
                 child = fork();
                 if (child == 0) { execv(argv[1], argv + 1); _exit(127); }
                 started = time(NULL); zoom_sent = 0;
+                if (new_stream) { new_stream = 0; kick_pending = 1; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
                 logm("renderer started", child);
             } else if (!zoom_sent && time(NULL) - started >= 2) {
                 send_cmd("idr");              /* renderer attached: get a fresh key frame */
@@ -156,16 +192,16 @@ int main(int argc, char **argv) {
                 zoom_sent = 1;
                 logm("idr requested", 0);
             } else if (zoom_sent == 1 && time(NULL) - started >= 5) {
-                if (zoom_n > 0) { char b[32]; snprintf(b, sizeof b, "zoomin %d", zoom_n); send_cmd(b); }
+                if (zoom_n > 0 && !skip_zoom) { char b[32]; snprintf(b, sizeof b, "zoomin %d", zoom_n); send_cmd(b); }
                 zoom_sent = 2;
-                logm("zoom requested", zoom_n);
+                logm(skip_zoom ? "zoom kept (renderer restart)" : "zoom requested", zoom_n);
+                skip_zoom = 0;
                 auto_va = -1; last_auto = time(NULL);
-            } else if (!boot_kick && zoom_sent == 2 && time(NULL) - started >= 20) {
-                boot_kick = 1;
-                if (started - boot_t < 120) {
-                    kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
-                    waitpid(child, NULL, 0); logm("first renderer after boot restarted once", child); child = 0;
-                }
+            } else if (kick_pending && zoom_sent == 2 && time(NULL) - started >= 20) {
+                /* v19.3: also after reconnects, not only after boot (the map stayed hidden after a CarPlay restart too) */
+                kick_pending = 0; skip_zoom = 1;   /* the phone keeps its zoom: do not zoom in a second time */
+                kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
+                waitpid(child, NULL, 0); logm("renderer restarted once for this connection", child); child = 0;
             } else if (zoom_sent == 2 && time(NULL) - last_auto >= 1) {
                 int nav, v = pick_va(app, sizeof app, &nav);
                 last_auto = time(NULL);
@@ -179,6 +215,7 @@ int main(int argc, char **argv) {
         } else if (child > 0 && ++inactive >= 6) {   /* ~3 s without stream: release window 33 */
             kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
             waitpid(child, NULL, 0); logm("renderer stopped", child); child = 0;
+            new_stream = 1; kick_pending = 0; skip_zoom = 0;
             usleep(500000);
             rebind(back_seq);                 /* back to native map 33, same steps as the VIEW key */
             logm("rebind requested", 0);
