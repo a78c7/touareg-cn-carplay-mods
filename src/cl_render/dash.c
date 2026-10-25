@@ -61,7 +61,9 @@ enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL,
        IT_TRIPKM,                                     /* v19.2: Trip = odometer - trip_base (dash.conf) */
        IT_N };
 typedef struct { const char *key; const char *label; const char *unit; const char *sample; } dash_item;
-/* label "A|B" = two lines (A small on top). In items= the label is matched without '|' and spaces. */
+/* label "A|B" = two lines (A small on top). In items= the label is matched without '|' and spaces.
+ * v19.4: the board-computer values use short one-line names (本次 / 加油后 / 累计 + 油耗 / 里程 / 均速 / 时长) in the
+ * same large font as the other rows instead of the two-line VW names; the old names still work in items=. */
 static const dash_item g_items[IT_N] = {
     { "power",        "功率",                   "kW",      "-888" },
     { "torque",       "扭矩",                   "Nm",      "-888" },
@@ -81,18 +83,18 @@ static const dash_item g_items[IT_N] = {
     { "cons",         "当前消耗",               "L/100km", "88.8" },
     { "fuel",         "燃油存量",               "L",       "188" },
     { "range",        "续驶里程",               "km",      "1888" },
-    { "trip",         "自启动起|平均消耗",      "L/100km", "88.8" },
-    { "tripdist",     "自启动起|行驶里程",      "km",      "8888" },
-    { "tripspeed",    "自启动起|平均车速",      "km/h",    "188" },
-    { "triptime",     "自启动起|行驶时间",      "h",       "88:88" },
-    { "refuel",       "自上次加油起|平均消耗",  "L/100km", "88.8" },
-    { "refueldist",   "自上次加油起|行驶里程",  "km",      "8888" },
-    { "refuelspeed",  "自上次加油起|平均车速",  "km/h",    "188" },
-    { "refueltime",   "自上次加油起|行驶时间",  "h",       "88:88" },
-    { "total",        "累计|平均消耗",          "L/100km", "88.8" },
-    { "totaldist",    "累计|行驶里程",          "km",      "8888" },
-    { "totalspeed",   "累计|平均车速",          "km/h",    "188" },
-    { "totaltime",    "累计|行驶时间",          "h",       "88:88" },
+    { "trip",         "本次油耗",      "L/100km", "88.8" },
+    { "tripdist",     "本次里程",      "km",      "8888" },
+    { "tripspeed",    "本次均速",      "km/h",    "188" },
+    { "triptime",     "本次时长",      "h",       "88:88" },
+    { "refuel",       "加油后油耗",  "L/100km", "88.8" },
+    { "refueldist",   "加油后里程",  "km",      "8888" },
+    { "refuelspeed",  "加油后均速",  "km/h",    "188" },
+    { "refueltime",   "加油后时长",  "h",       "88:88" },
+    { "total",        "累计油耗",          "L/100km", "88.8" },
+    { "totaldist",    "累计里程",          "km",      "8888" },
+    { "totalspeed",   "累计均速",          "km/h",    "188" },
+    { "totaltime",    "累计时长",          "h",       "88:88" },
     { "t100",         "0–100",                  "s",       "88.8" },
     { "pmax",         "最大功率",               "kW",      "888" },
     { "tqmax",        "最大扭矩",               "Nm",      "8888" },
@@ -184,6 +186,11 @@ static void dash_parse_items(const char *v) {
                 for (const char *p = g_items[i].label; *p && ll < 63; p++) if (*p != ' ' && *p != '|') lab[ll++] = *p;
                 lab[ll] = 0;
                 if (!strcmp(tok, g_items[i].key) || !strcmp(tok, lab)) { g_rows[n++] = i; break; }
+                if (i >= IT_S_AVG && i <= IT_L_TIME) {      /* v19.4: old two-line names, e.g. 自启动起平均消耗 */
+                    static const char *mem[] = { "自启动起", "自上次加油起", "累计" }, *val[] = { "平均消耗", "行驶里程", "平均车速", "行驶时间" };
+                    char old[64]; snprintf(old, sizeof old, "%s%s", mem[(i - IT_S_AVG) / 4], val[(i - IT_S_AVG) % 4]);
+                    if (!strcmp(tok, old)) { g_rows[n++] = i; break; }
+                }
             }
         }
         if (!term || term == '\n' || term == '\r' || term == '#') break;
@@ -256,18 +263,23 @@ static void dash_fonts(int sz) {   /* 0 normal 40px, 1 medium 36px (v18), 2 comp
     }
 }
 
-/* column widths of the chosen rows in the current font */
-static void dash_cols(int *lab_w, int *val_w, int *unit_w) {
+/* column widths of the chosen rows in the current font. v19.4: *val_w is what the widest row needs for label + value
+ * beyond the widest label (labels are left, values right-aligned: the long label and the long value are rarely on the
+ * same row, e.g. 加油后里程 344 and Trip 8888.8), so lab_w + gap + val_w = the widest label-plus-value row. */
+static void dash_cols_gap(int *lab_w, int *val_w, int *unit_w, int gap) {
     *lab_w = *val_w = *unit_w = 0;
+    int row = 0;
     for (int r = 0; r < g_nrows; r++) {
         const dash_item *it = &g_items[g_rows[r]];
         const dash_glyph *gl = dash_find(L_lab, L_nlab, it->label);
         if (gl && gl->adv > *lab_w) *lab_w = gl->adv;
-        int vw = dash_str_w(it->sample);
-        if (vw > *val_w) *val_w = vw;
+        int lw = gl ? gl->adv : 0, vw = dash_str_w(it->sample);
+        if (lw + gap + vw > row) row = lw + gap + vw;
         const char *u = it->unit;
         if (u) { gl = dash_find(L_unit, L_nunit, u); if (gl && gl->adv > *unit_w) *unit_w = gl->adv; }
     }
+    *val_w = row - gap - *lab_w;
+    if (*val_w < 0) *val_w = 0;
 }
 
 static void dash_layout(void) {
@@ -289,11 +301,12 @@ static void dash_layout(void) {
     int lab_w, val_w, unit_w, pad = DASH_PAD_X, gap = DASH_GAP, ugap = 8;
     for (;;) {
         dash_fonts(sz);
-        dash_cols(&lab_w, &val_w, &unit_w);
         pad = DASH_PAD_X; gap = DASH_GAP; ugap = 8;
+        dash_cols_gap(&lab_w, &val_w, &unit_w, gap);
         int need = pad + lab_w + gap + val_w + ugap + unit_w + pad;
         if (!target || need <= target) break;
         pad = 12; gap = 8; ugap = 5;                                     /* tighter spacing */
+        dash_cols_gap(&lab_w, &val_w, &unit_w, gap);
         need = pad + lab_w + gap + val_w + ugap + unit_w + pad;
         if (need <= target || !autosz || sz == 3) break;
         sz++;                                                            /* smaller font */

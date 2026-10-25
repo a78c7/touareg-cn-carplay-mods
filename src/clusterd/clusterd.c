@@ -185,29 +185,34 @@ static int turn_areas(const char *app, int *left, int *right) {
     return 0;
 }
 static int vision_va(const char *app, int nav, int base, int cur) {
-    static unsigned last_seq; static int want = -1, cnt, frozen, nsw; static time_t sw_t[6], last_sw;
+    static unsigned last_seq; static int want = -1, cnt, frozen, nsw, chosen = -1, last_base = -1; static time_t sw_t[6], last_sw;
     int on = g_mode == 3 && nav && app[0] && strstr(app, "高德");
     if (!on) {
         if (access("/tmp/cl_det_on", F_OK) == 0) unlink("/tmp/cl_det_on");
         if (!nav) { want = -1; cnt = 0; frozen = 0; nsw = 0; }
+        chosen = -1;
         return base;
     }
     if (access("/tmp/cl_det_on", F_OK) != 0) { int fd = open("/tmp/cl_det_on", O_WRONLY | O_CREAT, 0666); if (fd >= 0) close(fd); }
-    if (frozen || cur < 0) return base;
+    /* start from the normal area of this app; a picture result moves it to a turn= area. The area actually
+     * applied (cur) is what the icon position is measured against. */
+    if (chosen < 0 || base != last_base) { chosen = base; last_base = base; want = -1; cnt = 0; last_sw = time(NULL); }
+    if (frozen) return base;
+    if (cur != chosen) return chosen;                         /* not applied yet */
     char b[96]; unsigned seq; int x, y, sc, crop;
-    if (read_file("/tmp/cl_car", b, sizeof b) <= 0 || sscanf(b, "%u %d %d %d %d", &seq, &x, &y, &sc, &crop) != 5 || seq == last_seq) return cur;
+    if (read_file("/tmp/cl_car", b, sizeof b) <= 0 || sscanf(b, "%u %d %d %d %d", &seq, &x, &y, &sc, &crop) != 5 || seq == last_seq) return chosen;
     last_seq = seq;
     time_t now = time(NULL);
-    if (now - last_sw < 4) return cur;
+    if (now - last_sw < 4) return chosen;
     int L, R, c = area_centre(cur);
-    if (c < 0 || !turn_areas(app, &L, &R)) return cur;
-    if (sc < 620) { cnt = 0; return cur; }                      /* no icon (cruise dot, map panned, other icon) */
+    if (c < 0 || !turn_areas(app, &L, &R)) return chosen;
+    if (sc < 620) { cnt = 0; return chosen; }                      /* no icon (cruise dot, map panned, other icon) */
     int d = x - c, s = d > 106 ? 1 : d < -106 ? -1 : 0;
-    if (d - 213 * s > 40 || d - 213 * s < -40) { cnt = 0; return cur; }   /* not one of AMap's three spots */
+    if (d - 213 * s > 40 || d - 213 * s < -40) { cnt = 0; return chosen; }   /* not one of AMap's three spots */
     int w = s == 0 ? base : s < 0 ? L : R;
-    if (w == cur) { cnt = 0; want = -1; return cur; }
+    if (w == cur) { cnt = 0; want = -1; return chosen; }
     if (w != want) { want = w; cnt = 0; }
-    if (++cnt < 3) return cur;
+    if (++cnt < 3) return chosen;
     char m[160];
     snprintf(m, sizeof m, "car icon at x=%d (area %d centre %d, side %d, score %d): area %d", x, cur, c, s, sc, w);
     logs(m);
@@ -216,6 +221,7 @@ static int vision_va(const char *app, int nav, int base, int cur) {
     sw_t[nsw++ % 6] = now;
     for (int i = 0; i < 6 && i < nsw; i++) if (now - sw_t[i] <= 90) recent++;
     if (recent >= 6) { frozen = 1; logs("car icon: 6 area changes within 90 s, back to the normal area until this guidance ends"); return base; }
+    chosen = w;
     return w;
 }
 

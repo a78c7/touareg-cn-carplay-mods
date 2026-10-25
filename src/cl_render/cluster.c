@@ -2458,10 +2458,21 @@ static int             g_cp_crop;
 static pthread_mutex_t g_cp_mx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  g_cp_cv = PTHREAD_COND_INITIALIZER;
 
+/* state for troubleshooting (the renderer's own log is off in normal runs): /tmp/cl_car_dbg, rewritten on change */
+static void carpos_dbg(const char *what, int a, int b) {
+    static char last[96];
+    char m[96]; int n = snprintf(m, sizeof m, "%s %d %d\n", what, a, b);
+    if (!strcmp(m, last)) return;
+    strcpy(last, m);
+    int fd = open("/tmp/cl_car_dbg", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd >= 0) { write(fd, m, n); close(fd); }
+}
+
 static void *carpos_worker(void *arg) {
     (void)arg;
     sigset_t all; sigfillset(&all); pthread_sigmask(SIG_BLOCK, &all, NULL);   /* daemon signals stay on the main thread */
     unsigned seq = 0;
+    carpos_dbg("worker-started", 0, 0);
     for (;;) {
         pthread_mutex_lock(&g_cp_mx);
         while (!g_cp_busy) pthread_cond_wait(&g_cp_cv, &g_cp_mx);
@@ -2472,8 +2483,9 @@ static void *carpos_worker(void *arg) {
         int ms = (int)((now_us() - t0) / 1000ULL);
         char b[96];
         int n = snprintf(b, sizeof b, "%u %d %d %d %d\n", ++seq, x, y, (int)(s * 1000), g_cp_crop);
-        int fd = open("/tmp/cl_car.new", O_WRONLY | O_CREAT | O_TRUNC, 0666);
-        if (fd >= 0) { write(fd, b, n); close(fd); rename("/tmp/cl_car.new", "/tmp/cl_car"); }
+        /* one write() of a short line; rename() does not work on the head unit's /tmp. clusterd checks the 5 fields */
+        int fd = open("/tmp/cl_car", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (fd >= 0) { write(fd, b, n); close(fd); }
         if (seq <= 3 || seq % 600 == 0) LOG("carpos: #%u x=%d y=%d score=%.2f (%d ms)\n", seq, x, y, s, ms);
         g_cp_busy = 0;
     }
@@ -2511,10 +2523,10 @@ static void carpos_tick(int didx) {
     g_cp_ms = now;
     if (access("/tmp/cl_det_on", F_OK) != 0 || g_cp_busy) return;
     /* the band is in cluster pixels: only for the tall 1920-wide stream (Touareg), shown 1:1 from g_crop_top */
-    if (g_dec.width != 1920 || !g_post_h || g_dec.height <= g_post_h + 16) return;
-    if (!g_cp_state) { g_cp_state = carpos_setup(); if (g_cp_state < 0) return; }
+    if (g_dec.width != 1920 || !g_post_h || g_dec.height <= g_post_h + 16) { carpos_dbg("not-tall", g_dec.width, g_dec.height); return; }
+    if (!g_cp_state) { g_cp_state = carpos_setup(); if (g_cp_state < 0) { carpos_dbg("setup-failed", errno, 0); return; } }
     int sy = g_crop_top + CARPOS_Y0;
-    if (sy + CARPOS_BH > g_dec.height) return;
+    if (sy + CARPOS_BH > g_dec.height) { carpos_dbg("band-outside", sy, g_dec.height); return; }
     int a[] = {
         SCREEN_BLIT_SOURCE_X, CARPOS_X0, SCREEN_BLIT_SOURCE_Y, sy,
         SCREEN_BLIT_SOURCE_WIDTH, CARPOS_BW, SCREEN_BLIT_SOURCE_HEIGHT, CARPOS_BH,
@@ -2527,7 +2539,8 @@ static void carpos_tick(int didx) {
     if (!looked) { looked = 1; flush_blits = (int (*)(screen_context_t, int))dlsym(RTLD_DEFAULT, "screen_flush_blits"); }
     int rc = screen_blit(g_dec.scr_ctx, g_cp_buf, g_dec.decode_bufs[didx], a);
     if (!rc) rc = flush_blits ? flush_blits(g_dec.scr_ctx, SCREEN_WAIT_IDLE) : screen_flush_context(g_dec.scr_ctx, SCREEN_WAIT_IDLE);
-    if (rc) { LOG("carpos: blit failed rc=%d errno=%d, off\n", rc, errno); g_cp_state = -1; return; }
+    if (rc) { LOG("carpos: blit failed rc=%d errno=%d, off\n", rc, errno); carpos_dbg("blit-failed", rc, errno); g_cp_state = -1; return; }
+    carpos_dbg("running", flush_blits != NULL, g_cp_stride);
     for (int y = 0; y < CARPOS_H; y++) memcpy(g_cp_copy + y * CARPOS_W * 4, g_cp_ptr + y * g_cp_stride, CARPOS_W * 4);
     g_cp_crop = g_crop_top;
     pthread_mutex_lock(&g_cp_mx);
