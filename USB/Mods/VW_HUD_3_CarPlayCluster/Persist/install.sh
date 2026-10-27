@@ -27,7 +27,7 @@ while true; do
     for m in /fs/usb0_0 /fs/usb1_0 /fs/sda0 /fs/sdb0; do
         if [[ -d $m/cluster_logs ]]; then
             mount -uw $m 2>/dev/null
-            cp -f /tmp/cl_probe.log /tmp/clusterd.log $m/cluster_logs/ 2>/dev/null
+            cp -f /tmp/cl_probe.log /tmp/clusterd.log /tmp/cl_render_dbg /tmp/cl_car_dbg $m/cluster_logs/ 2>/dev/null
             sync
         fi
     done
