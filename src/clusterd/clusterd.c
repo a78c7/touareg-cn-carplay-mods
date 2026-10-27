@@ -185,18 +185,26 @@ static int turn_areas(const char *app, int *left, int *right) {
     return 0;
 }
 static int vision_va(const char *app, int nav, int base, int cur) {
-    static unsigned last_seq; static int want = -1, cnt, frozen, nsw, chosen = -1, last_base = -1; static time_t sw_t[6], last_sw;
+    static unsigned last_seq; static int want = -1, cnt, frozen, nsw, chosen = -1, last_base = -1, kept = -1;
+    static time_t sw_t[6], last_sw, gone_t, last_diag;
     int on = g_mode == 3 && nav && app[0] && strstr(app, "高德");
     if (!on) {
         if (access("/tmp/cl_det_on", F_OK) == 0) unlink("/tmp/cl_det_on");
         if (!nav) { want = -1; cnt = 0; frozen = 0; nsw = 0; }
+        if (chosen >= 0) { kept = chosen; gone_t = time(NULL); }
         chosen = -1;
         return base;
     }
     if (access("/tmp/cl_det_on", F_OK) != 0) { int fd = open("/tmp/cl_det_on", O_WRONLY | O_CREAT, 0666); if (fd >= 0) close(fd); }
     /* start from the normal area of this app; a picture result moves it to a turn= area. The area actually
-     * applied (cur) is what the icon position is measured against. */
-    if (chosen < 0 || base != last_base) { chosen = base; last_base = base; want = -1; cnt = 0; last_sw = time(NULL); }
+     * applied (cur) is what the icon position is measured against. v19.4: AMap ends and restarts the guidance
+     * when it re-routes (seen 3 times within 20 s); a guidance that comes back within 30 s keeps the last area
+     * instead of starting from the normal one again (the car jumped off-centre for a few seconds each time). */
+    if (chosen < 0 || base != last_base) {
+        int resume = chosen < 0 && kept >= 0 && base == last_base && time(NULL) - gone_t <= 30;
+        chosen = resume ? kept : base; last_base = base; want = -1; cnt = 0; last_sw = time(NULL);
+        if (resume) { char m[96]; snprintf(m, sizeof m, "car icon: guidance back within 30 s, keeping area %d", chosen); logs(m); }
+    }
     if (frozen) return base;
     if (cur != chosen) return chosen;                         /* not applied yet */
     char b[96]; unsigned seq; int x, y, sc, crop;
@@ -206,9 +214,15 @@ static int vision_va(const char *app, int nav, int base, int cur) {
     if (now - last_sw < 4) return chosen;
     int L, R, c = area_centre(cur);
     if (c < 0 || !turn_areas(app, &L, &R)) return chosen;
+    /* v19.4: while navigating and the icon is not found under the clock, log what the picture shows every 10 s
+     * (a drive where the correction did nothing left no trace of why) */
+    if ((sc < 620 || x - 959 > 40 || x - 959 < -40) && now - last_diag >= 10) {
+        char m[128]; snprintf(m, sizeof m, "car icon check: x=%d y=%d score=%d area %d (centre %d)", x, y, sc, cur, c);
+        logs(m); last_diag = now;
+    }
     if (sc < 620) { cnt = 0; return chosen; }                      /* no icon (cruise dot, map panned, other icon) */
     int d = x - c, s = d > 106 ? 1 : d < -106 ? -1 : 0;
-    if (d - 213 * s > 40 || d - 213 * s < -40) { cnt = 0; return chosen; }   /* not one of AMap's three spots */
+    if (d - 213 * s > 60 || d - 213 * s < -60) { cnt = 0; return chosen; }   /* not one of AMap's three spots (v19.4: +-60, was 40) */
     int w = s == 0 ? base : s < 0 ? L : R;
     if (w == cur) { cnt = 0; want = -1; return chosen; }
     if (w != want) { want = w; cnt = 0; }
@@ -280,9 +294,11 @@ int main(int argc, char **argv) {
                     if (strcmp(did, "33") != 0) rebind(show_seq);   /* show our own displayable on the cluster */
                     stage = 2; shown_t = time(NULL);
                     logm("renderer window ready, cluster list set (s after start)", (int)(shown_t - started));
-                } else if (time(NULL) - started >= 12) {
+                } else if (time(NULL) - started >= 6) {
+                    /* v19.4: 6 s (was 12). A cold boot needed 3 renderer starts (window never created although key
+                     * frames arrived); the cause is being traced in /tmp/cl_render_dbg, meanwhile retry sooner. */
                     kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
-                    waitpid(child, NULL, 0); logm("renderer window not ready after 12 s, restarting", child); child = 0;
+                    waitpid(child, NULL, 0); logm("renderer window not ready after 6 s, restarting", child); child = 0;
                 }
             } else if (stage == 2 && time(NULL) - shown_t >= 2) {
                 /* the phone keeps its zoom for the whole connection: zoom in once per connection, not per renderer */

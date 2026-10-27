@@ -656,7 +656,27 @@ static const char *get_arg_s(int argc, char **argv, const char *key, const char 
 /* Non-static so aa_cluster_decoder.c (linked into the same binary)
  * can declare it `extern` and gate its own LOG calls on the same flag. */
 int g_verbose = 0;
-#define LOG(...) do { if (g_verbose) printf(__VA_ARGS__); } while(0)
+/* v19.4: the renderer runs with stdout on /dev/null, so a start-up that never gets its window left no trace. Until the
+ * window exists, every LOG line also goes to /tmp/cl_render_dbg (appended per run with a pid header, kept < 64 KB). */
+#include <stdarg.h>
+static int g_rdbg = 1;
+static uint64_t now_us(void);
+static void rdbg_printf(const char *fmt, ...) {
+    static int fd = -2;
+    if (fd == -2) {
+        struct stat st;
+        if (stat("/tmp/cl_render_dbg", &st) == 0 && st.st_size > 65536) unlink("/tmp/cl_render_dbg");
+        fd = open("/tmp/cl_render_dbg", O_WRONLY | O_CREAT | O_APPEND, 0666);
+        if (fd >= 0) { char h[64]; int n = snprintf(h, sizeof h, "=== pid %d\n", (int)getpid()); write(fd, h, n); }
+    }
+    static int total;
+    if (fd < 0 || total > 48000) return;                         /* a run that never gets its window: keep the start */
+    char b[320]; int n = snprintf(b, sizeof b, "[%llu] ", (unsigned long long)(now_us() / 1000ULL));
+    va_list ap; va_start(ap, fmt); int m = vsnprintf(b + n, sizeof b - n, fmt, ap); va_end(ap);
+    if (m > (int)sizeof b - n - 1) m = (int)sizeof b - n - 1;
+    if (m > 0) { write(fd, b, n + m); total += n + m; }
+}
+#define LOG(...) do { if (g_verbose) printf(__VA_ARGS__); if (g_rdbg) rdbg_printf(__VA_ARGS__); } while(0)
 
 /* -------- verbose=2: redirect stdout to rotating log file -------- */
 #define LOG_FILENAME   "cluster_daemon.log"
@@ -2018,6 +2038,8 @@ static int setup_screen(int width, int height) {
     {
         int rfd = open("/tmp/cl_render_ready", O_WRONLY | O_CREAT | O_TRUNC, 0666);
         if (rfd >= 0) { char rb[16]; int rl = snprintf(rb, sizeof rb, "%d\n", (int)getpid()); write(rfd, rb, rl); close(rfd); }
+        LOG("window ready (cl_render_ready written)\n");
+        g_rdbg = 0;
     }
 
     /* If a resume signal arrived BEFORE setup_screen ran (race: Java often

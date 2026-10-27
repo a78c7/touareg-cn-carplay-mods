@@ -532,6 +532,58 @@ func (p pkg) apply(r applyReq) ([]string, error) {
 
 const logDir = "drive_logs"
 
+// v19.4: a guide for chat AIs (豆包, 通义千问, DeepSeek ...) written next to the CSV files when the drive is
+// switched to record mode: what each column means and a prompt to paste, so the owner can upload a trip and ask.
+const aiGuideName = "给AI分析行车记录.txt"
+const aiGuide = `【怎么用】
+把 drive_logs 里想分析的那个 CSV 文件（一次开车一个文件，文件名里的日期多是 1970，看文件大小和修改时间找）
+连同这个说明一起上传到豆包、通义千问、DeepSeek、ChatGPT 等 AI，再把下面"提问模板"整段复制过去发送。
+文件太大传不上时，用 Excel / Numbers 打开，只保留想看的那一段时间再另存为 CSV。
+
+【提问模板】（整段复制）
+这是我的大众途锐 3.0T 车机记录的行车数据（CSV，约每秒 10 行），列的含义见我上传的说明。请：
+1. 概括这趟：时长、里程、平均车速、最高车速、怠速时间占比；
+2. 驾驶习惯：急加速、急刹车（纵向加速度超过 ±3 m/s² 算一次）各多少次，大致在第几分钟；
+3. 动力：出现过的最大功率、最大扭矩，以及当时的转速、车速、油门；
+4. 油耗：按"当前消耗"估算这趟的平均油耗，并说明这个估算的局限；
+5. 温度：机油、变速箱油、冷却液温度多久到正常工作温度，有没有异常偏高；
+6. 有没有看起来不正常的数据（数值跳变、长时间为空等），可能是什么原因。
+用中文回答，先给结论，再给依据；不确定的地方直接说不确定。
+
+【文件格式】
+第 1 行以 # 开头是说明（车机时钟从 1970 年开始，日期不可信），第 2 行是列名，之后每行一个时刻。
+空格子 = 车机当时没给这个值。
+
+【各列含义】
+t_ms         车机开机后的毫秒数（时间轴，相邻两行约 100 毫秒）
+spd_kmh      仪表显示车速 km/h（一般比真实车速高几个百分点）
+real_spd_kmh 真实车速 km/h（分析速度、里程用这一列）
+rpm          发动机转速
+power_kw     发动机输出功率 kW（车机计算值）
+torque_nm    发动机扭矩 N·m
+pedal_pct    油门踏板开度 %
+brake_bar    制动压力 bar（踩刹车时 > 0）
+steer_deg    方向盘转角 度（正负表示左右）
+yaw_dps      横摆角速度 度/秒
+ax_ms2       纵向加速度 m/s²（正 = 加速，负 = 减速）
+ay_g         横向加速度 g
+lever        换挡杆位置：1 = P，2 = R，3 = N，4 = D
+gear         挡位（这台车上多数时候为 0，不可信，看挡位请用 lever 和车速）
+gearbox_c    变速箱油温 °C
+oil_c        机油温度 °C（冷车时可能为空）
+coolant_c    冷却液温度 °C
+cons         当前消耗，单位见 cons_unit；车机报的上限是 40.9 L/100km，大于这个数时也显示 40.9
+cons_unit    0 = L/100km，1 = km/L，2 = L/h（停车时车机改用 L/h）
+tank_pct     油箱剩余 %
+outside_c    车外温度 °C
+range_km     续驶里程 km
+wheel1_kmh … wheel4_kmh  四个车轮的轮速 km/h
+acc          1 = 自适应巡航（ACC）正在控车，0 = 没有（只是待命时也是 0）
+
+【不包含】
+增压压力、点火角、爆震、空燃比、进气温度等发动机内部数据（要用 OBD 诊断工具读）。
+`
+
 func (p pkg) usbMode() string {
 	if isDir(p.path("_Data")) && isDir(p.path("_Meta")) && !isDir(p.path("Data")) {
 		return "record"
@@ -562,6 +614,9 @@ func (p pkg) setUsbMode(mode string) ([]string, error) {
 				return log, err
 			}
 			log = append(log, "新建 "+logDir+" 文件夹")
+		}
+		if err := os.WriteFile(filepath.Join(p.path(logDir), aiGuideName), []byte(aiGuide), 0o644); err == nil {
+			log = append(log, "写入 "+logDir+"/"+aiGuideName+"（把行车记录交给 AI 分析时用）")
 		}
 		log = append(log, "现在是行车记录 U 盘：插在车上不会刷机，行车数据记到 "+logDir)
 	case "flash":
