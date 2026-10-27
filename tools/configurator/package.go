@@ -100,7 +100,7 @@ type dashConf struct {
 }
 
 func defaultDash() dashConf {
-	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 35, AccUp: 80, AmapTurn: 0}
+	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 35, AccUp: 80, AmapTurn: 3}
 }
 
 type pkg struct{ Root string }
