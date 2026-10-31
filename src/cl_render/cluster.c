@@ -677,6 +677,13 @@ static void rdbg_printf(const char *fmt, ...) {
     if (m > 0) { write(fd, b, n + m); total += n + m; }
 }
 #define LOG(...) do { if (g_verbose) printf(__VA_ARGS__); if (g_rdbg) rdbg_printf(__VA_ARGS__); } while(0)
+static volatile int g_wait_idr;
+/* v19.5: ask cl_probe (in the CarPlay process) for a key frame; "#<tag><n>" keeps repeated requests distinct */
+static void request_key_frame(const char *why) {
+    static unsigned n;
+    int cfd = open("/tmp/cl_alt_cmd", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (cfd >= 0) { char cb[48]; int cl = snprintf(cb, sizeof cb, "idr 1 #%c%u\n", why[0], ++n); write(cfd, cb, cl); close(cfd); }
+}
 
 /* -------- verbose=2: redirect stdout to rotating log file -------- */
 #define LOG_FILENAME   "cluster_daemon.log"
@@ -1343,6 +1350,13 @@ static int g_post_w = 0, g_post_h = 0;
  * frame (= the whole map moves up by acc_up), stepping a few rows per frame. Works for every app because it only
  * changes which rows of the phone's frame are shown. cl.conf: acc_up=<rows> (0 = off). */
 static int g_crop_base = 0, g_crop_target = 0, g_acc_up = 80, g_car_up = 0, g_acc_on = 0;
+/* v19.5: wide stream (cl.conf wide= in cl_probe): the phone draws on a canvas wider than the cluster, the 1920 layout
+ * sits in its middle (g_x0 = (W-1920)/2). We show a window of it: anchored so canvas point (g_x0+959+pan, croptop+
+ * g_anchor_y) lands on the cluster target (959, g_anchor_y); view=<percent> shows the canvas at that size (85 =
+ * 1/0.85 of the canvas in each direction, more map ahead, everything smaller); pan follows the AMap car icon. */
+static int g_view = 100, g_anchor_y = 556, g_x0 = 0, g_pan_mode = 0;
+static volatile int g_pan_tgt = 0;
+static int g_pan_cur = 0;
 static uint64_t g_acc_poll_ms = 0;
 static void read_crop_conf(void) {
     static const char *paths[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
@@ -1351,6 +1365,8 @@ static void read_crop_conf(void) {
         char l[128]; int v;
         while (fgets(l, sizeof l, f)) {
             if (sscanf(l, " croptop = %d", &v) == 1) g_crop_top = v;
+            else if (sscanf(l, " view = %d", &v) == 1) g_view = v < 60 ? 60 : v > 100 ? 100 : v;
+            else if (sscanf(l, " anchor_y = %d", &v) == 1) g_anchor_y = v < 100 ? 100 : v > 630 ? 630 : v;
             else if (sscanf(l, " acc_up = %d", &v) == 1) g_acc_up = v < 0 ? 0 : v;
         }
         fclose(f);
@@ -1701,6 +1717,16 @@ static int setup_screen(int width, int height) {
         LOG("tall stream %dx%d: post window %dx%d, showing rows %d..%d\n", width, height,
             width, g_h264_args.yres, g_crop_top, g_crop_top + g_h264_args.yres - 1);
         height = g_h264_args.yres;
+        /* v19.5: wider than the cluster -> the post window stays cluster-wide; we show a window of the canvas */
+        if (g_h264_args.xres > 0 && width > g_h264_args.xres + 16) {
+            g_x0 = (width - g_h264_args.xres) / 2;
+            /* panning +-213 px (AMap) needs that much canvas beside the shown window, at this view scale */
+            g_pan_mode = g_x0 >= 213 + (959 * (100 - g_view) + g_view - 1) / g_view;
+            LOG("wide stream: x0=%d view=%d%% pan %s\n", g_x0, g_view, g_pan_mode ? "on" : "off (not enough margin)");
+            int pfd = open("/tmp/cl_pan_mode", O_WRONLY | O_CREAT | O_TRUNC, 0666);   /* clusterd: no area switching */
+            if (pfd >= 0) { write(pfd, g_pan_mode ? "1\n" : "0\n", 2); close(pfd); }
+            width = g_h264_args.xres;
+        }
     }
     g_post_w = width; g_post_h = height;
     int win_size[2] = { width, height };
@@ -2476,6 +2502,7 @@ static int             g_cp_stride, g_cp_state;        /* 0 = not set up, 1 = re
 static uint64_t        g_cp_ms;
 static unsigned char   g_cp_copy[CARPOS_W * CARPOS_H * 4];
 static volatile int    g_cp_busy;
+static int             g_cp_hits, g_cp_last;
 static int             g_cp_crop;
 static pthread_mutex_t g_cp_mx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  g_cp_cv = PTHREAD_COND_INITIALIZER;
@@ -2499,16 +2526,31 @@ static void *carpos_worker(void *arg) {
         pthread_mutex_lock(&g_cp_mx);
         while (!g_cp_busy) pthread_cond_wait(&g_cp_cv, &g_cp_mx);
         pthread_mutex_unlock(&g_cp_mx);
-        int x, y; double s;
+        int x, y, side; double best, second;
         uint64_t t0 = now_us();
-        carpos_find(g_cp_copy, CARPOS_W * 4, &x, &y, &s);
+        carpos_find3(g_cp_copy, CARPOS_W * 4, &side, &best, &second, &x, &y);
         int ms = (int)((now_us() - t0) / 1000ULL);
+        /* v19.5: accepted only if the spot stands out (offline: 117 of 117 AMap screenshots right, none wrong) */
+        int ok = best >= 0.58 && best - second >= 0.12;
+        x += CARPOS_X0; y += CARPOS_Y0;                    /* in the 1920 layout, as before */
+        if (g_pan_mode) {
+            /* pan to where the icon is (AMap: 0 or about +-213); two agreeing results in a row before moving */
+            int off = x - 959;
+            if (ok && (off - g_pan_tgt > 20 || off - g_pan_tgt < -20)) {
+                if (++g_cp_hits >= 2 && (off - g_cp_last > -30 && off - g_cp_last < 30)) {
+                    g_pan_tgt = off; g_cp_hits = 0;
+                    FILE *lf = fopen("/tmp/clusterd.log", "a");
+                    if (lf) { fprintf(lf, "[%ld] car icon at x=%d (score %d, next %d): map follows, pan %d\n", (long)time(NULL), x, (int)(best * 1000), (int)(second * 1000), off); fclose(lf); }
+                }
+                g_cp_last = off;
+            } else if (ok) g_cp_hits = 0;
+        }
         char b[96];
-        int n = snprintf(b, sizeof b, "%u %d %d %d %d\n", ++seq, x, y, (int)(s * 1000), g_cp_crop);
+        int n = snprintf(b, sizeof b, "%u %d %d %d %d\n", ++seq, x, y, ok ? (int)(best * 1000) : (best > 0.5 ? 500 : (int)(best * 1000)), g_cp_crop);
         /* one write() of a short line; rename() does not work on the head unit's /tmp. clusterd checks the 5 fields */
         int fd = open("/tmp/cl_car", O_WRONLY | O_CREAT | O_TRUNC, 0666);
         if (fd >= 0) { write(fd, b, n); close(fd); }
-        if (seq <= 3 || seq % 600 == 0) LOG("carpos: #%u x=%d y=%d score=%.2f (%d ms)\n", seq, x, y, s, ms);
+        if (seq <= 3 || seq % 300 == 0) rdbg_printf("carpos: #%u x=%d y=%d score=%.2f next=%.2f side=%d ok=%d pan=%d (%d ms)\n", seq, x, y, best, second, side, ok, g_pan_tgt, ms);
         g_cp_busy = 0;
     }
     return NULL;
@@ -2543,14 +2585,15 @@ static void carpos_tick(int didx) {
     uint64_t now = now_us() / 1000ULL;
     if (now - g_cp_ms < 1000) return;
     g_cp_ms = now;
-    if (access("/tmp/cl_det_on", F_OK) != 0 || g_cp_busy) return;
-    /* the band is in cluster pixels: only for the tall 1920-wide stream (Touareg), shown 1:1 from g_crop_top */
-    if (g_dec.width != 1920 || !g_post_h || g_dec.height <= g_post_h + 16) { carpos_dbg("not-tall", g_dec.width, g_dec.height); return; }
+    if (access("/tmp/cl_det_on", F_OK) != 0) { g_pan_tgt = 0; g_cp_hits = 0; return; }   /* not AMap navigating */
+    if (g_cp_busy) return;
+    /* the band is in canvas pixels around the canvas point under the clock: only for the tall Touareg stream */
+    if (g_dec.width < 1920 || !g_post_h || g_dec.height <= g_post_h + 16) { carpos_dbg("not-tall", g_dec.width, g_dec.height); return; }
     if (!g_cp_state) { g_cp_state = carpos_setup(); if (g_cp_state < 0) { carpos_dbg("setup-failed", errno, 0); return; } }
-    int sy = g_crop_top + CARPOS_Y0;
-    if (sy + CARPOS_BH > g_dec.height) { carpos_dbg("band-outside", sy, g_dec.height); return; }
+    int sy = g_crop_top + g_anchor_y - (556 - CARPOS_Y0), sx0 = g_x0 + CARPOS_X0;
+    if (sy < 0 || sy + CARPOS_BH > g_dec.height || sx0 + CARPOS_BW > g_dec.width) { carpos_dbg("band-outside", sy, g_dec.height); return; }
     int a[] = {
-        SCREEN_BLIT_SOURCE_X, CARPOS_X0, SCREEN_BLIT_SOURCE_Y, sy,
+        SCREEN_BLIT_SOURCE_X, sx0, SCREEN_BLIT_SOURCE_Y, sy,
         SCREEN_BLIT_SOURCE_WIDTH, CARPOS_BW, SCREEN_BLIT_SOURCE_HEIGHT, CARPOS_BH,
         SCREEN_BLIT_DESTINATION_X, 0, SCREEN_BLIT_DESTINATION_Y, 0,
         SCREEN_BLIT_DESTINATION_WIDTH, CARPOS_W, SCREEN_BLIT_DESTINATION_HEIGHT, CARPOS_H,
@@ -2628,9 +2671,21 @@ static int cb_display_picture(void* user, void* disp_info) {
         float dst_ar = (float)dst_w / (float)dst_h;
         const char* m = g_h264_args.mode ? g_h264_args.mode : "letter";
         if (g_post_h && g_dec.height > g_post_h + 16) {
-            /* tall stream: 1:1 rows from g_crop_top, full width (v19.2: moves up while ACC is on) */
+            /* tall stream: rows from g_crop_top (v19.2: moves up while ACC is on); v19.5: window of a wider canvas,
+             * optional view scale, horizontal pan toward the AMap car icon */
             crop_tick(g_dec.height, dst_h);
-            sy = g_crop_top; sh = dst_h; if (sy + sh > g_dec.height) sy = g_dec.height - sh;
+            {
+                int tgt = g_pan_mode ? g_pan_tgt : 0;
+                if (g_pan_cur < tgt) g_pan_cur = g_pan_cur + 12 > tgt ? tgt : g_pan_cur + 12;
+                else if (g_pan_cur > tgt) g_pan_cur = g_pan_cur - 12 < tgt ? tgt : g_pan_cur - 12;
+                sw = (1920 * 100 + g_view / 2) / g_view; sh = (dst_h * 100 + g_view / 2) / g_view;
+                if (sw > g_dec.width) sw = g_dec.width;
+                if (sh > g_dec.height) sh = g_dec.height;
+                sx = g_x0 + 959 + g_pan_cur - (959 * 100 + g_view / 2) / g_view;
+                sy = g_crop_top + g_anchor_y - (g_anchor_y * 100 + g_view / 2) / g_view;
+                if (sx < 0) sx = 0; if (sx + sw > g_dec.width) sx = g_dec.width - sw;
+                if (sy < 0) sy = 0; if (sy + sh > g_dec.height) sy = g_dec.height - sh;
+            }
         } else if (strcmp(m, "stretch") == 0) {
             /* dst = full, src = full — HW scales to fill */
         } else if (strcmp(m, "fill") == 0) {
@@ -3060,6 +3115,15 @@ int run_h264_mode(int argc, char** argv) {
         }
 
         uint32_t wp = shm->write_pos;
+        /* v19.5: the writer does not wait for us. If more than the ring holds was written since the last read, the
+         * unread part was overwritten and what is left is a mix of old and new data: decoding it garbles the map
+         * until the next key frame. Skip to the newest data and wait for a key frame instead (picture stays). */
+        if ((uint32_t)(total - last_total) > CLUSTER_RING_SIZE - 65536) {
+            rdbg_printf("ring overrun: %u bytes behind, skipping to the newest data and waiting for a key frame\n",
+                        (unsigned)(total - last_total));
+            read_pos = wp; last_total = total; g_wait_idr = 1; request_key_frame("overrun");
+            continue;
+        }
         uint32_t avail;
         if (wp >= read_pos)
             avail = wp - read_pos;
@@ -3119,8 +3183,19 @@ int run_h264_mode(int argc, char** argv) {
         }
 
         uint32_t parse_data[9] = {0};
-        parse_data[0] = (uint32_t)chunk;
-        parse_data[1] = avail;
+        uint32_t feed_off = 0;
+        if (g_wait_idr) {          /* v19.5: after an overrun, decode nothing until SPS/IDR (keeps the last picture) */
+            uint32_t ni; int found = 0;
+            for (ni = 0; ni + 4 < avail; ni++)
+                if (chunk[ni] == 0 && chunk[ni + 1] == 0 && chunk[ni + 2] == 1) {
+                    int t = chunk[ni + 3] & 0x1f;
+                    if (t == 7 || t == 5) { feed_off = (ni > 0 && chunk[ni - 1] == 0) ? ni - 1 : ni; found = 1; break; }
+                }
+            if (!found) { free(chunk); continue; }
+            g_wait_idr = 0; rdbg_printf("key frame after overrun, decoding again\n");
+        }
+        parse_data[0] = (uint32_t)(chunk + feed_off);
+        parse_data[1] = avail - feed_off;
 
         int pr = nv.ParserParse(parser, parse_data);
         feed_count++;

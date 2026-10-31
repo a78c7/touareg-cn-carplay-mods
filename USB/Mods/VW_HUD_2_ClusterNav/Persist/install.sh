@@ -61,8 +61,14 @@ while true; do
     fi
     for m in /fs/usb0_0 /fs/usb1_0 /fs/sda0 /fs/sdb0; do
         if [[ -d $m/cluster_logs ]]; then
-            D=$m/cluster_logs
             mount -uw $m 2>/dev/null
+            # v19.5: one folder per head-unit start (boot_1, boot_2 ...), so a later drive does not overwrite the logs
+            # of the one that had a problem. Chosen once per boot; VW_HUD_3 copies into the same folder.
+            if [[ ! -f /tmp/cl_bootdir ]]; then
+                n=1; while [[ -d $m/cluster_logs/boot_$n ]]; do n=$((n + 1)); done
+                mkdir $m/cluster_logs/boot_$n 2>/dev/null && echo boot_$n > /tmp/cl_bootdir
+            fi
+            D=$m/cluster_logs/$(cat /tmp/cl_bootdir 2>/dev/null)
             cp -f /tmp/vwcn.log /tmp/vwcn_persist.log /tmp/dio_cluster.log $ST /tmp/Performance.txt /tmp/disableReasons $D/ 2>/dev/null
             ls -l /dev/shmem/ > $D/tmp_list.txt 2>&1
             ls -l /mnt/app/eso/hmi/lsd/jars /eso/hmi/lsd/jars > $D/jars_list.txt 2>&1
