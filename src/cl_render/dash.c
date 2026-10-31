@@ -488,7 +488,7 @@ static void dash_item_value(int it, const dash_vals_t *v, char *o, const char **
     case IT_BRAKE:   I(DASH_NAN(v->brk), "%.1f", v->brk); break;
     case IT_STEER:   I(v->str == -999, "%d", v->str); break;
     case IT_GEAR:    snprintf(o, 16, "%s", v->gm == -999 ? "-" : dash_gear(v->gm, v->gc, gb)); break;
-    case IT_GEARBOX: I(v->gbt == -999, "%d", v->gbt); break;
+    case IT_GEARBOX: I(v->gbt == -999 || v->gbt < -40, "%d", v->gbt); break;   /* v19.4.1: -58 = not ready yet (seen right after start) */
     case IT_OIL:     I(v->oil == -999, "%d", v->oil); break;
     case IT_COOLANT: I(v->cool == -999, "%d", v->cool); break;
     case IT_OUTSIDE: I(v->out == -999, "%d", v->out); break;

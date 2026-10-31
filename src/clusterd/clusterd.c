@@ -285,7 +285,9 @@ int main(int argc, char **argv) {
                 if (new_stream) { new_stream = 0; zoomed = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
                 logm("renderer started", child);
             } else if (stage == 0 && time(NULL) - started >= 2) {
-                send_cmd("idr");              /* get a fresh key frame: the renderer creates its window on it */
+                /* get a fresh key frame: the renderer creates its window on it. v19.4.1: the renderer also asks by itself
+                 * once its decoder listens (a cold start took 2.4 s to get there, so this 2 s request was missed) */
+                send_cmd("idr");
                 stage = 1;
                 logm("idr requested", 0);
             } else if (stage == 1) {
@@ -294,11 +296,11 @@ int main(int argc, char **argv) {
                     if (strcmp(did, "33") != 0) rebind(show_seq);   /* show our own displayable on the cluster */
                     stage = 2; shown_t = time(NULL);
                     logm("renderer window ready, cluster list set (s after start)", (int)(shown_t - started));
-                } else if (time(NULL) - started >= 6) {
+                } else if (time(NULL) - started >= 8) {
                     /* v19.4: 6 s (was 12). A cold boot needed 3 renderer starts (window never created although key
                      * frames arrived); the cause is being traced in /tmp/cl_render_dbg, meanwhile retry sooner. */
                     kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
-                    waitpid(child, NULL, 0); logm("renderer window not ready after 6 s, restarting", child); child = 0;
+                    waitpid(child, NULL, 0); logm("renderer window not ready after 8 s, restarting", child); child = 0;
                 }
             } else if (stage == 2 && time(NULL) - shown_t >= 2) {
                 /* the phone keeps its zoom for the whole connection: zoom in once per connection, not per renderer */

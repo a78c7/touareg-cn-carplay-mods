@@ -3036,6 +3036,15 @@ int run_h264_mode(int argc, char** argv) {
 
     LOG("decode loop started (wp=%u total=%u, waiting for NEW H.264 data)...\n",
         read_pos, last_total);
+    /* v19.4.1: ask the phone for a key frame now that we are reading. The window is created on the first key frame,
+     * and we only read data written after this point. clusterd asked at a fixed 2 s after starting us, but a cold
+     * start took 2.4 s to get here (NvMedia load), so that key frame came and went before we listened: no window,
+     * a 6 s restart, the map ~6 s late. The "#pid" suffix makes the command differ from clusterd's own "idr". */
+    {
+        int cfd = open("/tmp/cl_alt_cmd", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (cfd >= 0) { char cb[48]; int cl = snprintf(cb, sizeof cb, "idr 1 #r%d\n", (int)getpid()); write(cfd, cb, cl); close(cfd); }
+        LOG("key frame requested (decoder listening)\n");
+    }
 
     while (1) {
         /* Apply pause/resume signals here too — when AA is paused, the phone
