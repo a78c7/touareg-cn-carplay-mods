@@ -37,8 +37,12 @@
  *   tall=H    advertise a 1920xH cluster (H 640..1080); cl_render shows only the top 639 rows, so the
  *             map centre (where the app puts the car) lands lower on the panel                  default 640
  *   ui=N      cluster scene URL preset (-1 = phone's suggestUI url or URL 0)                   default -1 */
-static int g_cfg_va = 0, g_cfg_tall = CLUSTER_H_STD, g_cfg_ui = -1;
+static int g_cfg_va = 0, g_cfg_tall = CLUSTER_H_STD, g_cfg_ui = -1, g_cfg_wide = CLUSTER_W;
 static int g_cl_h = CLUSTER_H_STD;          /* height advertised in the current /info */
+/* v19.5: wide=W advertises a W x H cluster (W 1920..2880). The safe areas in cl.conf stay in 1920 coordinates and
+ * are moved right by (W-1920)/2, so the apps draw as before in the middle; cl_render shows a 1920-wide window of it
+ * that it can slide left/right (AMap car icon) or scale (view=) without asking the phone to redraw. */
+static int g_cl_w = CLUSTER_W, g_cl_x0;
 /* safe-area presets {x, y, w, h} inside the full 1920 x g_cl_h visible frame (car = centre of the safe area
  * if the app honours it). Wide (>= 660 px) keeps the CarPlay ETA card in a side column. */
 static const int VA[][4] = {
@@ -72,7 +76,7 @@ static const char *UI_URLS[] = {
 static void plog(const char *fmt, ...);
 static void read_conf(void) {
     static const char *paths[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
-    g_cfg_va = 0; g_cfg_tall = CLUSTER_H_STD; g_cfg_ui = -1;
+    g_cfg_va = 0; g_cfg_tall = CLUSTER_H_STD; g_cfg_ui = -1; g_cfg_wide = CLUSTER_W;
     g_va_n = VA_BUILTIN; memcpy(g_va, VA, sizeof VA);
     for (unsigned i = 0; i < 2; i++) {
         int fd = open(paths[i], O_RDONLY); if (fd < 0) continue;
@@ -85,6 +89,7 @@ static void read_conf(void) {
             if (sscanf(l, " va = %d", &v) == 1) g_cfg_va = v;
             else if (sscanf(l, " tall = %d", &v) == 1) g_cfg_tall = v;
             else if (sscanf(l, " ui = %d", &v) == 1) g_cfg_ui = v;
+            else if (sscanf(l, " wide = %d", &v) == 1) g_cfg_wide = v;
             else {
                 int a[4];
                 if (sscanf(l, " area = %d , %d , %d , %d", &a[0], &a[1], &a[2], &a[3]) == 4) {
@@ -96,8 +101,10 @@ static void read_conf(void) {
         if (g_cfg_va < 0 || g_cfg_va >= VA_N) g_cfg_va = 0;
         if (g_cfg_tall < CLUSTER_H_STD || g_cfg_tall > 1080) g_cfg_tall = CLUSTER_H_STD;
         g_cfg_tall &= ~15;
+        if (g_cfg_wide < CLUSTER_W || g_cfg_wide > 2880) g_cfg_wide = CLUSTER_W;
+        g_cfg_wide &= ~15;
         if (g_cfg_ui >= UI_N) g_cfg_ui = -1;
-        plog("conf %s: va=%d tall=%d ui=%d areas=%d", paths[i], g_cfg_va, g_cfg_tall, g_cfg_ui, g_va_n);
+        plog("conf %s: va=%d tall=%d wide=%d ui=%d areas=%d", paths[i], g_cfg_va, g_cfg_tall, g_cfg_wide, g_cfg_ui, g_va_n);
         return;
     }
     plog("conf: none, defaults va=0 tall=640 ui=-1");
@@ -170,7 +177,7 @@ static void init_once(void) {
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v19.3 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
+    plog("cl_alt v19.5 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -208,7 +215,7 @@ static void *rect(int64_t x, int64_t y, int64_t w, int64_t h) {
     return d;
 }
 static void *viewarea(int64_t sx, int64_t sy, int64_t sw, int64_t sh) {
-    void *va = rect(0, 0, CLUSTER_W, g_cl_h);
+    void *va = rect(0, 0, g_cl_w, g_cl_h);
     void *s = rect(sx, sy, sw, sh); set_obj(va, "safeArea", s); cf_rel(s);
     return va;
 }
@@ -221,23 +228,23 @@ static void *stream_arr(void *uuidCF, const char *uuidStr) {
 }
 static void *build_cluster(int night) {
     void *d = cf_dictm(0, 0, dkey_cb, dval_cb), *a;
-    g_cl_h = g_cfg_tall;
+    g_cl_h = g_cfg_tall; g_cl_w = g_cfg_wide; g_cl_x0 = (g_cl_w - CLUSTER_W) / 2;
     set_str(d, "name", "Instrument Cluster");
     set_i64(d, "type", 111);
     set_i64(d, "maxFPS", 30);
-    set_i64(d, "widthPixels", CLUSTER_W); set_i64(d, "heightPixels", g_cl_h);
-    /* keep the pixel pitch: physical height grows with the pixel height, so iOS keeps the same map scale */
-    set_i64(d, "widthPhysical", CLUSTER_PHYS_W); set_i64(d, "heightPhysical", (CLUSTER_PHYS_H_STD * g_cl_h + CLUSTER_H_STD / 2) / CLUSTER_H_STD);
+    set_i64(d, "widthPixels", g_cl_w); set_i64(d, "heightPixels", g_cl_h);
+    /* keep the pixel pitch: physical size grows with the pixel size, so iOS keeps the same map scale */
+    set_i64(d, "widthPhysical", (CLUSTER_PHYS_W * g_cl_w + CLUSTER_W / 2) / CLUSTER_W); set_i64(d, "heightPhysical", (CLUSTER_PHYS_H_STD * g_cl_h + CLUSTER_H_STD / 2) / CLUSTER_H_STD);
     set_str(d, "uid", CLUSTER_UUID); set_str(d, "uuid", CLUSTER_UUID);
     a = cf_arrm(0, 1, arr_cb); arr_add_str(a, "Instrument Cluster"); set_obj(d, "properties", a); cf_rel(a);
     a = cf_arrm(0, VA_N, arr_cb);
     for (int i = 0; i < VA_N; i++) {
         /* a safe area outside the frame makes the iPhone drop the whole CarPlay session: clamp */
-        int x = g_va[i][0], y = g_va[i][1], w = g_va[i][2], h = g_va[i][3];
-        if (x < 0) x = 0; if (x > CLUSTER_W - 64) x = CLUSTER_W - 64;
+        int x = g_va[i][0] + g_cl_x0, y = g_va[i][1], w = g_va[i][2], h = g_va[i][3];
+        if (x < 0) x = 0; if (x > g_cl_w - 64) x = g_cl_w - 64;
         if (y < 0) y = 0; if (y > g_cl_h - 32) y = g_cl_h - 32;
         if (h <= 0) h = g_cl_h - y;
-        if (w < 64) w = 64; if (x + w > CLUSTER_W) w = CLUSTER_W - x;
+        if (w < 64) w = 64; if (x + w > g_cl_w) w = g_cl_w - x;
         if (h < 32) h = 32; if (y + h > g_cl_h) h = g_cl_h - y;
         arr_add_obj(a, viewarea(x, y, w, h));
     }
@@ -421,6 +428,12 @@ static void *rx_thread(void *arg) {
     struct timespec t0, t; clock_gettime(CLOCK_MONOTONIC, &t0); time_t lastrep = t0.tv_sec;
     int kf1 = 0, kf2 = 0, ui_sent = 0, cmd_seen = 0, kf_retry = 0; time_t last_cmd_mtime = 0, last_status = 0;
     long long last_cmd_poll_ms = 0; char last_cb[64] = "";
+    /* v19.5 (garbled cluster map): a frame we cannot use was dropped, so every following frame until the next key
+     * frame decodes against missing data and the whole map turns to garbage. Now: after a bad frame nothing more
+     * goes to the renderer until a key frame (the cluster keeps the last good picture), and a key frame is requested
+     * at once (again every 2 s while waiting). The phone otherwise sends key frames only when asked (3 in 14 min), so
+     * one is also requested every 30 s: any damage we cannot detect clears within 30 s. */
+    int wait_idr = 0; long long kf_req_ms = 0, last_idr_ms = 0, wait_since_ms = 0;
     while (!g_rx_stop) {
         if (read_exact(fd, hdr, 128)) break;
         uint32_t bs = hdr[0] | hdr[1] << 8 | hdr[2] << 16 | (uint32_t)hdr[3] << 24;
@@ -450,12 +463,26 @@ static void *rx_thread(void *arg) {
                 if ((body[p] & 0x1f) == 5) isidr = 1;
                 memcpy(ab + w, sc, 4); memcpy(ab + w + 4, body + p, L); w += 4 + L; p += L;
             }
-            if (!good) { badnal++; if (badnal <= 3) plog("rx: bad NAL structure frame %lu (nonce desync?)", frames); continue; }
+            {
+                struct timespec tn; clock_gettime(CLOCK_MONOTONIC, &tn);
+                long long nm = (long long)tn.tv_sec * 1000 + tn.tv_nsec / 1000000;
+                if (!last_idr_ms) last_idr_ms = nm;
+                if (!good) {
+                    badnal++; if (badnal <= 3 || badnal % 100 == 0) plog("rx: bad NAL structure frame %lu (nonce desync?)", frames);
+                    if (!wait_idr) { wait_idr = 1; wait_since_ms = nm; plog("rx: frame dropped -> holding the picture until a key frame"); }
+                }
+                if (wait_idr && !isidr && nm - kf_req_ms >= 2000) { kf_req_ms = nm; send_cmd("forceKeyFrame", NULL); }
+                else if (!wait_idr && nm - last_idr_ms >= 30000 && nm - kf_req_ms >= 30000) { kf_req_ms = nm; send_cmd("forceKeyFrame", NULL); }
+                if (!good) continue;
+                if (wait_idr && !isidr) continue;          /* P frames without their reference: do not decode */
+                if (wait_idr) { wait_idr = 0; plog("rx: key frame after %lld ms, picture resumes", nm - wait_since_ms); }
+                if (isidr) last_idr_ms = nm;
+            }
             if (isidr) {
                 idr++; st_idr = idr;
                 gop_reset();
                 if (psn) { shm_write(ps, psn); gop_add(ps, psn); }
-                plog("rx: IDR #%lu at frame %lu", idr, frames);
+                if (idr <= 5 || idr % 20 == 0) plog("rx: IDR #%lu at frame %lu", idr, frames);
             }
             shm_write(ab, w); gop_add(ab, w);
         }

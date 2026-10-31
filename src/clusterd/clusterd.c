@@ -206,6 +206,8 @@ static int vision_va(const char *app, int nav, int base, int cur) {
         if (resume) { char m[96]; snprintf(m, sizeof m, "car icon: guidance back within 30 s, keeping area %d", chosen); logs(m); }
     }
     if (frozen) return base;
+    /* v19.5: wide canvas -> the renderer slides the map to the icon itself (no phone redraw, no area switching) */
+    { char pm[8]; if (read_file("/tmp/cl_pan_mode", pm, sizeof pm) > 0 && pm[0] == '1') return base; }
     if (cur != chosen) return chosen;                         /* not applied yet */
     char b[96]; unsigned seq; int x, y, sc, crop;
     if (read_file("/tmp/cl_car", b, sizeof b) <= 0 || sscanf(b, "%u %d %d %d %d", &seq, &x, &y, &sc, &crop) != 5 || seq == last_seq) return chosen;
@@ -282,7 +284,7 @@ int main(int argc, char **argv) {
                 child = fork();
                 if (child == 0) { execv(argv[1], argv + 1); _exit(127); }
                 started = time(NULL); stage = 0;
-                if (new_stream) { new_stream = 0; zoomed = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
+                if (new_stream) { unlink("/tmp/cl_pan_mode"); new_stream = 0; zoomed = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
                 logm("renderer started", child);
             } else if (stage == 0 && time(NULL) - started >= 2) {
                 /* get a fresh key frame: the renderer creates its window on it. v19.4.1: the renderer also asks by itself

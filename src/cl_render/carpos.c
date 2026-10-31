@@ -64,7 +64,7 @@ static double carpos_ncc(int k, int x, int y) {
 
 /* px: RGBA (or RGBX/BGRA, grey is the same either way) band of CARPOS_W x CARPOS_H, stride in bytes.
  * Out: icon centre in cluster pixels and the score (-1..1). */
-static void carpos_find(const unsigned char *px, int stride, int *ox, int *oy, double *oscore) {
+static void carpos_prepare(const unsigned char *px, int stride) {
     if (carpos_tn[0] == 0) carpos_init();
     const int W1 = CARPOS_W + 1;
     for (int y = 0; y < CARPOS_H; y++) {
@@ -83,6 +83,10 @@ static void carpos_find(const unsigned char *px, int stride, int *ox, int *oy, d
             carpos_s2[(y + 1) * W1 + x + 1] = carpos_s2[y * W1 + x + 1] + r2;
         }
     }
+}
+
+static void carpos_find(const unsigned char *px, int stride, int *ox, int *oy, double *oscore) {
+    carpos_prepare(px, stride);
     /* per template: every 2nd position, then the 5x5 around its best; keep the best of all */
     int bx = 0, by = 0; double best = -2;
     for (int k = 0; k < CARPOS_NT; k++) {
@@ -104,4 +108,29 @@ static void carpos_find(const unsigned char *px, int stride, int *ox, int *oy, d
     *ox = CARPOS_X0 + bx * 2 + CARPOS_TW;      /* centre: (bx + TW/2) * 2 */
     *oy = CARPOS_Y0 + by * 2 + CARPOS_TH;
     *oscore = best;
+}
+
+/* v19.5: AMap puts the car at the centre of the band or 213 px (106.5 at half size) left or right of it, nowhere else.
+ * Instead of one global best match against a fixed threshold (failed on views the templates did not cover, such as
+ * the lane-level view), score each of the three spots (best template, x within +-20 half-size px, any y) and take
+ * the spot that stands out. side -1/0/1, best and second-best scores, centre of the winner in band pixels
+ * (full scale, 0..CARPOS_BW / 0..CARPOS_BH). */
+static void carpos_find3(const unsigned char *px, int stride, int *side, double *best, double *second, int *ox, int *oy) {
+    carpos_prepare(px, stride);
+    double sc[3]; int bx[3], by[3];
+    for (int c = 0; c < 3; c++) {
+        int cx = CARPOS_W / 2 + (c - 1) * 107 - CARPOS_TW / 2;     /* template left edge for an icon centred there */
+        sc[c] = -2; bx[c] = cx; by[c] = 0;
+        for (int k = 0; k < CARPOS_NT; k++)
+            for (int y = 0; y + CARPOS_TH <= CARPOS_H; y++)
+                for (int x = cx - 20; x <= cx + 20; x++) {
+                    if (x < 0 || x + CARPOS_TW > CARPOS_W) continue;
+                    double s = carpos_ncc(k, x, y);
+                    if (s > sc[c]) { sc[c] = s; bx[c] = x; by[c] = y; }
+                }
+    }
+    int w = 0; for (int c = 1; c < 3; c++) if (sc[c] > sc[w]) w = c;
+    double s2 = -2; for (int c = 0; c < 3; c++) if (c != w && sc[c] > s2) s2 = sc[c];
+    *side = w - 1; *best = sc[w]; *second = s2;
+    *ox = bx[w] * 2 + CARPOS_TW; *oy = by[w] * 2 + CARPOS_TH;
 }

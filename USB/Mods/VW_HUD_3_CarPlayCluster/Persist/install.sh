@@ -27,7 +27,12 @@ while true; do
     for m in /fs/usb0_0 /fs/usb1_0 /fs/sda0 /fs/sdb0; do
         if [[ -d $m/cluster_logs ]]; then
             mount -uw $m 2>/dev/null
-            cp -f /tmp/cl_probe.log /tmp/clusterd.log /tmp/cl_render_dbg /tmp/cl_car_dbg $m/cluster_logs/ 2>/dev/null
+            # v19.5: per-boot folder chosen by VW_HUD_2 (boot_N); without it (HUD_2 not installed) choose it here
+            if [[ ! -f /tmp/cl_bootdir && ! -f /tmp/vwcn_persist.log ]]; then
+                n=1; while [[ -d $m/cluster_logs/boot_$n ]]; do n=$((n + 1)); done
+                mkdir $m/cluster_logs/boot_$n 2>/dev/null && echo boot_$n > /tmp/cl_bootdir
+            fi
+            [[ -f /tmp/cl_bootdir ]] && cp -f /tmp/cl_probe.log /tmp/clusterd.log /tmp/cl_render_dbg /tmp/cl_car_dbg $m/cluster_logs/$(cat /tmp/cl_bootdir)/ 2>/dev/null
             sync
         fi
     done
