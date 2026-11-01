@@ -514,7 +514,8 @@ public final class Bridge implements Runnable {
     // is what follows the last one. Single-character 沿 / 经 are no longer stripped (沿河大道, 经X路 are road names);
     // only the full pattern 沿XX行驶/直行 is.
     private static final String[] ACTIONS = new String[] {
-        "\u8fdb\u5165", "\u9a76\u5165", "\u524d\u5f80", "\u53bb\u5f80", "\u6cbf\u7740", "\u7ecf\u7531" };   // 进入 驶入 前往 去往 沿着 经由
+        "\u8fdb\u5165", "\u9a76\u5165", "\u524d\u5f80", "\u53bb\u5f80", "\u6cbf\u7740", "\u7ecf\u7531",
+        "\u884c\u9a76\u5230" };   // 进入 驶入 前往 去往 沿着 经由 行驶到 (AMap start: 请行驶到XX门)
     private static final String[] TAILS = new String[] {
         "\u7ee7\u7eed\u884c\u9a76", "\u884c\u9a76", "\u76f4\u884c", "\u65b9\u5411" };    // 继续行驶 行驶 直行 方向
     private static final String YAN = "\u6cbf";                                                    // 沿
@@ -533,6 +534,9 @@ public final class Bridge implements Runnable {
         if (s == null) {
             return "";
         }
+        // v19.7: AMap sometimes sends several roads separated by spaces ("A路 B路"): keep the first road
+        // after any leading action-word tokens ("进入 XX中路" stays one road)
+        s = firstRoad(s);
         StringBuffer b = new StringBuffer();
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
@@ -580,6 +584,55 @@ public final class Bridge implements Runnable {
             t = t.substring(0, MAX_CHARS);
         }
         return t;
+    }
+
+    private static boolean isSpace(char c) {
+        return c == ' ' || c == '\u3000' || c == '\t';
+    }
+
+    /** Space-separated tokens: drop leading tokens that are only an action word, then keep only the first road. */
+    static String firstRoad(String s) {
+        java.util.Vector tok = new java.util.Vector();
+        int i = 0, n = s.length();
+        while (i < n) {
+            while (i < n && isSpace(s.charAt(i))) {
+                i++;
+            }
+            int st = i;
+            while (i < n && !isSpace(s.charAt(i))) {
+                i++;
+            }
+            if (i > st) {
+                tok.addElement(s.substring(st, i));
+            }
+        }
+        if (tok.size() < 2) {
+            return s;
+        }
+        int k = 0;
+        while (k < tok.size() - 1) {
+            String w = (String) tok.elementAt(k);
+            boolean action = w.equals(YAN) || w.equals("\u7ecf");   // lone 沿 / 经 before a road
+            for (int a = 0; a < ACTIONS.length && !action; a++) {
+                if (w.endsWith(ACTIONS[a])) {
+                    action = true;
+                    break;
+                }
+            }
+            if (!action) {
+                break;
+            }
+            k++;
+        }
+        StringBuffer r = new StringBuffer();
+        for (int j = 0; j < k; j++) {
+            String w = (String) tok.elementAt(j);
+            if (!w.equals(YAN) && !w.equals("\u7ecf")) {
+                r.append(w);
+            }
+        }
+        r.append((String) tok.elementAt(k));
+        return r.toString();
     }
 
     private static long toLong(String s, long def) {
