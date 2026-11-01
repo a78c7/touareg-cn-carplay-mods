@@ -514,7 +514,7 @@ public final class Bridge implements Runnable {
     // is what follows the last one. Single-character 沿 / 经 are no longer stripped (沿河大道, 经X路 are road names);
     // only the full pattern 沿XX行驶/直行 is.
     private static final String[] ACTIONS = new String[] {
-        "\u8fdb\u5165", "\u9a76\u5165", "\u524d\u5f80", "\u6cbf\u7740", "\u7ecf\u7531" };   // 进入 驶入 前往 沿着 经由
+        "\u8fdb\u5165", "\u9a76\u5165", "\u524d\u5f80", "\u53bb\u5f80", "\u6cbf\u7740", "\u7ecf\u7531" };   // 进入 驶入 前往 去往 沿着 经由
     private static final String[] TAILS = new String[] {
         "\u7ee7\u7eed\u884c\u9a76", "\u884c\u9a76", "\u76f4\u884c", "\u65b9\u5411" };    // 继续行驶 行驶 直行 方向
     private static final String YAN = "\u6cbf";                                                    // 沿

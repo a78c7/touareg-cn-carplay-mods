@@ -18,8 +18,16 @@ EXE_END="$L/crtend.o $L/crtn.o"
 cd "$(dirname "$0")"; mkdir -p out
 
 # 1) cl_probe.so - LD_PRELOAD into dio_manager
+#    + wired/ (CC BY-NC-SA 4.0, fifthBro mh2p-cluster parser incl. luka-dev rgd_tlv/pps_writer): route guidance for
+#    wired CarPlay, which runs its iAP2 session on the Cinemo stack that dio_cluster.so does not see
+WI="-Icluster-probe/wired/routeguidance -Icluster-probe/wired/framework"
 clang $CF -fvisibility=hidden -c cluster-probe/cl_probe.c -o out/cl_probe.o
-arm-linux-gnueabi-ld --hash-style=both -shared -soname cl_alt.so -o out/cl_probe.so -L$L -L$UL out/cl_probe.o -lsocket -lc
+clang $CF -fvisibility=hidden $WI -c cluster-probe/wired/cl_wired.c -o out/cl_wired.o
+for f in routeguidance/rgd_tlv framework/pps_writer framework/logging; do
+    clang $CF -fvisibility=hidden -w $WI -c cluster-probe/wired/$f.c -o out/w_$(basename $f).o
+done
+arm-linux-gnueabi-ld --hash-style=both -shared -soname cl_alt.so -o out/cl_probe.so -L$L -L$UL out/cl_probe.o \
+    out/cl_wired.o out/w_rgd_tlv.o out/w_pps_writer.o out/w_logging.o -lsocket -lc
 
 # 2) clusterd
 clang $CF -fvisibility=hidden -c clusterd/clusterd.c -o out/clusterd.o

@@ -4,7 +4,7 @@
 
 - **全屏 CarPlay**：去掉黑边，铺满中控屏
 - **无线 CarPlay**、**Android Auto**：开启原厂未激活的功能（LawPaul 作品）
-- **CarPlay 导航上 HUD**：苹果地图、高德、百度的转向箭头、距离、路名显示在抬头显示上，App 发车道信息时（如百度）也显示车道
+- **CarPlay 导航上 HUD**：苹果地图、高德、百度的转向箭头、距离、路名显示在抬头显示上（有线、无线 CarPlay 都支持），App 发车道信息时（如百度）也显示车道
 - **CarPlay 地图上仪表**：手机导航地图显示在仪表中间，车标对准仪表时钟下方；仪表上方显示剩余距离和到达时间；断开 CarPlay 自动回到原车地图；方向盘上下键缩放（高德）
 - **仪表信息框**：地图左右两边各一个半透明小框，从 30 多项行车数据里自选、排序（功率、扭矩、G 值、转速、油温、油耗、里程、0–100 计时等）
 - **行车记录**：U 盘一直插在车上，每次开车记录约 10 次/秒的行车数据，可以直接交给豆包、千问等 AI 分析
@@ -100,7 +100,7 @@
 ## 许可证
 
 - 本仓库新写的部分（全屏补丁脚本、`src/hud-java`、`src/cluster-probe`、`src/clusterd`、`tools/`、各模块安装脚本、文档）：**GPL-3.0**（见 [LICENSE](LICENSE)）。
-- `src/cl_render` 和 `dio_cluster.so`：fifthBro 作品及其修改版，**CC BY-NC-SA 4.0**。信息框字形 `src/cl_render/dash_font.h` 由 Noto Sans CJK SC 预渲染，**SIL OFL 1.1**（见 [LICENSES/NotoSansCJK_OFL.md](LICENSES/NotoSansCJK_OFL.md)）。
+- `src/cl_render`、`src/cluster-probe/wired` 和 `dio_cluster.so`：fifthBro 作品及其修改版（`wired` 内含 luka-dev 的 rgd_tlv / pps_writer），**CC BY-NC-SA 4.0**；因此编译出的 `cl_probe.so` 整体按 CC BY-NC-SA 4.0。信息框字形 `src/cl_render/dash_font.h` 由 Noto Sans CJK SC 预渲染，**SIL OFL 1.1**（见 [LICENSES/NotoSansCJK_OFL.md](LICENSES/NotoSansCJK_OFL.md)）。
 - ModKit 及 LawPaul 的模块：**CC BY-NC-SA 4.0**。
 - 因包含禁止商用的部分，**整个 U 盘包仅供个人非商业使用**。
 - 仓库和 U 盘包里不含大众或苹果的文件：全屏 CarPlay 只带补丁表（改哪几个字节），在车上就地修改本车已有的文件。
@@ -117,6 +117,6 @@ One USB flash for the China-market VW Touareg (MH2p, head unit `MH2p_CN_VWG36_P2
 
 **Credits**: [LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit) and its CarPlay / Android Auto mods (included unmodified), [fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster) (`dio_cluster.so`, `cluster.c`), [davecozens / touareg-carplay](https://github.com/davecozens/touareg-carplay), [luka-dev](https://github.com/luka-dev).
 
-**License**: new code GPL-3.0; `src/cl_render`, `dio_cluster.so`, ModKit and LawPaul mods CC BY-NC-SA 4.0; info-box glyphs SIL OFL 1.1. The USB bundle is for personal, non-commercial use only.
+**License**: new code GPL-3.0; `src/cl_render`, `src/cluster-probe/wired` (hence `cl_probe.so`), `dio_cluster.so`, ModKit and LawPaul mods CC BY-NC-SA 4.0; info-box glyphs SIL OFL 1.1. The USB bundle is for personal, non-commercial use only.
 
 **Disclaimer**: unofficial personal research, not affiliated with or endorsed by Volkswagen, Apple, Google or any other company. Provided "as is" without warranty; you use it entirely at your own risk and the author is not liable for any damage or loss. Do not operate the phone or head unit while driving. Rights holders: please open an Issue.
