@@ -78,6 +78,10 @@
 - **[a78c7/vw-mh2p-dev-notes](https://github.com/a78c7/vw-mh2p-dev-notes)**：按主题整理的平台笔记。
 - 源码：`src/hud-java`（车机 Java 插件）、`src/cluster-probe`（CarPlay 进程钩子，接收仪表视频）、`src/clusterd`（仪表守护进程）、`src/cl_render`（解码显示、信息框、车标识别）、`src/vhpatch`（全屏补丁）、`tools/configurator`（改装设置程序）；编译见 `src/build.sh`。
 
+## 社区引用
+
+本项目已被德国途锐车友论坛 **Touareg-Freunde** 的 [CarPlay 仪表地图项目讨论帖](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)引用，作为其 MH2p P2869 适配项目的参考来源之一。感谢海外车友的关注与分享；论坛中的适配与测试结论以发帖者说明为准。
+
 ## 致谢
 
 - **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)**（[网站](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)）：让 MH2p 能用 U 盘改装的基础工具。本仓库 `USB/Data`、`USB/Meta`、`USB/Logs`、`USB/Mods/README.md` 原样来自该项目，遵循 **CC BY-NC-SA 4.0**（禁止商用），许可证见 [LICENSES/MH2p_SD_ModKit_LICENSE.md](LICENSES/MH2p_SD_ModKit_LICENSE.md)。
