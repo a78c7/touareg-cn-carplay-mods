@@ -239,7 +239,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 
   <footer>
     本程序只修改这个 U 盘里的文件：不选的功能文件夹移到「未选模块」（车机不会刷它），卸载的功能里放一个 uninstall.txt，信息框设置写进 dash.conf，并删掉 Mac 自动生成的隐藏文件（._ 开头的文件和 .DS_Store）。不联网、不上传任何东西。<br>
-    全屏 CarPlay、HUD 与仪表地图仅适用于车机版本 MH2p_CN_VWG36_P2878（其它版本刷机时自动跳过）；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。
+    全屏 CarPlay、HUD、仪表地图与 5GHz 区域修复仅适用于车机版本 MH2p_CN_VWG36_P2878（其它版本刷机时自动跳过）；众行家与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。
   </footer>
 </div>
 
@@ -295,6 +295,8 @@ function featNotes(id){
   if (id === 'fullscreen' && sel.fullscreen === 'uninstall') out.push(['info', '在车上把改过的地方按补丁表改回原样，不需要当初那个 U 盘里的备份。']);
   if (id === 'carplay' && sel.carplay === 'uninstall' && sel.aa !== 'uninstall') out.push(['warn', '无线 CarPlay 和 Android Auto 共用一部分授权，只卸载 CarPlay 可能让 Android Auto 也失效。如果卸载后 Android Auto 不能用，再刷一次只把 Android Auto 选为安装。']);
   if (id === 'aa' && sel.aa === 'uninstall' && sel.carplay === 'skip') out.push(['warn', 'Android Auto 和无线 CarPlay 共用一部分授权，只卸载 Android Auto 可能影响 CarPlay；建议把无线 CarPlay 同时选为安装（会重新写入授权）。']);
+  if (id === 'nocarnet' && sel.nocarnet === 'install') out.push(['warn', '开启后会隐藏顶栏众行家图标并停用众行家在线服务入口；如果仍在使用众行家 App 远程控车或原车在线服务请勿安装（随时可选「卸载」恢复）。']);
+  if (id === 'nosimpopup' && sel.nosimpopup === 'install') out.push(['info', '通过独立 HMI 插件仅拦截该提示弹窗，与「导航上 HUD」插件（97/98）互不冲突，可单独安装或卸载。']);
   if (S.states[id] === 'missing') out.push(['warn', 'U 盘里没有这个功能的文件夹，只能选「不处理」。']);
   return out;
 }
@@ -475,7 +477,7 @@ $('save').addEventListener('click', async () => {
     if (!r.ok) { $('result').innerHTML = `<div class="msg bad">没有保存：${esc(r.error)}</div>`; return; }
     lastSSHKey = r.sshPrivKey || ''; lastSSHGuide = r.sshGuide || '';
     const sshBanner = lastSSHKey ? `<div class="msg info" style="margin:10px 0"><b>已生成本车专属 SSH 密钥对</b>${r.sshKeySavedDir ? `，私钥已自动保存到电脑：<code>${esc(r.sshKeySavedDir)}</code>` : ''}（U 盘内不保留私钥，请妥善保存）。<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="dlpriv">下载私钥 touareg_ed25519</button><button class="btn" type="button" id="dlguide">下载连接说明.txt</button></div></div>` : '';
-    const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip';
+    const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip' || sel.nosimpopup !== 'skip';
     $('result').innerHTML = `<div class="msg ok"><b>已保存。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>
       ${sshBanner}
       <b>接下来：</b><ol class="steps">

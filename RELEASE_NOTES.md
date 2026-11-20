@@ -1,5 +1,19 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v20.2
+- **新增可选模块「去除『输入用户名』弹窗（关闭众行家）」**（`VW_NoCarNet`，默认放在 `未选模块/` 不刷入，按需在「改装设置」里勾选）：
+  - 在 ModKit `Post` 阶段将 5F 众行家在线服务 HMI 开关（`0x5F22:0x0986` / `Dia_Anp_10894`）设为停用（`0`），随后由 ModKit 自动执行 `gem-reset` 生效，消除众行家服务过期或固件升级后反复弹出的「输入用户名」窗口及顶栏众行家图标
+  - 不影响 Wi-Fi、蓝牙、CarPlay、Android Auto、HUD 与仪表地图；随时可在「改装设置」里选「卸载」写回 `1` 恢复原车（仍在用众行家 App 远程控车的车主请勿勾选）
+- **新增可选模块「屏蔽『SIM 卡仅用于数据连接。』弹窗」**（`VW_NoSimPopup`，默认放在 `未选模块/` 不刷入，按需在「改装设置」里勾选）：
+  - 独立 J9 Java 1.4（class version `48`）HMI OSGi 插件（Bundle `98`，源码位于 `src/nosim-java/`），启动时从车机当前 `lsd.jxe` 动态解析 `generated.de.vw.mib.asl.internal.phone.ASLPhoneSystemEventConstants.PHONE_SIM_DATAONLY`（P2878 上为 `1410020`），代理包装 `de.vw.mib.event.internal.ServiceManager.systemEventSender`，仅拦截该弹窗事件，其余所有 HMI 系统事件原样透传
+  - 完整覆盖 CarPlay / Android Auto 连接及冷启动竞态两条触发路径，不影响 SIM 卡数据联网、蓝牙、CarPlay 与 SOS（日志 `/tmp/vw_nosim.log`，创建 `/tmp/vw_nosim_off` 可临时停用）
+- **`bundles.properties` 双向正交编辑升级（Bundle `97` 与 `98` 互不干扰）**：
+  - 同步升级 `VW_HUD_2_ClusterNav`（Bundle `97`）与 `VW_NoSimPopup`（Bundle `98`）的安装/卸载脚本，改用 POSIX `awk` 仅增删各自对应的 Bundle ID 与配置行，任意顺序安装、升级或卸载任一模块均不会覆盖或误删另一模块
+- **「改装设置」程序更新至 `v20.2`**（Windows x64 / macOS Intel+Apple Silicon 通用二进制）：新增上述两个弹窗屏蔽模块的独立勾选开关与使用提示
+- 包含 v20.1 的全部内容
+
+两个弹窗屏蔽模块的精确地址与调用链已基于一台 2023 款途锐（`MH2p_CN_VWG36_P2878`）实机只读转储与 `lsd.jxe` 完整字节码核实，并完成 Java 1.4 常量池审计、模拟延迟 OSGi 注入拦截测试及原厂 `bundles.properties` 全排列往返回归校验；U 盘冷刷上车实测待进一步复核。
+
 ## v20.0
 - **新增可选模块「手机无线控制台（可选 SSH 开发）」**（`VW_WiFi_Dev`，默认放在 `未选模块/` 不刷入，不影响直接裸刷 U 盘的车主）：
   - 利用车机闲置的 `bcm2` 客户端接口后台自动连接手机个人热点（`dhcp.client -n -R` 独立路由，不占用无线 CarPlay，也不影响原车 `ecm0` 4G 车联网；开机等待原厂初始化稳定后再启动，并带 `io-pkt` 崩溃熔断保护）

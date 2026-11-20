@@ -30,6 +30,8 @@ var features = []feature{
 	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在抬头显示 HUD 上", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
 	{"cluster", "仪表地图 + 信息框", "手机导航地图显示在仪表中间，左右两个小框显示行车数据；需要和「导航上 HUD」一起装", []string{"VW_HUD_3_CarPlayCluster"}},
 	{"wifi5gfix", "老固件升 P2878 无线 CarPlay 5GHz 区域修复", "仅从旧版本（如 P9832）升级 P2878 后、有线正常但无线 CarPlay 连不上时勾选：解除 5GHz 国家码校验拦截（原厂 P2878 无线正常无需勾选）", []string{"VW_Wireless5GHzFix"}},
+	{"nocarnet", "去除「输入用户名」弹窗（关闭众行家）", "停用 5F 众行家在线服务开关（0x5F22:0x0986），消除众行家过期或升级固件后反复弹出的「输入用户名」窗口及顶栏图标；不影响 Wi-Fi、蓝牙、CarPlay 与 HUD（大众 MH2p 通用，待实车验证）", []string{"VW_NoCarNet"}},
+	{"nosimpopup", "屏蔽「SIM 卡仅用于数据连接。」弹窗", "仅屏蔽连接 CarPlay / Android Auto 时反复弹出的 SIM 卡数据模式提示框（PHONE_SIM_DATAONLY），不影响 SIM 卡联网、蓝牙、CarPlay 与 SOS（大众 MH2p 通用，待实车验证）", []string{"VW_NoSimPopup"}},
 	{"wifi", "手机无线控制台（可选 SSH 开发）", "连手机热点打开网页即可改信息框、调车标、无线下载行车记录（可选开启 SSH 2012 开发；同平台 MH2p 通用）", []string{"VW_WiFi_Dev"}},
 }
 
