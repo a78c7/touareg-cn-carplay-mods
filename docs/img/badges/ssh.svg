@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="22" role="img" aria-label="Wireless SSH: Ed25519 :2012">
+  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+  <clipPath id="r"><rect width="200" height="22" rx="4" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="97" height="22" fill="#24292f"/>
+    <rect x="97" width="103" height="22" fill="#8250df"/>
+    <rect width="200" height="22" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11.5" font-weight="600">
+    <text x="48.5" y="15">Wireless SSH</text>
+    <text x="148.5" y="15">Ed25519 :2012</text>
+  </g>
+</svg>

@@ -46,6 +46,7 @@ type stateResp struct {
 	MaxRows   int               `json:"maxRows"`
 	Dash      dashConf          `json:"dash"`
 	DashFound bool              `json:"dashFound"`
+	Wifi      wifiState         `json:"wifi"`
 	MacJunk   int               `json:"macJunk"`
 	UsbMode   string            `json:"usbMode"` // "flash" (Data/Meta: inserting it flashes) or "record" (_Data/_Meta + drive_logs)
 	Errors    []string          `json:"errors"`
@@ -89,6 +90,7 @@ func (p pkg) state() stateResp {
 		s.States[f.ID] = st
 	}
 	s.Dash, s.DashFound = p.readDash()
+	s.Wifi = p.readWifi()
 	s.MacJunk = len(p.macJunk())
 	s.UsbMode = p.usbMode()
 	return s
@@ -164,12 +166,17 @@ func main() {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		log, err := p.apply(req)
+		log, wout, err := p.apply(req)
 		resp := map[string]any{"ok": err == nil, "log": log}
 		if err != nil {
 			resp["error"] = err.Error()
 			fmt.Println("保存失败：", err)
 		} else {
+			if wout.PrivKeyText != "" {
+				resp["sshKeySavedDir"] = wout.KeySavedDir
+				resp["sshPrivKey"] = wout.PrivKeyText
+				resp["sshGuide"] = wout.GuideText
+			}
 			fmt.Println("已保存：")
 			for _, l := range log {
 				fmt.Println("  " + l)

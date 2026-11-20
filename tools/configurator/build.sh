@@ -15,7 +15,9 @@ LD="-s -w -buildid= -X main.version=$V"
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LD" -o out/win_amd64.exe .
 CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$LD" -o out/mac_amd64 .
 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$LD" -o out/mac_arm64 .
-llvm-lipo-18 -create -output out/mac_universal out/mac_amd64 out/mac_arm64
+LIPO=$(command -v lipo || command -v llvm-lipo-18 || command -v llvm-lipo)
+: ${LIPO:?need lipo or llvm-lipo}
+"$LIPO" -create -output out/mac_universal out/mac_amd64 out/mac_arm64
 cp out/win_amd64.exe "../../USB/改装设置（Windows）.exe"
 cp out/mac_universal "../../USB/改装设置（Mac）.command"
 chmod 755 "../../USB/改装设置（Mac）.command"

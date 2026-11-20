@@ -89,7 +89,10 @@ details{margin-top:12px}
 summary{cursor:pointer;color:var(--sub);font-size:14px}
 .adv{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:10px}
 .adv label{font-size:13px;color:var(--sub);display:flex;flex-direction:column;gap:4px}
-.adv input[type=number]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;width:100%}
+.adv input[type=number],.winput{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;width:100%}
+.wgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 12px}
+@media (max-width:680px){.wgrid{grid-template-columns:1fr}}
+.wbox{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fafbfc}
 .adv .cb{flex-direction:row;align-items:center;gap:8px}
 .summary{font-size:14px;color:var(--sub);margin:0 0 12px}
 .summary div{margin:2px 0}
@@ -167,15 +170,52 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
     </div>
   </section>
 
+  <section class="card dash" id="wificard">
+    <h2><span class="num">3</span>手机无线控制台（与可选 SSH 开发）</h2>
+    <p class="hint">刷入后只需打开手机个人热点，车机后台自动连上。手机浏览器打开 <code>http://touareg.local:8080</code> 即可随时改仪表信息框、调车标、无线把 U 盘行车记录 CSV 下载到手机发给 AI 分析，不用再插拔 U 盘。同平台 MH2p 车型（大众、奥迪、保时捷 PCM5、宾利、兰博基尼）也可单独勾选本模块使用。</p>
+    <div class="msg info dash-off-msg">要启用手机无线控制台，先在上面第 1 步把「手机无线控制台（可选 SSH 开发）」选为「安装」。</div>
+    <div class="dash-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <b>常用手机热点 / Wi-Fi（至少填 1 个，最多 3 个）</b>
+        <label style="font-size:13px;color:var(--sub);cursor:pointer"><input type="checkbox" id="wshowpw"> 显示密码</label>
+      </div>
+      <p class="hint" style="margin:4px 0 8px">iPhone 请打开「最大兼容性」，首次连接车机时停留在「设置 → 个人热点」页面亮屏 3～5 秒；含英文单引号的名称（如 <code>Phone's Hotspot</code>）保存时会自动兼容 iOS 弯撇号；安卓热点请选 WPA2（密码 8～63 位）。</p>
+      <div class="wgrid">
+        <input class="winput" id="wssid0" placeholder="热点 1 名称（必填，如 Phone's Hotspot）">
+        <input class="winput wpw" type="password" id="wpsk0" placeholder="热点 1 密码（8～63 位）">
+        <input class="winput" id="wssid1" placeholder="热点 2 名称（选填，备用手机或家里 Wi-Fi）">
+        <input class="winput wpw" type="password" id="wpsk1" placeholder="热点 2 密码（选填）">
+        <input class="winput" id="wssid2" placeholder="热点 3 名称（选填）">
+        <input class="winput wpw" type="password" id="wpsk2" placeholder="热点 3 密码（选填）">
+      </div>
+      <div class="wbox">
+        <div class="row">
+          <label style="font-size:14px;font-weight:600">手机网页管理口令（必填，4～8 位数字或字母）：</label>
+          <input class="winput" id="wpin" maxlength="8" style="width:140px;font-weight:600;letter-spacing:1px" placeholder="4～8位口令">
+          <button class="btn" type="button" id="wrandpin">随机换一个</button>
+        </div>
+        <p class="hint" style="margin:6px 0 0">手机浏览器首次打开 <code>http://touareg.local:8080</code> 时输入一次即自动记住；防止车机连上公司/公共 Wi-Fi 时局域网他人改动你的设置。</p>
+      </div>
+      <div class="wbox">
+        <label class="switch"><input type="checkbox" id="wssh"> <span>同时开启 SSH 无线开发终端（端口 2012，供 DeepSeek Hermes / 电脑终端自由开发）</span></label>
+        <p class="hint" style="margin:6px 0 0">普通车主不用勾（车机只开 8080 网页控制台）。勾选后，保存时会在本机随机生成这台车专属的 Ed25519 密钥对，私钥自动存到电脑桌面「途锐无线SSH密钥」文件夹（不会留在 U 盘里）。</p>
+        <div id="wsshkeybox" class="hidden" style="margin-top:8px;font-size:13px;color:var(--sub)">
+          <span id="wkeyfp"></span>
+          <label style="margin-left:10px;cursor:pointer"><input type="checkbox" id="wregen"> 重新生成一套新登录密钥（旧私钥将失效）</label>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="card">
-    <h2><span class="num">3</span>保存</h2>
+    <h2><span class="num">4</span>保存</h2>
     <div class="summary" id="summary"></div>
     <button class="primary" id="save">保存到 U 盘</button>
     <div class="result" id="result"></div>
   </section>
 
   <section class="card" id="usbcard">
-    <h2><span class="num">4</span>U 盘用途：刷机 / 行车记录</h2>
+    <h2><span class="num">5</span>U 盘用途：刷机 / 行车记录</h2>
     <p class="hint">刷完改装后，可以把这个 U 盘改成「行车记录 U 盘」一直插在车上：车机不会再刷机，每次开车把功率、扭矩、车速、油温等约 10 次/秒记到 U 盘的 drive_logs 文件夹（每次车机启动一个 CSV 文件，每小时约 5 MB）。需要车上已装 v18 的「导航上 HUD」。要再刷机时改回「刷机 U 盘」。drive_logs 里会放一份「给AI分析行车记录.txt」，把 CSV 和它一起传给豆包、千问等 AI 就能分析。</p>
     <div class="summary" id="usbnow"></div>
     <button class="btn" id="torecord">改成行车记录 U 盘</button>
@@ -185,7 +225,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 
   <footer>
     本程序只修改这个 U 盘里的文件：不选的功能文件夹移到「未选模块」（车机不会刷它），卸载的功能里放一个 uninstall.txt，信息框设置写进 dash.conf，并删掉 Mac 自动生成的隐藏文件（._ 开头的文件和 .DS_Store）。不联网、不上传任何东西。<br>
-    改装包只适用于车机版本 MH2p_CN_VWG36_P2878，其它版本刷机时会自动跳过。改装风险自负。
+    全屏 CarPlay、HUD 与仪表地图仅适用于车机版本 MH2p_CN_VWG36_P2878（其它版本刷机时自动跳过）；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。
   </footer>
 </div>
 
@@ -303,6 +343,33 @@ function renderDash(){
   $('carup').value = dash.car_up; $('carupv').textContent = dash.car_up; $('accup').value = dash.acc_up; $('accupv').textContent = dash.acc_up; $('amapturn').value = String(dash.amap_turn == null ? 3 : dash.amap_turn);
 }
 
+function collectWifi(){
+  const nets = [];
+  for (let i = 0; i < 3; i++) {
+    const ssid = ($('wssid' + i).value || '').trim(), psk = $('wpsk' + i).value || '';
+    if (ssid || psk) nets.push({ssid, psk});
+  }
+  return {networks: nets, pin: ($('wpin').value || '').trim(), enableSSH: $('wssh').checked, regenKey: $('wregen') ? $('wregen').checked : false};
+}
+function wifiInvalidMsg(){
+  if (sel.wifi !== 'install') return '';
+  const w = collectWifi();
+  if (!w.networks.length) return '请至少填 1 个手机热点';
+  for (const n of w.networks) {
+    if (!n.ssid) return '热点名称不能为空';
+    if (n.psk.length < 8 || n.psk.length > 63) return `热点「${n.ssid}」密码需 8～63 位`;
+  }
+  if (!/^[0-9A-Za-z]{4,8}$/.test(w.pin)) return '网页管理口令需 4～8 位数字或英文字母';
+  return '';
+}
+function renderWifi(){
+  const on = sel.wifi === 'install';
+  $('wificard').classList.toggle('off', !on);
+  const showKeyBox = $('wssh').checked && S.wifi && S.wifi.hasKeys;
+  $('wsshkeybox').classList.toggle('hidden', !showKeyBox);
+  if (showKeyBox) $('wkeyfp').textContent = 'U 盘已有公钥（' + (S.wifi.pubKeyFP || '已配置') + '）';
+}
+
 function renderSummary(){
   const by = {install: [], uninstall: [], skip: []};
   S.features.forEach(f => by[sel[f.id]].push(f.name));
@@ -312,8 +379,14 @@ function renderSummary(){
   if (by.skip.length) lines.push(`<div>不处理：${esc(by.skip.join('、'))}</div>`);
   const lst = (show, l) => show ? (l.length ? esc(l.map(k => plain(item(k).label)).join('、')) : '<span style="color:var(--bad)">还没有选项目</span>') : '不显示';
   if (sel.cluster === 'install') { lines.push(`<div>左边信息框：${lst(dash.show, dash.items)}</div>`); lines.push(`<div>右边信息框：${lst(dash.r_show, dash.r_items)}</div>`); }
+  const werr = wifiInvalidMsg();
+  if (sel.wifi === 'install') {
+    const w = collectWifi();
+    lines.push(werr ? `<div>手机无线控制台：<span style="color:var(--bad)">${esc(werr)}</span></div>`
+                    : `<div>手机无线控制台：热点 <b>${esc(w.networks.map(n => n.ssid).join('、'))}</b> · 口令 <b>${esc(w.pin)}</b> · ${w.enableSSH ? '<b>开启 8080 网页 + SSH 2012</b>' : '仅 8080 网页控制台'}</div>`);
+  }
   $('summary').innerHTML = lines.join('');
-  $('save').disabled = !!(S.errors && S.errors.length) || (sel.cluster === 'install' && ((dash.show && !dash.items.length) || (dash.r_show && !dash.r_items.length)));
+  $('save').disabled = !!(S.errors && S.errors.length) || !!werr || (sel.cluster === 'install' && ((dash.show && !dash.items.length) || (dash.r_show && !dash.r_items.length)));
 }
 
 function renderUsb(){
@@ -330,7 +403,7 @@ async function usbMode(mode){
 }
 $('torecord').onclick = () => usbMode('record');
 $('toflash').onclick = () => usbMode('flash');
-function renderAll(){ renderFeats(); renderDash(); renderSummary(); renderUsb(); }
+function renderAll(){ renderFeats(); renderDash(); renderWifi(); renderSummary(); renderUsb(); }
 
 // ---- events ----
 document.addEventListener('click', e => {
@@ -353,6 +426,12 @@ $('latflip').addEventListener('change', e => { dash.lat_flip = e.target.checked 
 $('carup').addEventListener('input', e => { dash.car_up = +e.target.value; $('carupv').textContent = dash.car_up; });
 $('accup').addEventListener('input', e => { dash.acc_up = +e.target.value; $('accupv').textContent = dash.acc_up; });
 $('amapturn').addEventListener('change', e => { dash.amap_turn = +e.target.value; });
+['wssid0','wpsk0','wssid1','wpsk1','wssid2','wpsk2','wpin'].forEach(id => $(id).addEventListener('input', renderSummary));
+$('wssh').addEventListener('change', () => { renderWifi(); renderSummary(); });
+$('wshowpw').addEventListener('change', e => { document.querySelectorAll('.wpw').forEach(el => el.type = e.target.checked ? 'text' : 'password'); });
+$('wrandpin').addEventListener('click', () => { $('wpin').value = String(Math.floor(100000 + Math.random() * 900000)); renderSummary(); });
+let lastSSHKey = '', lastSSHGuide = '';
+function dlBlob(name, text){ const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:'text/plain;charset=utf-8'})); a.download = name; a.click(); }
 
 // drag to reorder
 let dragIx = -1;
@@ -364,10 +443,13 @@ $('order').addEventListener('drop', e => { const li = e.target.closest('li[data-
 $('save').addEventListener('click', async () => {
   const btn = $('save'); btn.disabled = true; btn.textContent = '正在保存…';
   try {
-    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn}});
+    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn}, wifi: collectWifi()});
     if (!r.ok) { $('result').innerHTML = `<div class="msg bad">没有保存：${esc(r.error)}</div>`; return; }
+    lastSSHKey = r.sshPrivKey || ''; lastSSHGuide = r.sshGuide || '';
+    const sshBanner = lastSSHKey ? `<div class="msg info" style="margin:10px 0"><b>已生成本车专属 SSH 密钥对</b>${r.sshKeySavedDir ? `，私钥已自动保存到电脑：<code>${esc(r.sshKeySavedDir)}</code>` : ''}（U 盘内不保留私钥，请妥善保存）。<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="dlpriv">下载私钥 touareg_ed25519</button><button class="btn" type="button" id="dlguide">下载连接说明.txt</button></div></div>` : '';
     const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip';
     $('result').innerHTML = `<div class="msg ok"><b>已保存。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>
+      ${sshBanner}
       <b>接下来：</b><ol class="steps">
         <li>${S.os === 'darwin' ? '在访达左侧点 U 盘旁边的 ⏏ 推出 U 盘' : '在任务栏右下角「安全删除硬件」里弹出 U 盘'}，再拔下来。</li>
         <li>到车上<b>发动车辆</b>，插入 U 盘。约 10 秒后车机自动重启并开始刷机，过程几分钟，会重启几次、可能出现红色工程界面，<b>期间不要操作车机</b>。</li>
@@ -375,12 +457,16 @@ $('save').addEventListener('click', async () => {
       </ol>
       ${keepNote ? '<p class="hint" style="margin-top:8px">刷机时会把原厂文件备份到这个 U 盘，建议保留这个 U 盘，平时不要插在车上（插着会再次进入刷机）。</p>' : ''}
       <button class="btn" id="quit">完成，退出程序</button>`;
-    S = await api('/api/state'); renderStatus();
+    S = await api('/api/state'); if ($('wregen')) $('wregen').checked = false; renderStatus(); renderWifi();
   } catch (err) {
     $('result').innerHTML = `<div class="msg bad">${esc(err.message)}</div>`;
   } finally { btn.disabled = false; btn.textContent = '保存到 U 盘'; renderSummary(); }
 });
-document.addEventListener('click', async e => { if (e.target.id === 'quit') { await api('/api/quit').catch(()=>{}); document.body.innerHTML = '<div class="wrap"><h1>途锐改装设置</h1><p class="lead">程序已退出，可以关闭这个网页了。</p></div>'; } });
+document.addEventListener('click', async e => {
+  if (e.target.id === 'dlpriv' && lastSSHKey) dlBlob('touareg_ed25519', lastSSHKey);
+  if (e.target.id === 'dlguide' && lastSSHGuide) dlBlob('无线连接说明.txt', lastSSHGuide);
+  if (e.target.id === 'quit') { await api('/api/quit').catch(()=>{}); document.body.innerHTML = '<div class="wrap"><h1>途锐改装设置</h1><p class="lead">程序已退出，可以关闭这个网页了。</p></div>'; }
+});
 
 (async () => {
   try {
@@ -392,6 +478,11 @@ document.addEventListener('click', async e => { if (e.target.id === 'quit') { aw
   if (sel.cluster === 'install' && sel.hud !== 'install') sel.hud = 'install';
   if (sel.hud === 'uninstall' && sel.cluster !== 'uninstall') sel.cluster = 'uninstall';
   dash = Object.assign({}, S.dash, {items: (S.dash.items || []).slice(), r_items: (S.dash.r_items || []).slice(), r_show: !!S.dash.r_show});
+  if (S.wifi) {
+    (S.wifi.networks || []).slice(0, 3).forEach((n, i) => { $('wssid' + i).value = n.ssid || ''; $('wpsk' + i).value = n.psk || ''; });
+    $('wpin').value = S.wifi.pin || '';
+    $('wssh').checked = !!S.wifi.enableSSH;
+  }
   renderStatus(); renderAll();
 })();
 </script>

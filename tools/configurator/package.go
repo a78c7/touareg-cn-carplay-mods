@@ -29,6 +29,7 @@ var features = []feature{
 	{"aa", "Android Auto", "开启原厂未激活的 Android Auto，安卓手机投屏（LawPaul 作品）", []string{"AndroidAuto"}},
 	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在抬头显示 HUD 上", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
 	{"cluster", "仪表地图 + 信息框", "手机导航地图显示在仪表中间，左右两个小框显示行车数据；需要和「导航上 HUD」一起装", []string{"VW_HUD_3_CarPlayCluster"}},
+	{"wifi", "手机无线控制台（可选 SSH 开发）", "连手机热点打开网页即可改信息框、调车标、无线下载行车记录（可选开启 SSH 2012 开发；同平台 MH2p 通用）", []string{"VW_WiFi_Dev"}},
 }
 
 // info-box catalogue; keys and labels must match g_items[] in src/cl_render/dash.c (build.sh checks the keys)
@@ -387,6 +388,7 @@ func (p pkg) macJunk() []string {
 type applyReq struct {
 	Features map[string]string `json:"features"` // id -> install / uninstall / skip
 	Dash     dashConf          `json:"dash"`
+	Wifi     wifiReq           `json:"wifi"`
 }
 
 func validate(r applyReq) error {
@@ -395,6 +397,11 @@ func validate(r applyReq) error {
 		case "install", "uninstall", "skip":
 		default:
 			return fmt.Errorf("「%s」没有选择", f.Name)
+		}
+	}
+	if r.Features["wifi"] == "install" {
+		if err := validateWifi(r.Wifi); err != nil {
+			return err
 		}
 	}
 	if r.Features["cluster"] == "install" && r.Features["hud"] != "install" {
@@ -427,9 +434,10 @@ func validate(r applyReq) error {
 	return nil
 }
 
-func (p pkg) apply(r applyReq) ([]string, error) {
+func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
+	var wout wifiApplyOut
 	if err := validate(r); err != nil {
-		return nil, err
+		return nil, wout, err
 	}
 	var log []string
 	// check everything first, change nothing on an error
@@ -437,10 +445,10 @@ func (p pkg) apply(r applyReq) ([]string, error) {
 		for _, d := range f.Dirs {
 			loc, err := p.location(d)
 			if err != nil {
-				return nil, err
+				return nil, wout, err
 			}
 			if loc == "" && r.Features[f.ID] != "skip" {
-				return nil, fmt.Errorf("U 盘里找不到「%s」文件夹（%s），请重新复制完整的改装包", f.Name, d)
+				return nil, wout, fmt.Errorf("U 盘里找不到「%s」文件夹（%s），请重新复制完整的改装包", f.Name, d)
 			}
 		}
 	}
@@ -453,15 +461,15 @@ func (p pkg) apply(r applyReq) ([]string, error) {
 			}
 			if want == "skip" && loc == "mods" {
 				if err := os.MkdirAll(p.path(parkDir), 0o755); err != nil {
-					return log, err
+					return log, wout, err
 				}
 				if err := os.Rename(p.path("Mods", d), p.path(parkDir, d)); err != nil {
-					return log, fmt.Errorf("移动 %s 失败：%v", d, err)
+					return log, wout, fmt.Errorf("移动 %s 失败：%v", d, err)
 				}
 				log = append(log, fmt.Sprintf("%s：移到「%s」（这次不刷）", d, parkDir))
 			} else if want != "skip" && loc == "park" {
 				if err := os.Rename(p.path(parkDir, d), p.path("Mods", d)); err != nil {
-					return log, fmt.Errorf("移动 %s 失败：%v", d, err)
+					return log, wout, fmt.Errorf("移动 %s 失败：%v", d, err)
 				}
 				log = append(log, fmt.Sprintf("%s：移回 Mods", d))
 			}
@@ -469,14 +477,14 @@ func (p pkg) apply(r applyReq) ([]string, error) {
 			if want == "uninstall" {
 				if !isFile(u) {
 					if err := os.WriteFile(u, nil, 0o644); err != nil {
-						return log, err
+						return log, wout, err
 					}
 				}
 				log = append(log, fmt.Sprintf("%s：卸载（已放 uninstall.txt）", d))
 			} else {
 				if isFile(u) {
 					if err := os.Remove(u); err != nil {
-						return log, err
+						return log, wout, err
 					}
 					log = append(log, fmt.Sprintf("%s：删掉 uninstall.txt", d))
 				}
@@ -487,9 +495,19 @@ func (p pkg) apply(r applyReq) ([]string, error) {
 		}
 	}
 	os.Remove(p.path(parkDir)) // only succeeds when empty
+	if r.Features["wifi"] == "install" {
+		if loc, _ := p.location("VW_WiFi_Dev"); loc != "" {
+			wlog, wo, err := p.writeWifi(r.Wifi)
+			if err != nil {
+				return log, wout, fmt.Errorf("写入无线配置失败：%v", err)
+			}
+			log = append(log, wlog...)
+			wout = wo
+		}
+	}
 	if loc, _ := p.location("VW_HUD_3_CarPlayCluster"); loc != "" {
 		if err := p.writeDash(r.Dash); err != nil {
-			return log, fmt.Errorf("写 dash.conf 失败：%v", err)
+			return log, wout, fmt.Errorf("写 dash.conf 失败：%v", err)
 		}
 		names := func(keys []string) string {
 			out := make([]string, 0, len(keys))
@@ -522,7 +540,7 @@ func (p pkg) apply(r applyReq) ([]string, error) {
 	if n > 0 {
 		log = append(log, fmt.Sprintf("清理了 %d 个 Mac 隐藏文件（._* / .DS_Store）", n))
 	}
-	return log, nil
+	return log, wout, nil
 }
 
 // ---- USB mode (v18 drive log) ----

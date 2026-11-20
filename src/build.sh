@@ -52,4 +52,11 @@ if [ -n "$ZLIB_SRC" ]; then
     clang $CF -I"$ZLIB_SRC" -c vhpatch/vhpatch.c -o out/vhpatch.o
     arm-linux-gnueabi-ld --hash-style=both -o out/vhpatch $EXE_START -L$L -L$UL out/vhpatch.o out/z_*.o -lc $EXE_END
 fi
-echo "built: out/cl_probe.so out/clusterd out/cl_render ${ZLIB_SRC:+out/vhpatch}"
+
+# 5) touareg_netd - mDNS (touareg.local) + bcm2:8080 wireless console daemon (v20)
+python3 touareg_netd/gen_web_header.py
+clang $CF -fvisibility=hidden -Itouareg_netd -c touareg_netd/touareg_netd.c -o out/touareg_netd.o
+arm-linux-gnueabi-ld --hash-style=both -o out/touareg_netd $EXE_START -L$L -L$UL out/touareg_netd.o -lsocket -lc $EXE_END
+arm-linux-gnueabi-strip out/touareg_netd
+
+echo "built: out/cl_probe.so out/clusterd out/cl_render out/touareg_netd ${ZLIB_SRC:+out/vhpatch}"
