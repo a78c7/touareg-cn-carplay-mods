@@ -1,4 +1,4 @@
-package vwnosim;
+package vwpopup;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -11,44 +11,59 @@ import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 
 /**
- * VW MH2p HMI bundle (ID 98): 屏蔽连接 CarPlay / Android Auto 时反复弹出的
- * 「SIM 卡仅用于数据连接。」(ASLPhoneSystemEventConstants.PHONE_SIM_DATAONLY) 弹窗。
+ * VW MH2p HMI 弹窗过滤插件（Bundle ID 98），由可选模块按开关文件独立启用：
+ * - /mnt/app/eso/hmi/lsd/config/popup_filter/no_sim_dataonly
+ *     屏蔽连接 CarPlay / Android Auto 时的「SIM 卡仅用于数据连接。」弹窗
+ *     (ASLPhoneSystemEventConstants.PHONE_SIM_DATAONLY，P2878 上为 1410020)
+ * - /mnt/app/eso/hmi/lsd/config/popup_filter/no_bt_auth
+ *     屏蔽蓝牙 OBEX 认证触发的「输入用户名」弹窗 (Busrlo / BLUETOOTH_UID_SPELLER_REQ__LatinOnly)
+ *     (ASLPhoneBluetoothSystemEventConstants.BLUETOOTH_CONNECT_AUTH_REQUIRED，P2878 上为 132)
  *
  * 原理：
- * 1. 启动时从车机当前 lsd.jxe 动态解析 PHONE_SIM_DATAONLY 事件编号（在 P2878 上为 1410020），
- *    不硬编码魔数，跨 VW MH2p 固件版本安全；若当前车机无该常量则自动退出不做任何改动。
- * 2. 通过反射包装 de.vw.mib.event.internal.ServiceManager.systemEventSender
+ * 1. 启动时从当前车机 lsd.jxe 动态解析上述事件编号（不硬编码固件版本偏移）。
+ * 2. 通过单一 Proxy 包装 de.vw.mib.event.internal.ServiceManager.systemEventSender
  *    （单方法公开接口 de.vw.mib.coreapi.asl.SystemEventSender.fireSystemEvent(int)），
- *    仅丢弃 PHONE_SIM_DATAONLY 事件，其余全部 HMI 系统事件原样透传。
- * 3. 不改动 SIM 卡数据/语音模式、蓝牙、CarPlay、eCall/SOS 或任何 5F 编码。
- * 4. 纯 Java 1.4 / J2ME Foundation Profile 1.1 (class version 48)，零原厂编译期依赖。
+ *    仅丢弃已启用的目标弹窗事件，其余所有 HMI 系统事件原样透传。
+ * 3. 纯 Java 1.4 / J2ME Foundation Profile 1.1 (class version 48)，零原厂编译依赖。
  *
- * 临时停用（调试用）：在车机创建 /tmp/vw_nosim_off；日志位于 /tmp/vw_nosim.log。
+ * 调试：日志位于 /tmp/vw_popup_filter.log；创建 /tmp/vw_popup_filter_off 可临时全部放行。
  */
 public final class Activator implements BundleActivator, Runnable, InvocationHandler {
-    private static final String LOG_PATH = "/tmp/vw_nosim.log";
+    private static final String LOG_PATH = "/tmp/vw_popup_filter.log";
     private static final long LOG_MAX = 65536L;
-    private static final String BYPASS_FLAG = "/tmp/vw_nosim_off";
+    private static final String BYPASS_FLAG = "/tmp/vw_popup_filter_off";
+    private static final String FLAG_DIR = "/mnt/app/eso/hmi/lsd/config/popup_filter";
+    private static final String ALT_FLAG_DIR = "/eso/hmi/lsd/config/popup_filter";
+    private static final String FLAG_SIM = FLAG_DIR + "/no_sim_dataonly";
+    private static final String ALT_FLAG_SIM = ALT_FLAG_DIR + "/no_sim_dataonly";
+    private static final String FLAG_BT_AUTH = FLAG_DIR + "/no_bt_auth";
+    private static final String ALT_FLAG_BT_AUTH = ALT_FLAG_DIR + "/no_bt_auth";
 
-    private static final String CONST_CLASS = "generated.de.vw.mib.asl.internal.phone.ASLPhoneSystemEventConstants";
-    private static final String CONST_FIELD = "PHONE_SIM_DATAONLY";
+    private static final String SIM_CONST_CLASS = "generated.de.vw.mib.asl.internal.phone.ASLPhoneSystemEventConstants";
+    private static final String SIM_CONST_FIELD = "PHONE_SIM_DATAONLY";
+    private static final String BT_CONST_CLASS = "generated.de.vw.mib.asl.internal.phone.bluetooth.ASLPhoneBluetoothSystemEventConstants";
+    private static final String BT_CONST_FIELD = "BLUETOOTH_CONNECT_AUTH_REQUIRED";
+
     private static final String SM_CLASS = "de.vw.mib.event.internal.ServiceManager";
     private static final String SM_FIELD = "systemEventSender";
     private static final String SENDER_IFACE = "de.vw.mib.coreapi.asl.SystemEventSender";
 
     private volatile boolean stop;
     private volatile boolean bypassed;
-    private volatile int targetEventId = -1;
+    private volatile boolean blockSim;
+    private volatile boolean blockBtAuth;
+    private volatile int evSim = -1;
+    private volatile int evBtAuth = -1;
     private volatile Field senderField;
-    private volatile Class senderIface;
     private volatile Object origSender;
     private volatile Object proxySender;
-    private int droppedCount;
+    private int droppedSim;
+    private int droppedBtAuth;
 
     public void start(BundleContext ctx) throws Exception {
         try {
-            log("VWNoSimPopup v1.0 Activator.start");
-            Thread t = new Thread(this, "vw-nosim-popup");
+            log("VWPopupFilter v1.0 Activator.start");
+            Thread t = new Thread(this, "vw-popup-filter");
             t.setDaemon(true);
             t.start();
         } catch (Throwable t) {
@@ -73,13 +88,18 @@ public final class Activator implements BundleActivator, Runnable, InvocationHan
 
     public void run() {
         try {
-            int evId = resolveEventId();
-            if (evId < 0) {
-                log("PHONE_SIM_DATAONLY not found in this HMI; exiting without hooking");
+            evSim = resolveConst(SIM_CONST_CLASS, SIM_CONST_FIELD);
+            evBtAuth = resolveConst(BT_CONST_CLASS, BT_CONST_FIELD);
+            refreshFlags();
+            log("resolved events: PHONE_SIM_DATAONLY=" + evSim
+                + " BLUETOOTH_CONNECT_AUTH_REQUIRED=" + evBtAuth
+                + " | flags: no_sim_dataonly=" + blockSim
+                + " no_bt_auth=" + blockBtAuth);
+
+            if (evSim < 0 && evBtAuth < 0) {
+                log("no target event constants found in this HMI; exiting without hooking");
                 return;
             }
-            targetEventId = evId;
-            log("resolved PHONE_SIM_DATAONLY = " + evId);
 
             Class smCls = Class.forName(SM_CLASS);
             Field f;
@@ -91,11 +111,10 @@ public final class Activator implements BundleActivator, Runnable, InvocationHan
             }
             Class iface = Class.forName(SENDER_IFACE);
             senderField = f;
-            senderIface = iface;
 
             int waitCount = 0;
             while (!stop) {
-                bypassed = new File(BYPASS_FLAG).exists();
+                refreshFlags();
                 boolean attached = ensureHooked(f, iface);
                 if (attached) {
                     Thread.sleep(5000L);
@@ -112,13 +131,19 @@ public final class Activator implements BundleActivator, Runnable, InvocationHan
         }
     }
 
-    private int resolveEventId() {
+    private void refreshFlags() {
+        bypassed = new File(BYPASS_FLAG).exists();
+        blockSim = new File(FLAG_SIM).exists() || new File(ALT_FLAG_SIM).exists();
+        blockBtAuth = new File(FLAG_BT_AUTH).exists() || new File(ALT_FLAG_BT_AUTH).exists();
+    }
+
+    private static int resolveConst(String clsName, String fieldName) {
         try {
-            Class c = Class.forName(CONST_CLASS);
-            Field f = c.getField(CONST_FIELD);
+            Class c = Class.forName(clsName);
+            Field f = c.getField(fieldName);
             return f.getInt(null);
         } catch (Throwable t) {
-            log("resolveEventId error: " + t);
+            log("resolve " + clsName + "." + fieldName + " failed: " + t);
             return -1;
         }
     }
@@ -168,12 +193,16 @@ public final class Activator implements BundleActivator, Runnable, InvocationHan
             return new Integer(System.identityHashCode(proxy));
         }
         if ("toString".equals(name)) {
-            return "VWNoSimPopup[" + origSender + "]";
+            return "VWPopupFilter[" + origSender + "]";
         }
-        if ("fireSystemEvent".equals(name) && args != null && args.length == 1 && args[0] instanceof Integer) {
+        if (!bypassed && "fireSystemEvent".equals(name) && args != null && args.length == 1 && args[0] instanceof Integer) {
             int id = ((Integer) args[0]).intValue();
-            if (!bypassed && id == targetEventId) {
-                onDropped(id);
+            if (blockSim && evSim >= 0 && id == evSim) {
+                onDroppedSim(id);
+                return null;
+            }
+            if (blockBtAuth && evBtAuth >= 0 && id == evBtAuth) {
+                onDroppedBtAuth(id);
                 return null;
             }
         }
@@ -188,10 +217,17 @@ public final class Activator implements BundleActivator, Runnable, InvocationHan
         }
     }
 
-    private synchronized void onDropped(int id) {
-        droppedCount++;
-        if (droppedCount <= 20 || (droppedCount % 50) == 0) {
-            log("dropped PHONE_SIM_DATAONLY (" + id + ") #" + droppedCount);
+    private synchronized void onDroppedSim(int id) {
+        droppedSim++;
+        if (droppedSim <= 20 || (droppedSim % 50) == 0) {
+            log("dropped PHONE_SIM_DATAONLY (" + id + ") #" + droppedSim);
+        }
+    }
+
+    private synchronized void onDroppedBtAuth(int id) {
+        droppedBtAuth++;
+        if (droppedBtAuth <= 20 || (droppedBtAuth % 50) == 0) {
+            log("dropped BLUETOOTH_CONNECT_AUTH_REQUIRED (" + id + ") #" + droppedBtAuth);
         }
     }
 

@@ -1,5 +1,17 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v20.3
+- **新增可选模块「去除『输入用户名』弹窗（屏蔽蓝牙 OBEX 认证）」**（`VW_NoBtAuthPopup`，默认放在 `未选模块/` 不刷入，按需在「改装设置」里勾选）：
+  - 经车友实车刷入 `VW_NoCarNet` 排除众行家线索，并对全车 `zh_CN.res`（4,164 条文案）、`viewhandler.zip`（1,246 个界面）与 `lsd.jxe`（47,135 个类）逐层定位，确认反复弹出的「输入用户名」纯英文浮动弹窗唯一对应蓝牙 OBEX 认证界面 `Busrlo.jxe`（`BLUETOOTH_UID_SPELLER_REQ__LatinOnly`），由 `TargetASLPhoneBluetoothObex.dsiObexAuthenticationAuthenticationRequired()` 发送 `BLUETOOTH_CONNECT_AUTH_REQUIRED`（P2878 上为 `132`）触发
+  - 通过共享 HMI 弹窗过滤插件 **`VWPopupFilter.jar`**（Bundle `98`，源码位于 `src/popup-filter-java/`）+ 独立开关文件 `no_bt_auth` 精准拦截该事件；**不影响正常蓝牙配对（`131`/`144`）、蓝牙通话、蓝牙音乐与 CarPlay**
+- **升级 Bundle `98` 为共享单代理弹窗过滤器（`VWPopupFilter`）**：
+  - `VW_NoBtAuthPopup`（开关 `no_bt_auth`）与 `VW_NoSimPopup`（开关 `no_sim_dataonly`）共用单一 `VWPopupFilter.jar` 代理包装 `ServiceManager.systemEventSender`，彻底避免双模块同时安装时互相覆盖代理链；可任意独立安装/卸载（仅在最后一个开关也被卸载时才移除 Bundle `98`），并自动平滑迁移 `v20.2` 的旧版 `VWNoSimPopup.jar`
+- **移除 `v20.2` 中的 `VW_NoCarNet` 模块**：经实车排查确认「输入用户名」弹窗并非众行家引起，故不再提供关闭众行家/隐藏顶栏「众」字图标的选项（此前刷过 `v20.2` `VW_NoCarNet` 的车友若需恢复顶栏「众」字图标，用 `v20.2` 包将其选为「卸载」刷一次即可）
+- **「改装设置」程序更新至 `v20.3`**（Windows x64 / macOS Intel+Apple Silicon 通用二进制）
+- 包含 v20.2 的全部内容
+
+`VW_NoBtAuthPopup` / `VW_NoSimPopup` 共享插件已完成 Java 1.4 常量池审计、双事件模拟拦截测试、以及与 Bundle `97`（`VWClusterNav`）和 `v20.2` 旧版迁移的全排列往返回归校验，U 盘冷刷上车实测待进一步复核。
+
 ## v20.2
 - **新增可选模块「去除『输入用户名』弹窗（关闭众行家）」**（`VW_NoCarNet`，默认放在 `未选模块/` 不刷入，按需在「改装设置」里勾选）：
   - 在 ModKit `Post` 阶段将 5F 众行家在线服务 HMI 开关（`0x5F22:0x0986` / `Dia_Anp_10894`）设为停用（`0`），随后由 ModKit 自动执行 `gem-reset` 生效，消除众行家服务过期或固件升级后反复弹出的「输入用户名」窗口及顶栏众行家图标
