@@ -104,6 +104,14 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
             <option value="2">2 · 收到车道信息时不补偿</option>
           </select>
         </div>
+        <div class="row"><label>导航信息卡<span class="sub">导航时在选定侧自动显示转向、完整路名、车道与到达时间</span></label>
+          <select id="nav_mode">
+            <option value="right">显示在右边框（默认）</option>
+            <option value="left">显示在左边框</option>
+            <option value="off">关闭</option>
+          </select>
+        </div>
+        <div class="row"><label>预计到达时区偏移 (nav_tz)<span class="sub">东八区填 8，用于计算到达时间</span></label><input type="number" id="nav_tz" min="-12" max="14"></div>
         <div class="row"><label>背景不透明度 (0~255)</label><input type="number" id="alpha" min="0" max="255"></div>
         <div class="row"><label>油箱容积 (升，0=百分比)</label><input type="number" id="tank_l" min="0" max="200"></div>
         <div class="row"><label>横向 G 符号反转</label><input type="checkbox" id="lat_flip"></div>
@@ -138,10 +146,12 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
       <div class="row"><label>临时停用仪表地图 (disable)<span class="sub">下次重启后生效，不卸载模块</span></label><input type="checkbox" id="tg_disable" onchange="doToggle('disable',this.checked)"></div>
       <div class="row"><label>关闭 CarPlay 切原车保活 (ka_off)<span class="sub">默认关闭此项以防 30 秒断联</span></label><input type="checkbox" id="tg_ka_off" onchange="doToggle('ka_off',this.checked)"></div>
       <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放反转</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
+      <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">默认开启：2 秒内连按 2 下右侧 OK 键在 CarPlay/原车地图间切换</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
     </div>
     <div class="card">
       <h2>快捷运维（仅停车可用）</h2>
       <div class="actions">
+        <button class="btn pri" type="button" onclick="doAct('toggle_map')">切换仪表地图 (CarPlay ↔ 原车)</button>
         <button class="btn" type="button" onclick="doAct('restart_render')">刷新仪表画面 (slay cl_render)</button>
         <button class="btn" type="button" onclick="doAct('restart_carplay')">重连 CarPlay (slay dio_manager)</button>
         <button class="btn dan" type="button" onclick="if(confirm('确认软重启车机？过程约 30 秒'))doAct('reboot_hu')">软重启车机 (gem-reset)</button>
@@ -302,9 +312,10 @@ async function loadStatus(){
     R=(d.r_items||'').split(',').map(x=>x.trim()).filter(x=>x&&IMAP[x]);
     document.getElementById('show').checked=d.show!=0;
     document.getElementById('r_show').checked=d.r_show==1;
-    ['car_up','acc_up','amap_turn','alpha','tank_l','trip_base'].forEach(k=>{
+    ['car_up','acc_up','amap_turn','alpha','tank_l','trip_base','nav_tz'].forEach(k=>{
       if(d[k]!==undefined)document.getElementById(k).value=d[k];
     });
+    document.getElementById('nav_mode').value=d.nav_box==0?'off':(d.nav_side==='left'?'left':'right');
     document.getElementById('lat_flip').checked=d.lat_flip==1;
     renderBox(L,'lSel','lPool');
     renderBox(R,'rSel','rPool');
@@ -318,6 +329,7 @@ async function loadStatus(){
     document.getElementById('tg_disable').checked=!!tg.disable;
     document.getElementById('tg_ka_off').checked=!!tg.ka_off;
     document.getElementById('tg_zoom_flip').checked=!!tg.zoom_flip;
+    document.getElementById('tg_switch_off').checked=!!tg.switch_off;
 
     const pq=PIN?('&pin='+encodeURIComponent(PIN)):'';
     const dl=document.getElementById('driveList');
@@ -348,6 +360,9 @@ document.getElementById('btnSaveDash').onclick=async()=>{
       alpha:document.getElementById('alpha').value||200,
       tank_l:document.getElementById('tank_l').value||90,
       lat_flip:document.getElementById('lat_flip').checked?1:0,
+      nav_box:document.getElementById('nav_mode').value==='off'?0:1,
+      nav_side:document.getElementById('nav_mode').value==='left'?'left':'right',
+      nav_tz:document.getElementById('nav_tz').value||8,
       trip_base:document.getElementById('trip_base').value||0
     });
     toast(j.msg||'已保存并刷新仪表');

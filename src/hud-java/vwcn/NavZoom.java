@@ -18,11 +18,20 @@ import java.io.FileWriter;
 public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation.NavigationService, Runnable {
     static final String CMD = "/tmp/cl_alt_cmd";
     static final File FLIP = new File("/mnt/app/eso/bin/apps/cluster/zoom_flip");
+    static final File SWITCH_OFF = new File("/mnt/app/eso/bin/apps/cluster/switch_off");
+    static final long DEACT_DELAY_MS = 100L;     // 缩放键附带的 deactivateAutozoom 会在 1~20ms 内紧跟 zoomIndex，100ms 可彻底过滤
+    static final long DOUBLE_TAP_MAX_MS = 2000L; // 2 秒内连按 2 下方向盘右侧 OK 键触发地图切换
+    static final long SWITCH_COOLDOWN_MS = 2500L;
     final de.vw.mib.bap.mqbab2.common.api.navigation.NavigationService d;
     private int pending;
     private long lastSent;
     private int seq;
     private boolean logged;
+    // v19.8: 方向盘右侧 OK 键双击检测状态
+    private long pendingDeactAt;      // 待确认的独立 deactivateAutozoom 时间戳（0=无）
+    private long lastOkTapAt;         // 上次已确认的独立 OK 按键时间
+    private int  lastOkAct;           // 1=activateAutozoom, -1=deactivateAutozoom
+    private long lastSwitchAt;        // 上次切换触发时间（冷却防连跳）
 
     NavZoom(de.vw.mib.bap.mqbab2.common.api.navigation.NavigationService d) {
         this.d = d;
@@ -32,22 +41,67 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
     }
 
     private synchronized void press(int step) {
+        pendingDeactAt = 0; // 收到缩放键，取消刚伴随到来的 deactivateAutozoom
         pending += step;
         if (!logged) { logged = true; Log.log("zoom: first cluster zoom key while CarPlay is on the cluster, step " + step); }
+    }
+
+    private synchronized void onZoomKeyNative() {
+        pendingDeactAt = 0; // 原车地图下按缩放键同样取消附带的 deactivateAutozoom
+    }
+
+    /** 记录一次已确认的独立 OK 键按下（act: 1=activate, -1=deactivate）。 */
+    private void recordOkTap(long ts, int act) {
+        if (SWITCH_OFF.exists()) return;
+        if (Rebind.streamHold == null) {
+            // 未连 CarPlay 地图流时不做切换，重置状态
+            lastOkTapAt = 0;
+            return;
+        }
+        if (ts - lastSwitchAt < SWITCH_COOLDOWN_MS) {
+            Log.log("switch: ok tap ignored (cooldown) act=" + act);
+            return;
+        }
+        long dt = ts - lastOkTapAt;
+        if (lastOkTapAt > 0 && dt >= 120L && dt <= DOUBLE_TAP_MAX_MS) {
+            // 若是同方向事件且精准落在 540~660ms，过滤掉可能残留的 BAP 600ms 重试帧
+            if (act == lastOkAct && dt >= 540L && dt <= 660L) {
+                Log.log("switch: ignored possible 600ms BAP retry dt=" + dt + "ms act=" + act);
+                return;
+            }
+            lastOkTapAt = 0;
+            lastOkAct = 0;
+            lastSwitchAt = ts;
+            Log.log("switch: OK double-tap detected dt=" + dt + "ms (" + act + ")");
+            Rebind.requestToggle("ok-double-tap");
+        } else {
+            lastOkTapAt = ts;
+            lastOkAct = act;
+            Log.log("switch: OK tap #1 act=" + act + " cpHold=" + (Rebind.hold != null ? 1 : 0));
+        }
     }
 
     public void run() {
         while (true) {
             try {
                 Thread.sleep(50);
-                int p;
+                int p = 0;
                 long now = System.currentTimeMillis();
+                long fireDeact = 0;
                 synchronized (this) {
-                    if (pending == 0 || now - lastSent < 150) continue;
-                    p = pending;
-                    pending = 0;
+                    if (pendingDeactAt > 0 && (now - pendingDeactAt) >= DEACT_DELAY_MS) {
+                        fireDeact = pendingDeactAt;
+                        pendingDeactAt = 0;
+                    }
+                    if (pending != 0 && now - lastSent >= 150) {
+                        p = pending;
+                        pending = 0;
+                    }
                 }
-                if (Rebind.hold == null) continue;
+                if (fireDeact > 0) {
+                    synchronized (this) { recordOkTap(fireDeact, -1); }
+                }
+                if (p == 0 || Rebind.hold == null) continue;
                 boolean out = p > 0;
                 if (FLIP.exists()) out = !out;
                 int n = Math.min(Math.abs(p), 3);
@@ -64,8 +118,13 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
     }
 
     public void activateAutozoom() {
-        if (Rebind.hold != null) return;
-        d.activateAutozoom();
+        if (KeyProbe.active) Log.log("keyprobe: navbap activateAutozoom cpHold=" + (Rebind.hold != null ? 1 : 0));
+        // 放行给原车服务以返回 BAP Status ACK，消除仪表 600ms×5 超时重传；随后计一次独立 OK 按键
+        try { d.activateAutozoom(); } catch (Throwable t) { Log.log("activateAutozoom delegate err: " + t); }
+        synchronized (this) {
+            pendingDeactAt = 0;
+            recordOkTap(System.currentTimeMillis(), 1);
+        }
     }
     public void addHMIEventListener(de.vw.mib.asl.api.bap.events.HMIEventListener a0, int[] a1) {
         d.addHMIEventListener(a0, a1);
@@ -74,11 +133,17 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
         d.addNavigationServiceListener(a0, a1);
     }
     public void deactivateAutozoom() {
-        if (Rebind.hold != null) return;
-        d.deactivateAutozoom();
+        if (KeyProbe.active) Log.log("keyprobe: navbap deactivateAutozoom cpHold=" + (Rebind.hold != null ? 1 : 0));
+        // 放行以返回 BAP ACK，并用 100ms 延迟区分是缩放键附带还是独立按 OK 键
+        try { d.deactivateAutozoom(); } catch (Throwable t) { Log.log("deactivateAutozoom delegate err: " + t); }
+        synchronized (this) {
+            pendingDeactAt = System.currentTimeMillis();
+        }
     }
     public void decrementZoomIndex() {
+        if (KeyProbe.active) Log.log("keyprobe: navbap decrementZoomIndex cpHold=" + (Rebind.hold != null ? 1 : 0));
         if (Rebind.hold != null) { press(-1); return; }
+        onZoomKeyNative();
         d.decrementZoomIndex();
     }
     public int getActiveMapOrientation() {
@@ -220,7 +285,9 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
         return d.getZoomLevel();
     }
     public void incrementZoomIndex() {
+        if (KeyProbe.active) Log.log("keyprobe: navbap incrementZoomIndex cpHold=" + (Rebind.hold != null ? 1 : 0));
         if (Rebind.hold != null) { press(+1); return; }
+        onZoomKeyNative();
         d.incrementZoomIndex();
     }
     public boolean isAutozoomEnabled() {
@@ -259,24 +326,30 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
         d.removeNavigationServiceListener(a0, a1);
     }
     public void repeatLastNavAnnouncement() {
+        if (KeyProbe.active) Log.log("keyprobe: navbap repeatLastNavAnnouncement");
         d.repeatLastNavAnnouncement();
     }
     public void setActiveMapOrientation(int a0) {
+        if (KeyProbe.active) Log.log("keyprobe: navbap setActiveMapOrientation=" + a0);
         d.setActiveMapOrientation(a0);
     }
     public void setActiveMapType(int a0) {
+        if (KeyProbe.active) Log.log("keyprobe: navbap setActiveMapType=" + a0);
         d.setActiveMapType(a0);
     }
     public void setActiveMapView(int a0) {
+        if (KeyProbe.active) Log.log("keyprobe: navbap setActiveMapView=" + a0);
         d.setActiveMapView(a0);
     }
     public void setAlternativeRouteCalcSetting(boolean a0) {
         d.setAlternativeRouteCalcSetting(a0);
     }
     public void setMapScaleSteps(int a0) {
+        if (KeyProbe.active) Log.log("keyprobe: navbap setMapScaleSteps=" + a0);
         d.setMapScaleSteps(a0);
     }
     public void setMapSwitchState(int a0) {
+        if (KeyProbe.active) Log.log("keyprobe: navbap setMapSwitchState=" + a0);
         d.setMapSwitchState(a0);
     }
     public void setVoiceGuidanceStatus(int a0) {
@@ -286,12 +359,15 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
         d.setxUrgentTMCMessageToRead();
     }
     public void startRouteGuidance(int a0, long a1) {
+        if (KeyProbe.active) Log.log("keyprobe: navbap startRouteGuidance=" + a0 + "," + a1);
         d.startRouteGuidance(a0, a1);
     }
     public void stopCurrentNavAnnouncement() {
+        if (KeyProbe.active) Log.log("keyprobe: navbap stopCurrentNavAnnouncement");
         d.stopCurrentNavAnnouncement();
     }
     public void stopRouteGuidance() {
+        if (KeyProbe.active) Log.log("keyprobe: navbap stopRouteGuidance");
         d.stopRouteGuidance();
     }
 }

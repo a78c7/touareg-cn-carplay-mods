@@ -61,6 +61,7 @@ static const char *cl_disp_id(void) { const char *e = getenv("CL_DISPID"); retur
 
 #ifdef USE_DASH
 #include "dash.c"                 /* v16/v17: cluster info box, items chosen in dash.conf */
+#include "navbox.c"               /* v20.1: right-box CarPlay navigation card (AMap/Baidu/Apple) */
 #endif
 #ifdef USE_DASH
 static void dash_setup(int win_w, int win_h);
@@ -2275,11 +2276,15 @@ static int cb_decode_picture(void* user, void* pic_info) {
  * sending frames and cb_display_picture is no longer invoked). */
 #ifdef USE_DASH
 /* v16 info box glue: pixmap holding the panel, blitted (source-over) onto each frame for the cluster window. */
-/* v19: one pixmap per box (0 left, 1 right) */
+/* v19: one pixmap per box (0 left, 1 right) + v20.1 right-box navigation card */
 static screen_pixmap_t g_dash_pix[2];
 static screen_buffer_t g_dash_buf[2];
 static unsigned char  *g_dash_ptr[2];
 static int             g_dash_stride[2], g_dash_x[2], g_dash_y[2], g_dash_bw[2], g_dash_bh[2];
+static screen_pixmap_t g_nav_pix;
+static screen_buffer_t g_nav_buf;
+static unsigned char  *g_nav_ptr;
+static int             g_nav_stride, g_nav_logged;
 static int             g_dash_noblend, g_dash_logged;
 static uint64_t        g_dash_poll_ms;
 
@@ -2287,11 +2292,65 @@ static int dash_read_conf_file(const char *const *paths) {
     for (unsigned i = 0; i < 2; i++) {
         FILE *f = fopen(paths[i], "r"); if (!f) continue;
         char l[512];
-        while (fgets(l, sizeof l, f)) dash_read_conf_line(l);
+        while (fgets(l, sizeof l, f)) {
+            if (!nav_read_conf_line(l)) dash_read_conf_line(l);
+        }
         fclose(f);
         return 1;
     }
     return 0;
+}
+
+static void nav_setup(int win_w, int win_h) {
+    if (!g_nav_conf.enabled) { LOG("navbox: off\n"); return; }
+    int side = g_nav_conf.side ? 1 : 0;
+    int bx = g_dash_bw[side] > 0 ? g_dash_x[side] : g_box[side].conf.x;
+    int by = g_dash_bh[side] > 0 ? g_dash_y[side] : g_box[side].conf.y;
+    int br = g_dash_bw[side] > 0 ? (g_dash_x[side] + g_dash_bw[side]) : g_box[side].conf.right;
+    int x = g_nav_conf.x >= 0 ? g_nav_conf.x : bx;
+    int y = g_nav_conf.y >= 0 ? g_nav_conf.y : by;
+    int right = g_nav_conf.right > 0 ? g_nav_conf.right : br;
+    int w = right > x ? (right - x) : 295;
+    if (w < 240) w = 240;
+    if (w > NAV_MAX_W) w = NAV_MAX_W;
+    int h = 336;
+    if (g_dash_bh[side] >= 320 && g_dash_bh[side] <= 360) h = g_dash_bh[side];
+    else if (g_dash_bh[0] >= 320 && g_dash_bh[0] <= 360) h = g_dash_bh[0];
+    else if (g_dash_bh[1] >= 320 && g_dash_bh[1] <= 360) h = g_dash_bh[1];
+    if (h > NAV_MAX_H) h = NAV_MAX_H;
+    if (x < 0) x = 0;
+    if (x + w > win_w) x = win_w - w;
+    if (y < 0) y = 0;
+    if (y + h > win_h) y = win_h - h;
+    g_nav_x = x; g_nav_y = y; g_nav_w = w; g_nav_h = h;
+    g_nav_alpha = g_nav_conf.alpha >= 0 ? g_nav_conf.alpha : g_box[side].conf.alpha;
+    nav_fonts_init_once();
+
+    if (screen_create_pixmap(&g_nav_pix, g_dec.scr_ctx)) {
+        LOG("navbox: pixmap create failed errno=%d\n", errno);
+        g_nav_pix = NULL; return;
+    }
+    int fmt = SCREEN_FORMAT_RGBA8888, usage = SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE, size[2] = { w, h };
+    screen_set_pixmap_property_iv(g_nav_pix, SCREEN_PROPERTY_FORMAT, &fmt);
+    screen_set_pixmap_property_iv(g_nav_pix, SCREEN_PROPERTY_USAGE, &usage);
+    screen_set_pixmap_property_iv(g_nav_pix, SCREEN_PROPERTY_BUFFER_SIZE, size);
+    int rc;
+    do { rc = screen_create_pixmap_buffer(g_nav_pix); } while (rc < 0 && errno == EINTR);
+    if (rc) {
+        LOG("navbox: pixmap buffer failed errno=%d\n", errno);
+        screen_destroy_pixmap(g_nav_pix); g_nav_pix = NULL; return;
+    }
+    screen_get_pixmap_property_pv(g_nav_pix, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)&g_nav_buf);
+    void *ptr = NULL;
+    screen_get_buffer_property_pv(g_nav_buf, SCREEN_PROPERTY_POINTER, &ptr);
+    screen_get_buffer_property_iv(g_nav_buf, SCREEN_PROPERTY_STRIDE, &g_nav_stride);
+    g_nav_ptr = (unsigned char *)ptr;
+    if (!g_nav_ptr || g_nav_stride < w * 4) {
+        LOG("navbox: no CPU access (ptr=%p stride=%d), disabled\n", ptr, g_nav_stride);
+        screen_destroy_pixmap(g_nav_pix); g_nav_pix = NULL; return;
+    }
+    LOG("navbox: side=%s %dx%d at %d,%d alpha=%d tz=%+d stride=%d fonts=cjk:%d,lat:%d\n",
+        side ? "right" : "left", w, h, x, y, g_nav_alpha, g_nav_conf.tz_offset, g_nav_stride, g_nav_font[0].loaded, g_nav_font[1].loaded);
 }
 
 static void dash_setup_box(int b, int win_w, int win_h) {
@@ -2326,7 +2385,7 @@ static void dash_setup_box(int b, int win_w, int win_h) {
 
 static void dash_setup(int win_w, int win_h) {
     /* v16 kept the info_* keys in cl.conf; v17 reads them there first, then dash.conf (items/order/position);
-     * v19: keys with an "r_" prefix configure the right box */
+     * v19: keys with an "r_" prefix configure the right box; v20.1: nav_* keys configure right-box navigation card */
     static const char *cl[] = { "/tmp/cl.conf", "/mnt/app/eso/bin/apps/cluster/cl.conf" };
     static const char *dc[] = { "/tmp/dash.conf", "/mnt/app/eso/bin/apps/cluster/dash.conf" };
     dash_read_conf_file(cl);
@@ -2336,15 +2395,16 @@ static void dash_setup(int win_w, int win_h) {
     dash_setup_box(0, win_w, win_h);
     dash_setup_box(1, win_w, win_h);
     dash_use(0);
+    nav_setup(win_w, win_h);
 }
 
-/* poll /tmp/dash.state at most every 200 ms; copy changed boxes into their pixmaps. Returns 1 on change. */
+/* poll /tmp/dash.state + /tmp/cluster_cp.state at most every 200 ms; copy changed boxes into their pixmaps. */
 static int dash_tick(void) {
-    if (!g_dash_pix[0] && !g_dash_pix[1]) return 0;
+    if (!g_dash_pix[0] && !g_dash_pix[1] && !g_nav_pix) return 0;
     uint64_t now = now_us() / 1000ULL;
     if (now - g_dash_poll_ms < 200) return 0;
     g_dash_poll_ms = now;
-    int ch = dash_poll(now);
+    int ch = (g_dash_pix[0] || g_dash_pix[1]) ? dash_poll(now) : 0;
     if (ch && g_dash_have) {
         for (int b = 0; b < 2; b++) {
             if (!g_dash_pix[b]) continue;
@@ -2354,28 +2414,44 @@ static int dash_tick(void) {
         }
     }
     if (ch && g_dash_logged < 3) { g_dash_logged++; LOG("dash: %s %s", g_dash_have ? "show" : "hide", g_dash_line); }
-    return ch;
+
+    int nch = g_nav_pix ? nav_poll() : 0;
+    if (nch && g_nav_active && g_nav_dirty) {
+        for (int y = 0; y < g_nav_h; y++)
+            memcpy(g_nav_ptr + y * g_nav_stride, &g_nav_px[y * g_nav_w], g_nav_w * 4);
+    }
+    if (nch && g_nav_logged < 6) { g_nav_logged++; LOG("navbox: %s\n", g_nav_active ? "show" : "hide"); }
+    return ch || nch;
+}
+
+static void dash_blit_one(int pidx, screen_buffer_t src, int x, int y, int w, int h) {
+    int a[] = {
+        SCREEN_BLIT_SOURCE_X, 0, SCREEN_BLIT_SOURCE_Y, 0,
+        SCREEN_BLIT_SOURCE_WIDTH, w, SCREEN_BLIT_SOURCE_HEIGHT, h,
+        SCREEN_BLIT_DESTINATION_X, x, SCREEN_BLIT_DESTINATION_Y, y,
+        SCREEN_BLIT_DESTINATION_WIDTH, w, SCREEN_BLIT_DESTINATION_HEIGHT, h,
+        SCREEN_BLIT_TRANSPARENCY, SCREEN_TRANSPARENCY_SOURCE_OVER,
+        SCREEN_BLIT_END
+    };
+    if (g_dash_noblend) { a[16] = SCREEN_BLIT_END; }
+    int rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], src, a);
+    if (rc && !g_dash_noblend) {
+        g_dash_noblend = 1;
+        a[16] = SCREEN_BLIT_END;
+        rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], src, a);
+        LOG("dash: source-over blit not supported (errno=%d), opaque blit rc=%d\n", errno, rc);
+    }
 }
 
 static void dash_overlay(int pidx) {
-    if (!g_dash_have || pidx < 0) return;
+    if (pidx < 0) return;
+    int nav_side = g_nav_conf.side ? 1 : 0;
+    /* 导航中自动在指定侧（nav_side=left/right）切为导航信息卡，另一侧照常显示车辆数据；非导航恢复原框 */
     for (int b = 0; b < 2; b++) {
-        if (!g_dash_pix[b]) continue;
-        int a[] = {
-            SCREEN_BLIT_SOURCE_X, 0, SCREEN_BLIT_SOURCE_Y, 0,
-            SCREEN_BLIT_SOURCE_WIDTH, g_dash_bw[b], SCREEN_BLIT_SOURCE_HEIGHT, g_dash_bh[b],
-            SCREEN_BLIT_DESTINATION_X, g_dash_x[b], SCREEN_BLIT_DESTINATION_Y, g_dash_y[b],
-            SCREEN_BLIT_DESTINATION_WIDTH, g_dash_bw[b], SCREEN_BLIT_DESTINATION_HEIGHT, g_dash_bh[b],
-            SCREEN_BLIT_TRANSPARENCY, SCREEN_TRANSPARENCY_SOURCE_OVER,
-            SCREEN_BLIT_END
-        };
-        if (g_dash_noblend) { a[16] = SCREEN_BLIT_END; }
-        int rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dash_buf[b], a);
-        if (rc && !g_dash_noblend) {
-            g_dash_noblend = 1;
-            a[16] = SCREEN_BLIT_END;
-            rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dash_buf[b], a);
-            LOG("dash: source-over blit not supported (errno=%d), opaque blit rc=%d\n", errno, rc);
+        if (g_nav_active && g_nav_pix && b == nav_side) {
+            dash_blit_one(pidx, g_nav_buf, g_nav_x, g_nav_y, g_nav_w, g_nav_h);
+        } else if (g_dash_have && g_dash_pix[b]) {
+            dash_blit_one(pidx, g_dash_buf[b], g_dash_x[b], g_dash_y[b], g_dash_bw[b], g_dash_bh[b]);
         }
     }
 }

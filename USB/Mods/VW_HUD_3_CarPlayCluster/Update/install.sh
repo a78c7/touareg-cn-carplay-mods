@@ -47,6 +47,12 @@ cp -v $MOD_PATH/cl.conf $D/cl.conf.default && chmod 644 $D/cl.conf.default
 [[ -f $MOD_PATH/cl.sh ]] && cp -v $MOD_PATH/cl.sh $D/cl.sh && chmod 755 $D/cl.sh
 # info box items/order/position (v17): the USB copy is the owner's choice, always installed
 [[ -f $MOD_PATH/dash.conf ]] && cp -v $MOD_PATH/dash.conf $D/dash.conf && chmod 644 $D/dash.conf
+# steering-wheel OK double-tap map switch (v19.8): enabled by default unless switch_off is present on USB
+if [[ -f $MOD_PATH/switch_off ]]; then
+    cp -v $MOD_PATH/switch_off $D/switch_off && chmod 644 $D/switch_off
+else
+    rm -f $D/switch_off
+fi
 rm -f $D/disable
 ls -l $D
 

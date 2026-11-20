@@ -412,15 +412,18 @@ static void json_escape(const char *src, char *dst, size_t dsz) {
 typedef struct {
     char items[256];
     char r_items[256];
-    int show, r_show, car_up, acc_up, amap_turn, alpha, tank_l, lat_flip;
+    char nav_side[16];
+    int show, r_show, car_up, acc_up, amap_turn, alpha, tank_l, lat_flip, nav_box, nav_tz;
     double trip_base;
 } dash_cfg_t;
 
 static void parse_dash_conf(dash_cfg_t *c) {
     memset(c, 0, sizeof(*c));
     strcpy(c->items, "power,torque,g,rpm,oil,gearbox");
+    strcpy(c->nav_side, "right");
     c->show = 1; c->r_show = 0; c->car_up = 35; c->acc_up = 80;
     c->amap_turn = 3; c->alpha = 200; c->tank_l = 90; c->lat_flip = 0;
+    c->nav_box = 1; c->nav_tz = 8;
     c->trip_base = 0.0;
     FILE *fp = fopen(DASH_CONF_PATH, "r");
     if (!fp) return;
@@ -448,6 +451,9 @@ static void parse_dash_conf(dash_cfg_t *c) {
         else if (strcmp(k, "alpha") == 0) c->alpha = atoi(v);
         else if (strcmp(k, "tank_l") == 0) c->tank_l = atoi(v);
         else if (strcmp(k, "lat_flip") == 0) c->lat_flip = atoi(v);
+        else if (strcmp(k, "nav_box") == 0) c->nav_box = atoi(v);
+        else if (strcmp(k, "nav_side") == 0) strcpy(c->nav_side, (v[0] == 'l' || v[0] == 'L' || v[0] == '0') ? "left" : "right");
+        else if (strcmp(k, "nav_tz") == 0) c->nav_tz = atoi(v);
         else if (strcmp(k, "trip_base") == 0) c->trip_base = strtod(v, NULL);
     }
     fclose(fp);
@@ -494,17 +500,23 @@ static int save_dash_conf(const char *body) {
     int alpha = clamp_int(form_get(body, "alpha", bufv, sizeof(bufv)) ? bufv : "200", 0, 255, 200);
     int tank_l = clamp_int(form_get(body, "tank_l", bufv, sizeof(bufv)) ? bufv : "90", 0, 200, 90);
     int lat_flip = clamp_int(form_get(body, "lat_flip", bufv, sizeof(bufv)) ? bufv : "0", 0, 1, 0);
+    int nav_box = clamp_int(form_get(body, "nav_box", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
+    const char *nav_side = "right";
+    if (form_get(body, "nav_side", bufv, sizeof(bufv)) && (bufv[0] == 'l' || bufv[0] == 'L' || bufv[0] == '0')) {
+        nav_side = "left";
+    }
+    int nav_tz = clamp_int(form_get(body, "nav_tz", bufv, sizeof(bufv)) ? bufv : "8", -12, 14, 8);
     double trip_base = 0.0;
     if (form_get(body, "trip_base", bufv, sizeof(bufv)) && bufv[0]) {
         trip_base = strtod(bufv, NULL);
         if (trip_base < 0.0 || trip_base > 9999999.0) trip_base = 0.0;
     }
 
-    const char *keys[11] = {
+    const char *keys[14] = {
         "items", "show", "r_items", "r_show", "car_up", "acc_up",
-        "amap_turn", "alpha", "tank_l", "lat_flip", "trip_base"
+        "amap_turn", "alpha", "tank_l", "lat_flip", "trip_base", "nav_box", "nav_side", "nav_tz"
     };
-    char vals[11][280];
+    char vals[14][280];
     snprintf(vals[0], sizeof(vals[0]), "%s", items);
     snprintf(vals[1], sizeof(vals[1]), "%d", show);
     snprintf(vals[2], sizeof(vals[2]), "%s", r_items);
@@ -516,7 +528,10 @@ static int save_dash_conf(const char *body) {
     snprintf(vals[8], sizeof(vals[8]), "%d", tank_l);
     snprintf(vals[9], sizeof(vals[9]), "%d", lat_flip);
     snprintf(vals[10], sizeof(vals[10]), "%.1f", trip_base);
-    int seen[11];
+    snprintf(vals[11], sizeof(vals[11]), "%d", nav_box);
+    snprintf(vals[12], sizeof(vals[12]), "%s", nav_side);
+    snprintf(vals[13], sizeof(vals[13]), "%d", nav_tz);
+    int seen[14];
     memset(seen, 0, sizeof(seen));
 
     char *out = malloc(65536);
@@ -535,7 +550,7 @@ static int save_dash_conf(const char *body) {
                 if (eq) {
                     size_t kl = (size_t)(eq - p);
                     while (kl > 0 && (p[kl - 1] == ' ' || p[kl - 1] == '\t')) kl--;
-                    for (int i = 0; i < 11; i++) {
+                    for (int i = 0; i < 14; i++) {
                         if (strlen(keys[i]) == kl && memcmp(p, keys[i], kl) == 0) {
                             matched = i;
                             break;
@@ -556,7 +571,7 @@ static int save_dash_conf(const char *body) {
         }
         fclose(fp);
     }
-    for (int i = 0; i < 11 && ol + 320 < 65536; i++) {
+    for (int i = 0; i < 14 && ol + 320 < 65536; i++) {
         if (!seen[i]) ol += (size_t)snprintf(out + ol, 65536 - ol, "%s=%s\n", keys[i], vals[i]);
     }
 
@@ -719,7 +734,7 @@ static const char *USB_MOUNTS[] = {
 
 static const char *SYS_LOG_ALLOW[] = {
     "cl_probe.log", "clusterd.log", "vwcn.log", "vwcn_persist.log", "dio_cluster.log",
-    "cl_render_dbg", "cl_car_dbg", "wpa_bcm2.log", "dhcp_bcm2.log", "touareg_netd.log", "wifi_dev_persist.log", NULL
+    "cl_render_dbg", "cl_car_dbg", "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log", "touareg_netd.log", "wifi_dev_persist.log", NULL
 };
 
 static void handle_status(int fd, uint32_t bcm2_ip) {
@@ -745,20 +760,21 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
         "\"dash\":{\"items\":\"%s\",\"show\":%d,\"r_items\":\"%s\",\"r_show\":%d,"
-        "\"car_up\":%d,\"acc_up\":%d,\"amap_turn\":%d,\"alpha\":%d,\"tank_l\":%d,\"lat_flip\":%d,\"trip_base\":%.1f},"
+        "\"car_up\":%d,\"acc_up\":%d,\"amap_turn\":%d,\"alpha\":%d,\"tank_l\":%d,\"lat_flip\":%d,\"trip_base\":%.1f,\"nav_box\":%d,\"nav_side\":\"%s\",\"nav_tz\":%d},"
         "\"cl\":{\"wide_on\":%d,\"wide\":%d,\"view\":%d},"
-        "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d},\"drive_logs\":[",
+        "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d},\"drive_logs\":[",
         ipstr, spd, odo, has_cl, ssh_on,
         proc_alive("pidin -p clusterd 2>/dev/null | grep -q clusterd"),
         proc_alive("pidin -p cl_render 2>/dev/null | grep -q cl_render"),
         proc_alive("pidin -p dio_manager 2>/dev/null | grep -q dio_manager"),
         count_wifi_networks(),
         esc1, dc.show, esc2, dc.r_show,
-        dc.car_up, dc.acc_up, dc.amap_turn, dc.alpha, dc.tank_l, dc.lat_flip, dc.trip_base,
+        dc.car_up, dc.acc_up, dc.amap_turn, dc.alpha, dc.tank_l, dc.lat_flip, dc.trip_base, dc.nav_box, dc.nav_side, dc.nav_tz,
         wide_on, wide, view,
         file_exists(CLUSTER_DIR "/disable"),
         file_exists(CLUSTER_DIR "/ka_off"),
-        file_exists(CLUSTER_DIR "/zoom_flip"));
+        file_exists(CLUSTER_DIR "/zoom_flip"),
+        file_exists(CLUSTER_DIR "/switch_off"));
 
     /* 扫描 U 盘 drive_logs CSV 文件 */
     int first = 1;
@@ -956,7 +972,8 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
             char name[32], val[8];
             form_get(body, "name", name, sizeof(name));
             form_get(body, "val", val, sizeof(val));
-            if (strcmp(name, "disable") != 0 && strcmp(name, "ka_off") != 0 && strcmp(name, "zoom_flip") != 0) {
+            if (strcmp(name, "disable") != 0 && strcmp(name, "ka_off") != 0 &&
+                strcmp(name, "zoom_flip") != 0 && strcmp(name, "switch_off") != 0) {
                 send_json(cfd, 400, 0, "不支持的开关");
                 return;
             }
@@ -975,7 +992,13 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
         } else if (strcmp(target, "/api/action") == 0) {
             char act[32];
             form_get(body, "act", act, sizeof(act));
-            if (strcmp(act, "restart_render") == 0) {
+            if (strcmp(act, "toggle_map") == 0) {
+                if (!g_dry_test) {
+                    int tf = open("/tmp/vwcn_toggle", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                    if (tf >= 0) close(tf);
+                }
+                send_json(cfd, 200, 1, "已触发仪表地图切换（CarPlay ↔ 原车）");
+            } else if (strcmp(act, "restart_render") == 0) {
                 if (!g_dry_test) (void)system("slay -f cl_render >/dev/null 2>&1");
                 send_json(cfd, 200, 1, "已刷新仪表渲染进程");
             } else if (strcmp(act, "restart_carplay") == 0) {

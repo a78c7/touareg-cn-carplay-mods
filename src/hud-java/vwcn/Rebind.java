@@ -32,8 +32,48 @@ public final class Rebind implements Runnable {
     /** while set (CarPlay cluster stream live): re-assert this displayable list on the cluster every HOLD_MS,
      *  so native context switches (VIEW key, junction view) cannot hide the CarPlay layer. */
     static volatile int[] hold;
+    /** v19.8: 保存当前活跃 CarPlay 流的 displayable 列表（如 [58,33]），
+     *  即使用户通过方向盘 OK 双击临时切回原车地图，也保留以便随时一键切回 CarPlay 地图。 */
+    static volatile int[] streamHold;
+    static volatile boolean userNative;
+    static volatile boolean toggleRequested;
     static volatile de.vw.mib.display.DisplayManagementService holdSvc;
     static final int HOLD_MS = 3000;
+    static final File TOGGLE_FILE = new File("/tmp/vwcn_toggle");
+
+    /** 异步请求在 CarPlay 仪表地图与原车仪表地图之间切换（避免在 BAP 回调线程阻塞）。 */
+    static void requestToggle(String reason) {
+        if (streamHold == null) {
+            Log.log("switch: ignored (" + reason + "), no active CarPlay stream");
+            return;
+        }
+        Log.log("switch: requested (" + reason + ") cur=" + (hold != null ? "carplay" : "native"));
+        toggleRequested = true;
+    }
+
+    private static String csv(int[] a) {
+        StringBuffer b = new StringBuffer();
+        for (int i = 0; i < a.length; i++) { if (i > 0) b.append(','); b.append(a[i]); }
+        return b.toString();
+    }
+
+    private static void applyToggle() {
+        int[] sh = streamHold;
+        if (sh == null) {
+            Log.log("switch: aborted, stream ended");
+            return;
+        }
+        if (hold != null) {
+            userNative = true;
+            hold = null;
+            Log.log("switch: CarPlay -> native map");
+            rebind("33;vis1;rate10;st");
+        } else {
+            userNative = false;
+            Log.log("switch: native -> CarPlay map " + list(sh));
+            rebind("hold" + csv(sh) + ";rate10;st");
+        }
+    }
     static String readSeq(File f) {
         try {
             java.io.FileInputStream in = new java.io.FileInputStream(f);
@@ -95,14 +135,17 @@ public final class Rebind implements Runnable {
                     continue;
                 }
                 if (g.startsWith("hold")) {
-                    hold = parse(g.substring(4));
+                    int[] parsed = parse(g.substring(4));
+                    streamHold = parsed;
+                    userNative = false;
+                    hold = parsed;
                     holdSvc = s;
                     s.showDisplayables(CLUSTER_DISPLAY, hold);
                     Log.log("rebind: hold display " + CLUSTER_DISPLAY + " -> " + list(hold));
                     Thread.sleep(400);
                     continue;
                 }
-                if (g.equals("unhold")) { hold = null; Log.log("rebind: unhold"); continue; }
+                if (g.equals("unhold")) { hold = null; streamHold = null; userNative = false; Log.log("rebind: unhold"); continue; }
                 if (g.startsWith("sleep")) { Thread.sleep(Integer.parseInt(g.substring(5).trim())); continue; }
                 int[] ids = parse(g);
                 s.showDisplayables(CLUSTER_DISPLAY, ids);
@@ -120,29 +163,43 @@ public final class Rebind implements Runnable {
     public void run() {
         File f = new File("/tmp/vwcn_rebind");
         try { Thread.sleep(5000); rebindLogOnly(); } catch (Throwable t) { }
-        int tick = 0;
+        long lastPoll = 0;
+        long lastHold = 0;
         String failedQ = null;   // v16: a failed request is retried every 2 s and logged once (was: every 1 s, 2 lines each)
         long nextTry = 0;
         while (!stop) {
             try {
-                Thread.sleep(1000);
-                String q = f.exists() ? readRaw(f) : "";
-                if (q.length() > 0 && !q.equals(applied)) {
-                    long now = System.currentTimeMillis();
-                    boolean first = !q.equals(failedQ);
-                    if (first || now >= nextTry) {
-                        if (first) Log.log("rebind requested seq=" + q);
-                        if (rebind(q.equals("1") ? DEFAULT_SEQ : q)) { applied = q; tick = 0; failedQ = null; }
-                        else {
-                            if (first) Log.log("rebind: not applied yet, will retry every 2 s");
-                            failedQ = q;
-                            nextTry = now + 2000;
+                Thread.sleep(100);
+                long now = System.currentTimeMillis();
+                if (TOGGLE_FILE.exists()) {
+                    TOGGLE_FILE.delete();
+                    requestToggle("file");
+                }
+                if (toggleRequested) {
+                    toggleRequested = false;
+                    applyToggle();
+                    lastHold = System.currentTimeMillis();
+                    continue;
+                }
+                if (now - lastPoll >= 1000) {
+                    lastPoll = now;
+                    String q = f.exists() ? readRaw(f) : "";
+                    if (q.length() > 0 && !q.equals(applied)) {
+                        boolean first = !q.equals(failedQ);
+                        if (first || now >= nextTry) {
+                            if (first) Log.log("rebind requested seq=" + q);
+                            if (rebind(q.equals("1") ? DEFAULT_SEQ : q)) { applied = q; lastHold = now; failedQ = null; }
+                            else {
+                                if (first) Log.log("rebind: not applied yet, will retry every 2 s");
+                                failedQ = q;
+                                nextTry = now + 2000;
+                            }
                         }
                     }
                 }
                 int[] h = hold;
-                if (h != null && holdSvc != null && (++tick * 1000) >= HOLD_MS) {
-                    tick = 0;
+                if (h != null && holdSvc != null && (now - lastHold) >= HOLD_MS) {
+                    lastHold = now;
                     try { holdSvc.showDisplayables(CLUSTER_DISPLAY, h); } catch (Throwable t) { Log.log("hold error: " + t); }
                 }
             } catch (Throwable t) { Log.log("rebind loop error: " + t); }

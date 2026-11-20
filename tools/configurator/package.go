@@ -98,10 +98,15 @@ type dashConf struct {
 	CarUp    int `json:"car_up"`    // rows the map is always moved up (0-90)
 	AccUp    int `json:"acc_up"`    // extra rows while adaptive cruise control is on (0-90)
 	AmapTurn int `json:"amap_turn"` // AMap turn compensation: 0 off (default since v19.4), 1 on, 2 auto (off once lane data is seen), 3 from the picture (v19.4, trial)
+	// v20: navigation card (nav_box / nav_side / nav_tz in dash.conf) and steering-wheel OK double-tap map switch (switch_off flag)
+	NavBox   bool   `json:"nav_box"`
+	NavSide  string `json:"nav_side"` // "right" (default) or "left"
+	NavTz    int    `json:"nav_tz"`
+	OkSwitch bool   `json:"ok_switch"`
 }
 
 func defaultDash() dashConf {
-	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 35, AccUp: 80, AmapTurn: 3}
+	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 35, AccUp: 80, AmapTurn: 3, NavBox: true, NavSide: "right", NavTz: 8, OkSwitch: true}
 }
 
 type pkg struct{ Root string }
@@ -184,6 +189,10 @@ func lookupItem(name string) (string, bool) {
 
 func (p pkg) dashPath() string {
 	return filepath.Join(p.modPath("VW_HUD_3_CarPlayCluster"), "Update", "dash.conf")
+}
+
+func (p pkg) switchOffPath() string {
+	return filepath.Join(p.modPath("VW_HUD_3_CarPlayCluster"), "Update", "switch_off")
 }
 
 func confKV(line string) (string, string, bool) {
@@ -276,8 +285,24 @@ func (p pkg) readDash() (dashConf, bool) {
 			if nerr == nil {
 				d.AmapTurn = n
 			}
+		case "nav_box":
+			if nerr == nil {
+				d.NavBox = n != 0
+			}
+		case "nav_side":
+			lv := strings.ToLower(strings.TrimSpace(v))
+			if lv == "left" || lv == "0" {
+				d.NavSide = "left"
+			} else {
+				d.NavSide = "right"
+			}
+		case "nav_tz":
+			if nerr == nil {
+				d.NavTz = n
+			}
 		}
 	}
+	d.OkSwitch = !isFile(p.switchOffPath())
 	return d, true
 }
 
@@ -291,12 +316,19 @@ func (p pkg) writeDash(d dashConf) error {
 		}
 		b = []byte("# 仪表信息框设置（由「改装设置」程序生成）\n")
 	}
-	show, rshow := 0, 0
+	show, rshow, navbox := 0, 0, 0
 	if d.Show {
 		show = 1
 	}
 	if d.RShow {
 		rshow = 1
+	}
+	if d.NavBox {
+		navbox = 1
+	}
+	navside := "right"
+	if strings.EqualFold(strings.TrimSpace(d.NavSide), "left") {
+		navside = "left"
 	}
 	vals := []struct{ k, v string }{
 		{"items", strings.Join(d.Items, ",")},
@@ -311,6 +343,9 @@ func (p pkg) writeDash(d dashConf) error {
 		{"car_up", strconv.Itoa(clamp(d.CarUp, 0, 90))},
 		{"acc_up", strconv.Itoa(clamp(d.AccUp, 0, 90))},
 		{"amap_turn", strconv.Itoa(clamp(d.AmapTurn, 0, 3))},
+		{"nav_box", strconv.Itoa(navbox)},
+		{"nav_side", navside},
+		{"nav_tz", strconv.Itoa(clamp(d.NavTz, -12, 14))},
 	}
 	aliases := map[string]string{"info": "show", "info_x": "x", "info_y": "y", "info_alpha": "alpha"}
 	done := map[string]bool{}
@@ -344,7 +379,20 @@ func (p pkg) writeDash(d dashConf) error {
 			out = append(out, kv.k+"="+kv.v)
 		}
 	}
-	return os.WriteFile(path, []byte(strings.Join(out, "\n")+"\n"), 0o644)
+	if err := os.WriteFile(path, []byte(strings.Join(out, "\n")+"\n"), 0o644); err != nil {
+		return err
+	}
+	swPath := p.switchOffPath()
+	if d.OkSwitch {
+		if err := os.Remove(swPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	} else {
+		if err := os.WriteFile(swPath, []byte{}, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func clamp(v, lo, hi int) int {
@@ -529,6 +577,20 @@ func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
 			log = append(log, "右边信息框："+names(r.Dash.RItems))
 		} else {
 			log = append(log, "右边信息框：不显示")
+		}
+		if r.Dash.NavBox {
+			sideTxt := "右框"
+			if strings.EqualFold(strings.TrimSpace(r.Dash.NavSide), "left") {
+				sideTxt = "左框"
+			}
+			log = append(log, fmt.Sprintf("导航信息卡：放%s（UTC%+d）", sideTxt, clamp(r.Dash.NavTz, -12, 14)))
+		} else {
+			log = append(log, "导航信息卡：关闭")
+		}
+		if r.Dash.OkSwitch {
+			log = append(log, "方向盘 OK 双击切地图：开启")
+		} else {
+			log = append(log, "方向盘 OK 双击切地图：关闭")
 		}
 	}
 	n := 0

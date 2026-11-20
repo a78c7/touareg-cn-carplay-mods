@@ -8,6 +8,7 @@ export LD_LIBRARY_PATH=/mnt/app/armle/lib:/mnt/app/armle/usr/lib:/eso/lib:/lib:/
 D=/mnt/app/eso/bin/apps/wifi_dev
 LOG=/tmp/wifi_dev_persist.log
 WPA_BIN=/mnt/app/armle/usr/sbin/wpa_supplicant-2.5-wapi
+HAPD_BIN=/mnt/app/armle/usr/sbin/hostapd-2.5-wapi
 PFCTL=/mnt/app/armle/sbin/pfctl
 ED_KEY=$D/ssh_host_ed25519_key
 
@@ -96,6 +97,24 @@ stop_bcm2_dhcp() {
     done
 }
 
+# 2.5) RSDB 并发保活：wpa_supplicant 在 bcm2 启动时会重置博通 qwdi 状态导致 bcm0 5GHz AP 退出，
+# 补拉原厂 hostapd-2.5-wapi 后 bcm2 几秒内自动重连，实现 5GHz 无线 CarPlay AP (bcm0) 与 2.4GHz STA (bcm2) 真并发。
+hapd_tries=0
+ensure_hostapd_bcm0() {
+    [ -e "$D/no_ap_restore" ] && return 0
+    [ ! -s /tmp/ap.config.bcm0 ] && return 0
+    [ ! -x "$HAPD_BIN" ] && return 0
+    if pidin arg 2>/dev/null | grep -q "[h]ostapd-2.5-wapi"; then
+        return 0
+    fi
+    if [ "$hapd_tries" -ge 3 ]; then
+        return 1
+    fi
+    hapd_tries=$((hapd_tries + 1))
+    ( trap "" HUP; exec "$HAPD_BIN" /tmp/ap.config.bcm0 >/tmp/hostapd_bcm0.log 2>&1 ) </dev/null &
+    echo "hostapd restored on bcm0 (#$hapd_tries)" >> "$LOG"
+}
+
 # 后台独立守护循环
 (
     trap "" HUP
@@ -126,6 +145,10 @@ stop_bcm2_dhcp() {
         fi
     fi
 
+    # 第 3.5 步：等 wpa_supplicant 初始化完 qwdi 后，检查并恢复 bcm0 5GHz AP（无线 CarPlay）
+    sleep 3
+    ensure_hostapd_bcm0
+
     # 第 4 步：单实例拉起 touareg_netd (mDNS touareg.local + bcm2:8080 Web)
     if [ -x "$D/touareg_netd" ]; then
         if ! pidin arg 2>/dev/null | grep -q "[t]ouareg_netd"; then
@@ -155,7 +178,7 @@ stop_bcm2_dhcp() {
         if echo "$ifout" | grep -q "status: active"; then
             cur_ip=$(echo "$ifout" | awk '/inet / && !/inet6/ {print $2; exit}')
             if [ "$was_active" -eq 0 ] || [ -z "$cur_ip" ] || [ "$cur_ip" = "0.0.0.0" ]; then
-                now=$(date +%s 2>/dev/null || echo "$((tick * 6))")
+                now=$((tick * 6))
                 if [ $((now - last_dhcp_ts)) -ge 15 ] || [ "$was_active" -eq 0 ]; then
                     ensure_pf_bcm2
                     stop_bcm2_dhcp
@@ -179,7 +202,7 @@ stop_bcm2_dhcp() {
 
         # 控制内存日志大小 <= 512 KB
         if [ $((tick % 10)) -eq 0 ]; then
-            for lf in /tmp/wpa_bcm2.log /tmp/touareg_netd.log /tmp/dhcp_bcm2.log "$LOG"; do
+            for lf in /tmp/wpa_bcm2.log /tmp/hostapd_bcm0.log /tmp/touareg_netd.log /tmp/dhcp_bcm2.log "$LOG"; do
                 if [ -f "$lf" ]; then
                     set -- $(ls -l "$lf")
                     [ -n "$5" ] && [ "$5" -gt 524288 ] && : > "$lf"

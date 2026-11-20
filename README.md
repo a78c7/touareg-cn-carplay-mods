@@ -5,7 +5,7 @@
 <img src="docs/img/hero_banner.svg" alt="途锐 CarPlay 改装全家桶与无线自由定制底座" width="100%">
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v20.0"></a>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v20.1"></a>
   <a href="docs/README.md"><img src="docs/img/badges/platform.svg" alt="MH2p QNX 6.6"></a>
   <a href="#手机无线控制台与-ai-自由开发"><img src="docs/img/badges/console.svg" alt="touareg.local:8080"></a>
   <a href="docs/07-无线控制台与SSH开发.md"><img src="docs/img/badges/ssh.svg" alt="Wireless SSH Ed25519"></a>
@@ -55,8 +55,8 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 | **🖥️ 全屏 CarPlay** | 车机端就地修补 38 字节去掉黑边，铺满整块中控屏（仓库不分发任何原厂文件） | 默认安装 |
 | **📡 无线 CarPlay & Android Auto** | 开启原厂未激活的无线 CarPlay 与安卓投屏（集成 LawPaul 模块） | 默认安装 |
 | **🧭 CarPlay 导航上 HUD** | 苹果地图、高德、百度的转向箭头、路口距离、路名、车道直投抬头显示（有线/无线双协议栈均支持） | 默认安装 |
-| **🗺️ CarPlay 地图上仪表** | 手机导航实时投射至 `1920×639` 全液晶仪表中央；高德车标画面识别自动居中、方向盘上下键缩放、断开秒回原车地图 | 默认安装 |
-| **📊 左右双仪表信息框** | 仪表地图两侧叠放半透明实时数据卡片，从 **35 项原车底层数据**（功率、扭矩、纵横向 G 值、0–100 计时、双油温、油耗等）自选与拖拽排序 | 默认安装 |
+| **🗺️ CarPlay 地图上仪表** | 手机导航实时投射至 `1920×639` 全液晶仪表中央；高德车标画面识别自动居中、方向盘上下键缩放、**v20.1 新增方向盘右侧 `OK` 键双击切换 CarPlay ↔ 原车地图** | 默认安装 |
+| **📊 双侧信息框 & 导航卡** | 两侧叠放半透明卡片，从 **35 项原车数据**自选排序；**v20.1 新增导航信息卡**（左/右框可选，支持高德/百度/苹果地图：转向大箭头、完整中文路名、车道指引/下下路口、剩余路程/时间与到达时间，结束导航自动恢复原框） | 默认安装 |
 | **📈 10Hz 行车记录（AI 复盘）** | 刷完一键把 U 盘切换为「行车记录盘」常插车上，每秒 10 行记录全车动态 CSV，附带提问模板直接交给豆包、千问、DeepSeek 分析 | 随时切换 |
 | **📱 手机无线控制台 & SSH** | **v20 新增**：连手机个人热点打开 `http://touareg.local:8080` 秒改信息框、调车标、无线下载行车记录 CSV；进阶可勾选开启 `2012` 无线 SSH 自由开发 | 默认不装（按需开启） |
 
@@ -136,7 +136,8 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 ## 日常使用与进阶指南
 
-- **HUD 与仪表地图**：仪表按方向盘 `VIEW` 键切到导航页，连上 CarPlay 后地图自动投上仪表（两侧圆形表盘可在原车仪表设置里隐藏），切夜间模式同步变深色；导航开始后 HUD 自动显示转向箭头、距离与路名。开 ACC 时地图自动上移避开辅助驾驶图标。
+- **HUD 与仪表地图**：仪表按方向盘 `VIEW` 键切到导航页，连上 CarPlay 后地图自动投上仪表（两侧圆形表盘可在原车仪表设置里隐藏），切夜间模式同步变深色；导航开始后 HUD 与选定侧的仪表导航卡同步显示转向箭头、距离、完整路名、车道指引/下下路口、剩余路程/时间与到达时间。开 ACC 时地图自动上移避开辅助驾驶图标。
+- **方向盘切换 CarPlay / 原车地图（v20.1 新增）**：仪表在地图页且 CarPlay 在线时，**2 秒内连按 2 下方向盘右侧 `OK` 键**即可在 CarPlay 地图与原车地图间无缝秒切（后台 CarPlay 流不断开，单按 `OK` 键仍保持原车自动缩放，不干扰上下缩放键）；装车前「改装设置」和装车后手机无线控制台均支持随时开关。
 - **行车记录喂给 AI**：在「改装设置」底部点 **「改成行车记录 U 盘」** 后即可一直插在车上（不会再触发刷机）。把 `drive_logs` 里生成的 CSV 连同自动附带的 **`给AI分析行车记录.txt`** 一起传给豆包、千问、DeepSeek，即可一键复盘里程、急加减速、最大功率扭矩与三油温变化。
 
 <details>
@@ -156,6 +157,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 - **一键卸载还原**：运行「改装设置」，把要卸载的功能选为「卸载」保存到 U 盘，上车再刷一次即精准还原原厂文件（手动方式：在对应模块目录放空文件 `uninstall.txt`；三个 HUD/仪表模块需同时卸载）。
 - **插 U 盘没反应**：检查 U 盘是否为 **FAT32**（32GB 以内），且 `Data`、`Meta` 直接在 U 盘根目录而非子文件夹内。
 - **刷完没变化**：查看 U 盘 `Logs/` 下对应模块的 `.log`（版本号不符会记录 `abort`）；`_ModKit_Update.log` 中的 `Filename too long` 是 ModKit 自带提示，可忽略。
+- **从旧固件（如 P9832）升级 P2878 后无线 CarPlay 连不上**：有车友反馈跨版本升级 2878 后系统内部会屏蔽 5 GHz WLAN（表现：有线正常、手机只能搜到 2.4 GHz 热点但无线 CarPlay 进不去），需先确认车机内部 5 GHz WLAN 已重新开启（参见 [#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)）。
 - **安卓端直连无线 SSH 提示找不到 `touareg.local`**：部分安卓原生程序内置 DNS 不走系统 mDNS，打开手机热点「已连接设备」列表找到 `touareg` 对应的实际 IP 填入即可；若手机开了全局 VPN/代理请对局域网段放行。
 - **提 Issue 附日志**：在 U 盘根目录新建 `cluster_logs` 文件夹插车上导航 2 分钟以上（或直接在 `8080` 无线控制台「日志导出」页下载），仅上传 `Logs` 与排障日志（U 盘 `backup` 原厂备份与本车绑定切勿公开；发帖前留意抹去日志里可能出现的手机名或路名）。
 </details>
@@ -200,8 +202,8 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 One zero-disassembly USB flash for the China-market VW Touareg (`MH2p_CN_VWG36_P2878` — Touareg-specific UI/cluster patches safely skip any other firmware), plus an open wireless web console & SSH development base adaptable across **MH2p (MIB2+ High)** head units on **VW, Audi, Porsche PCM 5, Bentley, and Lamborghini**:
 
-- **Out-of-the-Box Mods**: Full-screen CarPlay (38-byte in-place patch, zero proprietary VW/Apple files distributed), wireless CarPlay & Android Auto (LawPaul), CarPlay turn-by-turn on HUD (both wireless `libesoiap2` & wired Cinemo iAP2), phone navigation map on the `1920×639` digital cluster with vision-based AMap auto-centering, dual customizable telemetry info boxes (35 live DSI channels), and a 10 Hz CSV drive logger ready for LLM trip analysis.
-- **Wireless Mobile Console & SSH (`v20.0`, opt-in)**: Connects silently to your phone's hotspot via the idle `bcm2` STA interface (`dhcp.client -n -R`, leaving wireless CarPlay and stock `ecm0` telematics untouched). Open `http://touareg.local:8080` (PIN-protected, parked-only safety lock) to tweak cluster items or download drive-log CSVs wirelessly — or enable **Wireless SSH (`:2012`)** with locally generated per-car Ed25519 keys to build custom cluster UIs live with AI coding agents such as **DeepSeek Hermes** (desktop) or **DeepSeek Hermes Go** (Android client for DeepSeek Hermes; iPhone not yet supported).
+- **Out-of-the-Box Mods**: Full-screen CarPlay (38-byte in-place patch, zero proprietary VW/Apple files distributed), wireless CarPlay & Android Auto (LawPaul), CarPlay turn-by-turn on HUD (both wireless `libesoiap2` & wired Cinemo iAP2), phone navigation map on the `1920×639` digital cluster with vision-based AMap auto-centering, **steering-wheel `OK` double-tap switching between CarPlay & stock cluster map (`v20.1`)**, dual customizable telemetry info boxes (35 live DSI channels) plus an **auto-switching navigation card** (left/right side selectable, full street names, lanes/next-next turn, remaining distance/time & ETA for AMap/Baidu/Apple Maps), and a 10 Hz CSV drive logger ready for LLM trip analysis.
+- **Wireless Mobile Console & SSH (`v20.0+`, opt-in)**: Connects silently to your phone's hotspot via the idle `bcm2` STA interface (`dhcp.client -n -R`, leaving stock `ecm0` telematics untouched and restoring 5 GHz `bcm0` AP for concurrent RSDB wireless CarPlay in `v20.1`). Open `http://touareg.local:8080` (PIN-protected, parked-only safety lock) to tweak cluster items, toggle maps, or download drive-log CSVs wirelessly — or enable **Wireless SSH (`:2012`)** with locally generated per-car Ed25519 keys to build custom cluster UIs live with AI coding agents such as **DeepSeek Hermes** (desktop) or **DeepSeek Hermes Go** (Android client for DeepSeek Hermes; iPhone not yet supported).
 - **Install**: Format a ≤ 32 GB USB drive as **FAT32** → extract the [latest release zip](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) to the USB root → run `改装设置（Windows）.exe` or `改装设置（Mac）.command` (offline `127.0.0.1` configurator) → start the engine, insert the USB drive, wait for automatic reboots, and remove when prompted.
 - **Documentation & Architecture**: Full Chinese engineering write-ups (`01–07`) and MH2p system reference (`R1–R5`) in **[`docs/README.md`](docs/README.md)**. Sources in `src/` & `tools/`, cross-build script in `src/build.sh`.
 - **License & Disclaimer**: Original code **GPL-3.0** (`docs/` text also **CC BY-SA 4.0**); `cl_render`, `wired`, `dio_cluster.so`, ModKit & LawPaul modules **CC BY-NC-SA 4.0**; glyphs **SIL OFL 1.1**. **Personal, non-commercial use only.** Unofficial research project, not affiliated with or endorsed by Volkswagen Group, Apple, or Google; use entirely at your own risk.

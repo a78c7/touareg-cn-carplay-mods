@@ -5,7 +5,7 @@ import org.osgi.framework.BundleContext;
 
 public class Activator implements BundleActivator {
     public void start(BundleContext ctx) throws Exception {
-        Log.log("VWClusterNav v19.7 Activator.start called");
+        Log.log("VWClusterNav v19.8-switch Activator.start called");
         try {
             Bridge.startThread();
             Log.log("bridge thread started");
@@ -21,6 +21,12 @@ public class Activator implements BundleActivator {
         } catch (Throwable t) {
             Log.log("dash start error: " + t);
         }
+        try {
+            KeyProbe.start();
+            Log.log("keyprobe thread started");
+        } catch (Throwable t) {
+            Log.log("keyprobe start error: " + t);
+        }
     }
 
     public void stop(BundleContext ctx) throws Exception {
@@ -28,6 +34,7 @@ public class Activator implements BundleActivator {
             RGGate.stop = true;
             Dash.stop = true;
             Rebind.stop = true;
+            KeyProbe.stop = true;
             Bridge.stopThread();
         } catch (Throwable t) {
             Log.log("Activator.stop error: " + t);

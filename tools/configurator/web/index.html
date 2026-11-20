@@ -148,13 +148,27 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
         <div class="pv-title">效果示意（数字是举例；车上用的字体和位置以实车为准）</div>
         <div class="pv-row"><div class="pv" id="pv"></div><div class="pv" id="pv2"></div></div>
       </div>
+      <div class="wbox" style="margin-top:12px">
+        <div class="row" style="margin-bottom:4px">
+          <label style="font-weight:600">导航信息卡（转向大箭头、完整路名、车道/下下路口、剩余路程/时间与到达时间）：</label>
+          <select id="navmode" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);font-size:14px">
+            <option value="right">显示在右边框（默认）</option>
+            <option value="left">显示在左边框</option>
+            <option value="off">关闭</option>
+          </select>
+        </div>
+        <p class="hint" style="margin:4px 0 10px">支持高德、百度、苹果地图；导航时自动接管选定那一侧的框，结束导航自动恢复该侧原信息框（未启用则隐藏）。</p>
+        <label class="switch"><input type="checkbox" id="okswitch"> <span>方向盘右侧 OK 键 2 秒内连按 2 下切换 CarPlay 地图 ↔ 原车地图</span></label>
+        <p class="hint" style="margin:4px 0 0">单按 OK 键仍保持原车自动缩放，不干扰上下缩放键。</p>
+      </div>
       <details>
-        <summary>高级：左边框位置、透明度、油箱容积</summary>
+        <summary>高级：左边框位置、透明度、油箱容积、导航到达时区</summary>
         <div class="adv">
           <label>左边距 x（仪表画面像素）<input type="number" id="x" min="0" max="1500"></label>
           <label>上边距 y（默认 164，刚好在导航条和挡位框之间）<input type="number" id="y" min="0" max="600"></label>
           <label>背景不透明度 <span id="alphav"></span><input type="range" id="alpha" min="0" max="255"></label>
           <label>油箱容积（升，"燃油存量"用；0 = 显示百分比）<input type="number" id="tank" min="0" max="200"></label>
+          <label>预计到达时间时区偏移（北京时间默认 8）<input type="number" id="navtz" min="-12" max="14"></label>
           <label class="cb"><input type="checkbox" id="latflip"> 横向 G 正负号反过来</label>
         </div>
       </details>
@@ -340,6 +354,8 @@ function renderDash(){
   // preview: both boxes (left, right)
   pvBox($('pv'), dash.show, dash.items, 'l'); pvBox($('pv2'), dash.r_show, dash.r_items, 'r');
   $('x').value = dash.x; $('y').value = dash.y; $('alpha').value = dash.alpha; $('alphav').textContent = dash.alpha; $('tank').value = dash.tank_l; $('latflip').checked = !!dash.lat_flip;
+  $('navmode').value = dash.nav_box === false ? 'off' : (dash.nav_side === 'left' ? 'left' : 'right');
+  $('navtz').value = dash.nav_tz == null ? 8 : dash.nav_tz; $('okswitch').checked = dash.ok_switch !== false;
   $('carup').value = dash.car_up; $('carupv').textContent = dash.car_up; $('accup').value = dash.acc_up; $('accupv').textContent = dash.acc_up; $('amapturn').value = String(dash.amap_turn == null ? 3 : dash.amap_turn);
 }
 
@@ -378,7 +394,12 @@ function renderSummary(){
   if (by.uninstall.length) lines.push(`<div>卸载（恢复原车）：<b>${esc(by.uninstall.join('、'))}</b></div>`);
   if (by.skip.length) lines.push(`<div>不处理：${esc(by.skip.join('、'))}</div>`);
   const lst = (show, l) => show ? (l.length ? esc(l.map(k => plain(item(k).label)).join('、')) : '<span style="color:var(--bad)">还没有选项目</span>') : '不显示';
-  if (sel.cluster === 'install') { lines.push(`<div>左边信息框：${lst(dash.show, dash.items)}</div>`); lines.push(`<div>右边信息框：${lst(dash.r_show, dash.r_items)}</div>`); }
+  if (sel.cluster === 'install') {
+    lines.push(`<div>左边信息框：${lst(dash.show, dash.items)}</div>`);
+    lines.push(`<div>右边信息框：${lst(dash.r_show, dash.r_items)}</div>`);
+    const navTxt = dash.nav_box === false ? '关闭' : (dash.nav_side === 'left' ? '放左边框' : '放右边框');
+    lines.push(`<div>导航信息卡：<b>${navTxt}</b> · 方向盘 OK 双击切地图：<b>${dash.ok_switch !== false ? '开启' : '关闭'}</b></div>`);
+  }
   const werr = wifiInvalidMsg();
   if (sel.wifi === 'install') {
     const w = collectWifi();
@@ -421,8 +442,15 @@ document.addEventListener('click', e => {
 $('show').addEventListener('change', e => { if (side === 'l') dash.show = e.target.checked; else dash.r_show = e.target.checked; renderDash(); renderSummary(); });
 const num = (id, key, lo, hi) => $(id).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dash[key] = Math.max(lo, Math.min(hi, v)); if (id === 'alpha') { $('alphav').textContent = dash.alpha; } renderDashPreviewOnly(); } });
 function renderDashPreviewOnly(){ const a = document.activeElement && document.activeElement.id; renderDash(); if (a && $(a)) $(a).focus(); }
-num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); num('tank', 'tank_l', 0, 200);
+num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); num('tank', 'tank_l', 0, 200); num('navtz', 'nav_tz', -12, 14);
 $('latflip').addEventListener('change', e => { dash.lat_flip = e.target.checked ? 1 : 0; });
+$('navmode').addEventListener('change', e => {
+  const v = e.target.value;
+  dash.nav_box = v !== 'off';
+  if (v === 'left' || v === 'right') dash.nav_side = v;
+  renderSummary();
+});
+$('okswitch').addEventListener('change', e => { dash.ok_switch = e.target.checked; renderSummary(); });
 $('carup').addEventListener('input', e => { dash.car_up = +e.target.value; $('carupv').textContent = dash.car_up; });
 $('accup').addEventListener('input', e => { dash.acc_up = +e.target.value; $('accupv').textContent = dash.acc_up; });
 $('amapturn').addEventListener('change', e => { dash.amap_turn = +e.target.value; });
@@ -443,7 +471,7 @@ $('order').addEventListener('drop', e => { const li = e.target.closest('li[data-
 $('save').addEventListener('click', async () => {
   const btn = $('save'); btn.disabled = true; btn.textContent = '正在保存…';
   try {
-    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn}, wifi: collectWifi()});
+    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn, nav_box: dash.nav_box !== false, nav_side: dash.nav_side === 'left' ? 'left' : 'right', nav_tz: dash.nav_tz == null ? 8 : dash.nav_tz, ok_switch: dash.ok_switch !== false}, wifi: collectWifi()});
     if (!r.ok) { $('result').innerHTML = `<div class="msg bad">没有保存：${esc(r.error)}</div>`; return; }
     lastSSHKey = r.sshPrivKey || ''; lastSSHGuide = r.sshGuide || '';
     const sshBanner = lastSSHKey ? `<div class="msg info" style="margin:10px 0"><b>已生成本车专属 SSH 密钥对</b>${r.sshKeySavedDir ? `，私钥已自动保存到电脑：<code>${esc(r.sshKeySavedDir)}</code>` : ''}（U 盘内不保留私钥，请妥善保存）。<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="dlpriv">下载私钥 touareg_ed25519</button><button class="btn" type="button" id="dlguide">下载连接说明.txt</button></div></div>` : '';
