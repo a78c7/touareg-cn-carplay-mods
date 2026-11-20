@@ -29,15 +29,14 @@
 
 ## 演示与概念预览
 
+https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
+
 <div align="center">
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/download/v20.0/touareg-cockpit-demo-hd.mp4">
-    <img src="docs/img/demo_preview.gif" alt="途锐全液晶仪表自定义与无线控制台演示预览" width="92%">
-  </a>
   <p>
-    <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/download/v20.0/touareg-cockpit-demo-hd.mp4"><b>▶️ 点击播放 57 秒有声双语完整版 (HD · 6.2 MB)</b></a> ·
-    <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/download/v20.0/touareg-cockpit-demo-1080p60.mp4"><b>🎞️ 下载 1080p 60fps 原画母带 (67 MB)</b></a>
+    <sub><i>上方视频可直接点击有声播放（中英双语字幕） · 如需收藏最高画质可点此 <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/download/v20.0/touareg-cockpit-demo-1080p60.mp4"><b>🎞️ 下载 1080p 60fps 原画母带 (67 MB)</b></a></i></sub>
+    <br>
+    <sub><i>注：视频前段展示的多套定制仪表皮肤为基于本仓库 <code>1920×639</code> 独立图层与 10Hz 实时车辆数据通道的扩展概念演示；当前 U 盘包开箱内置「全屏 CarPlay 地图 + 左右双信息框」，并开放无线网页控制台与无线 SSH 供自由定制开发。</i></sub>
   </p>
-  <sub><i>注：视频前段展示的多套定制仪表皮肤为基于本仓库 <code>1920×639</code> 独立图层与 10Hz 实时车辆数据通道的扩展概念演示；当前 U 盘包开箱内置「全屏 CarPlay 地图 + 左右双信息框」，并开放无线网页控制台与无线 SSH 供自由定制开发。</i></sub>
 </div>
 
 ---
