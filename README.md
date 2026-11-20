@@ -1,3 +1,5 @@
+# 途锐中国版(MH2p P2878) CarPlay 改装合集：全屏 + 无线 + Android Auto + 导航上HUD + CarPlay地图上仪表 + 自定义仪表信息框，一个U盘一次刷入
+
 <div align="center">
 
 <img src="docs/img/hero_banner.svg" alt="途锐 CarPlay 改装全家桶与无线自由定制底座" width="100%">
@@ -21,6 +23,22 @@
   <a href="#vw-touareg-cn--mh2p-open-cockpit"><b>🇺🇸 English</b></a>
 </p>
 
+</div>
+
+---
+
+## 演示与概念预览
+
+<div align="center">
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/download/v20.0/touareg-cockpit-demo-hd.mp4">
+    <img src="docs/img/demo_preview.gif" alt="途锐全液晶仪表自定义与无线控制台演示预览" width="92%">
+  </a>
+  <p>
+    <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/download/v20.0/touareg-cockpit-demo-hd.mp4"><b>▶️ 点击播放 57 秒有声双语完整版 (HD · 6.2 MB)</b></a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/download/v20.0/touareg-cockpit-demo-1080p60.mp4"><b>🎞️ 下载 1080p 60fps 原画母带 (67 MB)</b></a>
+  </p>
+  <sub><i>注：视频前段展示的多套定制仪表皮肤为基于本仓库 <code>1920×639</code> 独立图层与 10Hz 实时车辆数据通道的扩展概念演示；当前 U 盘包开箱内置「全屏 CarPlay 地图 + 左右双信息框」，并开放无线网页控制台与无线 SSH 供自由定制开发。</i></sub>
 </div>
 
 ---
