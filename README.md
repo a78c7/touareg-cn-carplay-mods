@@ -20,7 +20,8 @@
   <a href="#手机无线控制台与-ai-自由开发"><b>📱 无线控制台 & SSH</b></a> ·
   <a href="docs/README.md"><b>📚 MH2p 跨品牌开发手册</b></a> ·
   <a href="#免责声明"><b>⚠️ 免责声明</b></a> ·
-  <a href="#vw-touareg-cn--mh2p-open-cockpit"><b>🇺🇸 English</b></a>
+  <a href="#vw-touareg-cn--mh2p-open-cockpit"><b>🇺🇸 English</b></a> ·
+  <a href="#vw-touareg--mh2p-open-cockpit-deutsch"><b>🇩🇪 Deutsch</b></a>
 </p>
 
 </div>
@@ -105,71 +106,30 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 - 上车打开手机个人热点（**iPhone 首次请打开「最大兼容性」并停留在「设置 → 个人热点」页面亮屏 3～5 秒**；安卓选 WPA2），车机开机约 1 分钟后静默连入。
 - 手机浏览器访问 **`http://touareg.local:8080`**（首次输一次口令自动记住），停车状态下（车速 ≤ 3 km/h）直接点选左右信息框、调车标高度、开宽画布、或把 U 盘 `drive_logs` 里的行车记录 CSV 直接无线下载到手机发给 AI 分析。
 
-### 2. 傻瓜式无线 SSH + AI 自由开发教程（零代码基础也能照着做）
+### 2. 傻瓜式无线 SSH + AI 自由开发教程（把钥匙和一句话丢给 AI，全程免敲命令）
 
-想用手机或电脑上的 AI（如 **DeepSeek Hermes Go**、**DeepSeek Hermes**、**Claude Code**、**Cursor**）直接连进车机改配置、看实时数据或定制你自己的仪表画面，按下面 **4 步**走即可：
+想用电脑上的 **DeepSeek Hermes**（或 Claude Code / Cursor），或者只带一部手机用 **DeepSeek Hermes Go（DeepSeek Hermes 安卓手机客户端，iPhone 暂不支持）** 直接无线连进车机改配置、自定义仪表画面，**不需要你自己查车机 IP、不需要手动填端口建连接、也不需要敲一行命令**，只需 **3 步**：
 
-#### 第 ① 步：刷机前拿到你这台车的「专属钥匙」
-1. 双击运行 U 盘里的 `改装设置`，把 **「手机无线控制台（可选 SSH 开发）」** 选为 **「安装」**，填好你的手机热点名和密码。
-2. 勾上 **「同时开启 SSH 无线开发终端（端口 2012）」**，点 **「保存到 U 盘」**。
-3. 你的电脑桌面上会自动生成一个 **`途锐无线SSH密钥`** 文件夹，里面的 **`touareg_ed25519`**（注意是不带 `.pub` 的那个文件）就是登录车机的唯一私钥（按前面的步骤把 U 盘拿到车上刷完即可）。
-
-#### 第 ② 步：上车打开手机个人热点（让车机自动连上你）
-1. 发动车辆，打开手机**个人热点**，等车机开机约 **1 分钟**自动连入（手机顶栏会看到热点连接设备 `+1`）：
-   - **iPhone 用户**：打开「设置 → 个人热点 → 最大兼容性」，**首次连接时停留在个人热点页面亮屏等 3～5 秒**，连上后即可锁屏切走。
-   - **安卓用户**：热点安全性选 **WPA2**；如果手机上开了 VPN / 代理软件（如 Clash 全局模式），请先关闭或开启「绕过局域网」，否则手机访问不到热点里的车机。
-
-#### 第 ③ 步：按你的设备连上车机（三选一）
-
-<details open>
-<summary><b>📱 方式 A：只用一部安卓手机（DeepSeek Hermes Go 手机直接改车机，免带电脑）</b></summary>
-
-1. 把电脑桌面 `途锐无线SSH密钥` 文件夹里的 **`touareg_ed25519`** 私钥发到安卓手机上（存到手机本地文件夹，如 `Download`）。
-2. 点进手机系统的「个人热点 → **已连接设备**」，找到名叫 **`touareg`** 的设备，记下它的数字 IP（例如 `192.168.43.xxx` 或 `172.20.10.x`；安卓 App 填数字 IP 最稳）。
-3. 打开 **DeepSeek Hermes Go**（或 Termius / JuiceSSH 等支持 SSH 的客户端），新建车机连接，照下面 4 项填空：
-   - **主机 / Host**：填刚才看到的车机数字 IP（如 `192.168.43.105`）
-   - **端口 / Port**：`2012`
-   - **用户名 / User**：`root`
-   - **认证方式 / Auth**：选 **密钥（Private Key）**，导入手机里的 `touareg_ed25519` 文件（密码留空）
-4. 点连接即进！此时你的手机依然走自己的 5G 流量调大模型 API，同时已通过热点直连车机后台。
-</details>
-
-<details open>
-<summary><b>💻 方式 B：用笔记本电脑（Mac / Windows 跑 DeepSeek Hermes / Claude Code / Cursor）</b></summary>
-
-1. 把笔记本电脑的 Wi-Fi **连到同一个手机个人热点上**（这样电脑既有外网调 AI，又和车机在同一个局域网）。
-2. **一劳永逸配好快捷连接**（只需做第一次，以后永远只要输入 `ssh touareg` 就能进，所有 AI 编程工具也能自动免密调用）：
-   - **Mac 电脑**：打开「终端（Terminal）」，把下面整段复制进去回车：
-     ```bash
-     mkdir -p ~/.ssh && chmod 700 ~/.ssh && cp ~/Desktop/途锐无线SSH密钥/touareg_ed25519 ~/.ssh/ && chmod 600 ~/.ssh/touareg_ed25519 && printf "\nHost touareg\n  HostName touareg.local\n  Port 2012\n  User root\n  IdentityFile ~/.ssh/touareg_ed25519\n  StrictHostKeyChecking accept-new\n" >> ~/.ssh/config
-     ```
-   - **Windows 电脑**：按 `Win + X` 打开「终端（PowerShell）」，把下面整段复制进去回车：
-     ```powershell
-     New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null; Copy-Item "$HOME\Desktop\途锐无线SSH密钥\touareg_ed25519" "$HOME\.ssh\touareg_ed25519" -Force; Add-Content "$HOME\.ssh\config" "`nHost touareg`n  HostName touareg.local`n  Port 2012`n  User root`n  IdentityFile ~/.ssh/touareg_ed25519`n  StrictHostKeyChecking accept-new"
-     ```
-3. 测试一下：在终端里输入 `ssh touareg` 回车，看到 `#` 提示符或输入 `uname -a` 显示 `QNX mmx 6.6.0` 就说明彻底通了！（若 Windows 提示找不到 `touareg.local`，把上面配置里的 `touareg.local` 换成手机热点列表里 `touareg` 的数字 IP 即可）。
-</details>
-
-<details>
-<summary><b>🍎 方式 C：iPhone / iPad 随身连接（Termius 免费版）</b></summary>
-
-1. 把 `touareg_ed25519` 通过隔空投送（AirDrop）或文件发到 iPhone。
-2. 打开 App Store 免费的 **Termius**：先在 **Keychain** 里点 `+` → `Import Key` 导入 `touareg_ed25519`；再在 **Hosts** 里点 `+` 新建：Hostname 填 `touareg.local`、Port 填 `2012`、Username 填 `root`、Key 选刚才导入的密钥，保存后一点即连。
-</details>
-
-#### 第 ④ 步：把这段「安全开场提示词」复制给 AI，直接说人话改车机
-连通之后，打开你的 **DeepSeek Hermes（手机或电脑端）/ Claude Code / Cursor**，先把下面这段带好安全护栏的说明整段发给 AI，后面就可以直接用大白话提需求了：
+1. **刷机前勾上 SSH 拿到「专属钥匙」**：双击运行 U 盘里的 `改装设置`，把「手机无线控制台（可选 SSH 开发）」选为 **「安装」**，填好手机热点，勾上 **「同时开启 SSH 无线开发终端（端口 2012）」** 点保存。电脑桌面会自动生成 **`途锐无线SSH密钥`** 文件夹，里面的 **`touareg_ed25519`**（不带 `.pub` 后缀）就是本车唯一私钥（上车插 U 盘刷入一次即可）。
+2. **上车打开手机个人热点**：发动车辆，打开手机个人热点等约 **1 分钟**车机自动连入（iPhone 请开「最大兼容性」并在首次连接时停留在热点页亮屏 3～5 秒；安卓选 WPA2，若手机开了全局 VPN/代理请先关闭或绕过局域网）。
+3. **把私钥和下面这段话直接发给 AI（让它自己读钥匙、自己找车机连上）**：
+   - **电脑端**：电脑 Wi-Fi 连同一个手机热点，打开 **DeepSeek Hermes**（或 Claude Code / Cursor）；
+   - **安卓手机端（免带电脑）**：把 `touareg_ed25519` 私钥存到安卓手机上，打开 **DeepSeek Hermes Go（DeepSeek Hermes 安卓手机客户端，iPhone 暂不支持）**；
+   - 在对话框里附上 `touareg_ed25519` 私钥（或告诉它所在文件夹），把下面整段话复制发给它即可：
 
 ```text
-请通过 SSH 连接我的途锐 MH2p 车机（已配好快捷名 `ssh touareg`，或 `-p 2012 root@<车机IP>`）。
-车机环境与安全铁律（严格遵守）：
-1. 系统是 QNX 6.6.0 (ARMv7 Tegra K1)，没有 bash/sed -i/wc，shell 是 ksh。
-2. 原厂只读分区（/ifs、/mnt/system）严禁改动，也不要频繁重载 pfctl 避免冲击 io-pkt。
-3. 我们的改装目录都在 /mnt/app/eso/bin/apps/cluster/（仪表渲染 cl_render、配置 dash.conf / cl.conf）和 /mnt/app/eso/bin/apps/wifi_dev/；实时 10Hz 车速功率油温等状态在 /tmp/dash.state 和 /tmp/cluster_cp.state。
-4. /mnt/app 默认只读，修改文件前先执行 `mount -uw /mnt/app` 并备份原文件，用 `.new` 写完 `mv` 原子替换后立刻执行 `sync && mount -ur /mnt/app` 恢复只读；改完仪表配置执行 `slay -f cl_render` 即可秒级热刷新仪表画面（无需重启车机）。
-5. 如需修改 C 源码重新编译仪表界面（1920x639 画布），源码与交叉编译方法见仓库 https://github.com/a78c7/touareg-cn-carplay-mods 的 src/cl_render 与 docs/ 目录。
+这是我车机的 SSH 私钥文件 `touareg_ed25519`（电脑默认在桌面 `途锐无线SSH密钥/` 文件夹，安卓手机端请直接读取我上传或放在 Download 目录下的 `touareg_ed25519`）。
+请你自己读取这把私钥并配置保存好车机 SSH 连接（端口 `2012`，用户名 `root`）：
+- 先尝试连接 `touareg.local:2012`；如果当前系统（如安卓端）不解析 `.local`，请你自动读取本机热点路由/ARP 邻居表或扫描当前热点子网开放 `2012` 端口的设备找到车机 IP 并连上，无需让我手动查 IP 或填配置。
 
-先帮我连上去只读看一眼当前车速油温状态和已安装的模块，确认连接正常，然后听我指令修改。
+车机环境与安全护栏（请严格遵守）：
+1. 系统是 QNX 6.6.0 (ARMv7 Tegra K1)，shell 是 ksh（无 bash / sed -i / wc）。
+2. 严禁改动原厂只读分区（/ifs、/mnt/system），不要频繁重载 pfctl 避免冲击 io-pkt。
+3. 改装目录在 `/mnt/app/eso/bin/apps/cluster/`（仪表渲染 `cl_render`、配置 `dash.conf` / `cl.conf`）和 `/mnt/app/eso/bin/apps/wifi_dev/`；10Hz 实时车速、功率、扭矩、油温等数据在 `/tmp/dash.state` 与 `/tmp/cluster_cp.state`。
+4. `/mnt/app` 默认只读：改文件前先 `mount -uw /mnt/app` 并备份原文件，用 `.new` 写完原子 `mv` 替换后立刻 `sync && mount -ur /mnt/app` 恢复只读；改完仪表配置执行 `slay -f cl_render` 即可秒级刷新仪表画面（无需重启车机）。
+5. 完整接口表与自定义编译说明见公开仓库：https://github.com/a78c7/touareg-cn-carplay-mods/tree/main/docs
+
+现在请自动连上车机，只读查看一下当前车速/油温状态和已安装的模块，向我汇报连接成功，然后听我用大白话吩咐修改。
 ```
 
 ---
@@ -241,7 +201,25 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 One zero-disassembly USB flash for the China-market VW Touareg (`MH2p_CN_VWG36_P2878` — Touareg-specific UI/cluster patches safely skip any other firmware), plus an open wireless web console & SSH development base adaptable across **MH2p (MIB2+ High)** head units on **VW, Audi, Porsche PCM 5, Bentley, and Lamborghini**:
 
 - **Out-of-the-Box Mods**: Full-screen CarPlay (38-byte in-place patch, zero proprietary VW/Apple files distributed), wireless CarPlay & Android Auto (LawPaul), CarPlay turn-by-turn on HUD (both wireless `libesoiap2` & wired Cinemo iAP2), phone navigation map on the `1920×639` digital cluster with vision-based AMap auto-centering, dual customizable telemetry info boxes (35 live DSI channels), and a 10 Hz CSV drive logger ready for LLM trip analysis.
-- **Wireless Mobile Console & SSH (`v20.0`, opt-in)**: Connects silently to your phone's hotspot via the idle `bcm2` STA interface (`dhcp.client -n -R`, leaving wireless CarPlay and stock `ecm0` telematics untouched). Open `http://touareg.local:8080` (PIN-protected, parked-only safety lock) to tweak cluster items or download drive-log CSVs wirelessly — or enable **Wireless SSH (`:2012`)** with locally generated per-car Ed25519 keys to build custom cluster UIs live with AI coding agents.
+- **Wireless Mobile Console & SSH (`v20.0`, opt-in)**: Connects silently to your phone's hotspot via the idle `bcm2` STA interface (`dhcp.client -n -R`, leaving wireless CarPlay and stock `ecm0` telematics untouched). Open `http://touareg.local:8080` (PIN-protected, parked-only safety lock) to tweak cluster items or download drive-log CSVs wirelessly — or enable **Wireless SSH (`:2012`)** with locally generated per-car Ed25519 keys to build custom cluster UIs live with AI coding agents such as **DeepSeek Hermes** (desktop) or **DeepSeek Hermes Go** (Android client for DeepSeek Hermes; iPhone not yet supported).
 - **Install**: Format a ≤ 32 GB USB drive as **FAT32** → extract the [latest release zip](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) to the USB root → run `改装设置（Windows）.exe` or `改装设置（Mac）.command` (offline `127.0.0.1` configurator) → start the engine, insert the USB drive, wait for automatic reboots, and remove when prompted.
 - **Documentation & Architecture**: Full Chinese engineering write-ups (`01–07`) and MH2p system reference (`R1–R5`) in **[`docs/README.md`](docs/README.md)**. Sources in `src/` & `tools/`, cross-build script in `src/build.sh`.
 - **License & Disclaimer**: Original code **GPL-3.0** (`docs/` text also **CC BY-SA 4.0**); `cl_render`, `wired`, `dio_cluster.so`, ModKit & LawPaul modules **CC BY-NC-SA 4.0**; glyphs **SIL OFL 1.1**. **Personal, non-commercial use only.** Unofficial research project, not affiliated with or endorsed by Volkswagen Group, Apple, or Google; use entirely at your own risk.
+
+---
+
+## VW Touareg & MH2p Open Cockpit (Deutsch)
+
+Ein-USB-Stick-Modifikationspaket ohne Ausbau für den **VW Touareg III (CR)** mit **MH2p-Steuergerät (MIB2+ High)** sowie offene drahtlose Web-Konsole & SSH-Entwicklungsbasis als Plattform-Referenz für **VW, Audi (MIB2+ High), Porsche (PCM 5), Bentley und Lamborghini (LIS III)**:
+
+- **Fertige Module (Out-of-the-Box)**:
+  - **Vollbild-CarPlay** (38-Byte-In-Place-Patch direkt auf dem Fahrzeug, es werden keinerlei originale VW- oder Apple-Dateien verteilt) sowie Freischaltung von **Wireless CarPlay & Android Auto** (LawPaul-Module).
+  - **CarPlay-Abbiegehinweise im Head-up-Display (HUD)**: Pfeile, Distanz, Straßenname und Fahrspur sowohl über Wireless CarPlay (`libesoiap2`) als auch kabelgebundenes CarPlay (Cinemo-iAP2-Stack).
+  - **CarPlay-Kartenansicht im Digitalen Kombiinstrument (`1920×639` / Innovision Cockpit)**: Automatische Rückkehr zur Werkskarte beim Trennen, Lenkradtasten-Zoom und bildbasierte Positionszentrierung.
+  - **Zwei frei konfigurierbare Livedaten-Infoboxen & 10-Hz-Fahrtenlogger**: 35 Echtzeit-Kanäle direkt aus den Fahrzeug-DSI-Schnittstellen (Leistung, Drehmoment, Längs-/Querbeschleunigung, 0–100 km/h, Motoröl- & Getriebeöltemperatur, Verbrauch u. v. m.) im Kombiinstrument sowie CSV-Aufzeichnung auf USB zur KI-Auswertung.
+- **Drahtlose Web-Konsole & WLAN-SSH (`v20.0`, optional)**:
+  - Verbindet sich im Hintergrund über das ungenutzte Client-Interface `bcm2` automatisch mit dem persönlichen Smartphone-Hotspot (`dhcp.client -n -R` — Wireless CarPlay auf `bcm0` und die Werks-eSIM `ecm0` bleiben vollständig unberührt).
+  - **Web-Konsole (`http://touareg.local:8080`)**: PIN-geschützt und mit Geschwindigkeitssperre (> 3 km/h gesperrt) zum Ändern der Infoboxen oder drahtlosen Herunterladen der CSV-Fahrtenprotokolle per Smartphone-Browser.
+  - **WLAN-SSH (`Port 2012`) & KI-Entwicklung**: Der lokale Konfigurator erzeugt pro Fahrzeug ein eigenes Ed25519-Schlüsselpaar. Einfach den privaten Schlüssel `touareg_ed25519` und den obenstehenden Prompt an einen KI-Agenten wie **DeepSeek Hermes** (Desktop) oder **DeepSeek Hermes Go** (Android-Client für DeepSeek Hermes; iPhone derzeit nicht unterstützt) übergeben — der Agent liest den Schlüssel selbstständig ein, findet das Steuergerät im Hotspot-Netz und ermöglicht eigene Anpassungen per natürlicher Sprache.
+- **Hinweis für europäische Fahrzeuge (z. B. `P2869`)**: Die Touareg-spezifischen UI-/Kombiinstrument-Skripte prüfen auf die chinesische Firmware `MH2p_CN_VWG36_P2878` und brechen auf anderen Ständen sicherheitshalber ohne Änderungen ab. Die gesamte Systemarchitektur, alle Hook-/DSI-/Displaymanager-Tabellen ([`docs/README.md`](docs/README.md), Kapitel `01–07` & Referenz `R1–R5`) sowie der gesamte Quellcode (`src/`) und das universelle Modul `VW_WiFi_Dev` dienen jedoch direkt als Vorlage für EU-MH2p-Geräte (siehe auch den Thread im [Touareg-Freunde-Forum](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)).
+- **Lizenz & Haftungsausschluss**: Eigener Code unter **GPL-3.0** (Dokumentationstexte zusätzlich **CC BY-SA 4.0**); `cl_render`, `wired`, `dio_cluster.so`, ModKit & LawPaul-Module unter **CC BY-NC-SA 4.0**; Schriftglyphen unter **SIL OFL 1.1**. **Ausschließlich für den privaten, nicht-kommerziellen Gebrauch.** Inoffizielles Freizeitprojekt ohne Verbindung zur Volkswagen AG, Audi, Porsche, Bentley, Lamborghini, Apple oder Google. Jegliche Nutzung erfolgt auf eigene Gefahr (möglicher Garantieverlust oder Steuergeräteschäden).

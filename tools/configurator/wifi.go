@@ -328,7 +328,7 @@ func buildWifiGuide(keyDir, pin string) string {
 	if keyDir != "" {
 		keyFile = filepath.Join(keyDir, "touareg_ed25519")
 	}
-	return fmt.Sprintf(`【途锐 MH2p 手机无线控制台 & 傻瓜式无线 SSH / AI 开发说明】
+	return fmt.Sprintf(`【途锐 MH2p 手机无线控制台 & 傻瓜式无线 SSH / AI 自由开发说明】
 
 本文件夹内的 touareg_ed25519（不带 .pub 后缀）是你这台车专属的唯一登录私钥，请妥善保管，不要发给他人。
 
@@ -346,41 +346,28 @@ func buildWifiGuide(keyDir, pin string) string {
 - 首次打开输入你的网页管理口令：%s（输入一次后手机自动记住；仅停车时允许修改设置）
 
 ==================================================
-三、无线 SSH + AI 自由开发（按你的设备三选一）
+三、无线 SSH + AI 自由开发（免查 IP、免填参数，把钥匙和这段话直接发给 AI）
 ==================================================
+支持客户端：
+- 电脑端：DeepSeek Hermes / Claude Code / Cursor（电脑 Wi-Fi 连同一个手机个人热点，私钥在 %s）
+- 手机端：DeepSeek Hermes Go（DeepSeek Hermes 安卓手机客户端，iPhone 暂不支持；把本文件夹里的 touareg_ed25519 发到安卓手机上即可）
 
-【方式 A：只用一部安卓手机（如 DeepSeek Hermes Go 手机端直连）】
-1. 把本文件夹里的 touareg_ed25519 私钥文件传到安卓手机本地（如 Download 文件夹）。
-2. 打开手机「个人热点 → 已连接设备」，找到名叫 touareg 的设备，记下它的数字 IP（如 192.168.43.xxx；安卓 App 填数字 IP 最稳）。
-3. 在 DeepSeek Hermes Go（或 Termius / JuiceSSH）里新建连接：
-   - 主机 / IP：填刚才看到的车机数字 IP
-   - 端口：2012
-   - 用户名：root
-   - 认证方式：密钥（Private Key），导入手机里的 touareg_ed25519（密码留空）
+不需要你自己查车机 IP 或手填端口，打开客户端附上 touareg_ed25519 私钥文件，直接把下面整段话复制发给 AI：
 
-【方式 B：用笔记本电脑（Mac / Windows 跑 DeepSeek Hermes / Claude Code / Cursor）】
-1. 电脑 Wi-Fi 连到同一个手机个人热点上（既有外网调 AI，又和车机同局域网）。
-2. 直接测试连接命令：
-   ssh -i "%s" -p 2012 root@touareg.local
-   （也可以按仓库 README 里的快捷命令写进 ~/.ssh/config，以后直接输 ssh touareg 即可秒进；若 Windows 不认 touareg.local，换成手机热点列表里 touareg 的数字 IP 即可）
+--------------------------------------------------
+这是我车机的 SSH 私钥文件 touareg_ed25519（电脑默认在桌面「途锐无线SSH密钥」文件夹，安卓手机端请直接读取我上传或放在 Download 目录下的 touareg_ed25519）。
+请你自己读取这把私钥并配置保存好车机 SSH 连接（端口 2012，用户名 root）：
+- 先尝试连接 touareg.local:2012；如果当前系统（如安卓端）不解析 .local，请你自动读取本机热点路由/ARP 邻居表或扫描当前热点子网开放 2012 端口的设备找到车机 IP 并连上，无需让我手动查 IP 或填配置。
 
-【方式 C：iPhone / iPad（App Store 免费下载 Termius）】
-1. AirDrop 把 touareg_ed25519 传到手机 → Termius 的 Keychain 里 Import Key 导入。
-2. Hosts 新建：Hostname 填 touareg.local，Port 填 2012，Username 填 root，选择刚导入的 Key 连接即可。
+车机环境与安全护栏（请严格遵守）：
+1. 系统是 QNX 6.6.0 (ARMv7 Tegra K1)，shell 是 ksh（无 bash / sed -i / wc）。
+2. 严禁改动原厂只读分区（/ifs、/mnt/system），不要频繁重载 pfctl 避免冲击 io-pkt。
+3. 改装目录在 /mnt/app/eso/bin/apps/cluster/（仪表渲染 cl_render、配置 dash.conf / cl.conf）和 /mnt/app/eso/bin/apps/wifi_dev/；10Hz 实时车速、功率、扭矩、油温等数据在 /tmp/dash.state 与 /tmp/cluster_cp.state。
+4. /mnt/app 默认只读：改文件前先 mount -uw /mnt/app 并备份原文件，用 .new 写完原子 mv 替换后立刻 sync && mount -ur /mnt/app 恢复只读；改完仪表配置执行 slay -f cl_render 即可秒级刷新仪表画面（无需重启车机）。
+5. 完整接口表与自定义编译说明见公开仓库：https://github.com/a78c7/touareg-cn-carplay-mods/tree/main/docs
 
-==================================================
-四、直接复制给 AI 助手的「安全开场提示词模板」
-==================================================
-连通后，先把下面这段话发给你的 AI（DeepSeek Hermes / Claude Code / Cursor），再提你的修改想法：
-
-请通过 SSH 连接我的途锐 MH2p 车机（端口 2012，用户 root，地址 touareg.local 或热点分配的车机 IP）。
-车机环境与安全铁律（严格遵守）：
-1. 系统是 QNX 6.6.0 (ARMv7 Tegra K1)，shell 是 ksh（无 bash/sed -i/wc）。
-2. 严禁修改原厂只读分区（/ifs、/mnt/system），不要频繁重载 pfctl。
-3. 改装目录在 /mnt/app/eso/bin/apps/cluster/（cl_render、dash.conf、cl.conf）和 /mnt/app/eso/bin/apps/wifi_dev/；实时 10Hz 车辆数据在 /tmp/dash.state。
-4. /mnt/app 默认只读，写文件前执行 mount -uw /mnt/app 并备份原文件，写完 .new 原子 mv 后立刻执行 sync && mount -ur /mnt/app 恢复只读；改完仪表配置执行 slay -f cl_render 即可秒刷新仪表画面。
-5. 完整接口表与编译说明见 https://github.com/a78c7/touareg-cn-carplay-mods/tree/main/docs 。
-先只读查看当前车机状态确认连接正常，再听我指令修改。
+现在请自动连上车机，只读查看一下当前车速/油温状态和已安装的模块，向我汇报连接成功，然后听我用大白话吩咐修改。
+--------------------------------------------------
 `, pin, keyFile)
 }
 
