@@ -157,7 +157,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 - **一键卸载还原**：运行「改装设置」，把要卸载的功能选为「卸载」保存到 U 盘，上车再刷一次即精准还原原厂文件（手动方式：在对应模块目录放空文件 `uninstall.txt`；三个 HUD/仪表模块需同时卸载）。
 - **插 U 盘没反应**：检查 U 盘是否为 **FAT32**（32GB 以内），且 `Data`、`Meta` 直接在 U 盘根目录而非子文件夹内。
 - **刷完没变化**：查看 U 盘 `Logs/` 下对应模块的 `.log`（版本号不符会记录 `abort`）；`_ModKit_Update.log` 中的 `Filename too long` 是 ModKit 自带提示，可忽略。
-- **从旧固件（如 P9832）升级 P2878 后无线 CarPlay 连不上**：有车友反馈跨版本升级 2878 后系统内部会屏蔽 5 GHz WLAN（表现：有线正常、手机只能搜到 2.4 GHz 热点但无线 CarPlay 进不去），需先确认车机内部 5 GHz WLAN 已重新开启（参见 [#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)）。
+- **从旧固件（如 P9832）升级 P2878 后无线 CarPlay 连不上**：跨版本升 P2878 后部分老车机运行时 Wi-Fi 国家码仍锁在 `XT/0`（仅 2.4 GHz 信道），会被 P2878 新增的 `"enable5GHzCountryAdaption":true` 强行拦截。**v20.1 已内置一键修复模块**：在「改装设置」里把 **「老固件升 P2878 无线 CarPlay 5GHz 区域修复」** 选为「安装」刷入，再于车机和 iPhone 双端删除蓝牙/CarPlay 记录重新配对即可（原厂 P2878 无线正常无需勾选，详见 [#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)）。
 - **安卓端直连无线 SSH 提示找不到 `touareg.local`**：部分安卓原生程序内置 DNS 不走系统 mDNS，打开手机热点「已连接设备」列表找到 `touareg` 对应的实际 IP 填入即可；若手机开了全局 VPN/代理请对局域网段放行。
 - **提 Issue 附日志**：在 U 盘根目录新建 `cluster_logs` 文件夹插车上导航 2 分钟以上（或直接在 `8080` 无线控制台「日志导出」页下载），仅上传 `Logs` 与排障日志（U 盘 `backup` 原厂备份与本车绑定切勿公开；发帖前留意抹去日志里可能出现的手机名或路名）。
 </details>
