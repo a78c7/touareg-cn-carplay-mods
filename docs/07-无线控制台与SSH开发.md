@@ -6,7 +6,7 @@
 
 ## 1. 为什么不用车机自带热点，也不用中控界面的「连接 Wi-Fi」
 
-- **车机自带热点（`bcm0` / `carplay0`）**：手机连上车机热点后，大部分手机会把默认数据路由切向车机 Wi-Fi；车机自带 eSIM 没流量或网速很慢时，手机自身就断了 5G 外网，没法一边查资料或跑依赖云端接口的客户端（如 DeepSeek Hermes Go —— DeepSeek Hermes 安卓手机客户端，iPhone 暂不支持）一边连车机；而且无线 CarPlay 本身就占着 AP 接口。
+- **车机自带热点（`bcm0` / `carplay0`）**：手机连上车机热点后，大部分手机会把默认数据路由切向车机 Wi-Fi；车机自带 eSIM 没流量或网速很慢时，手机自身就断了 5G 外网，没法一边查资料或跑依赖云端接口的客户端（如 [DSH Go](https://github.com/ccch1mneyyy/dsh-go) —— DeepSeek Harness 安卓手机客户端，iPhone 暂无公开包）一边连车机；而且无线 CarPlay 本身就占着 AP 接口。
 - **中控菜单里的 WLAN 客户端**：国行车机插着内置 4G 模块（`ecm0`）时，在设置界面点连接外部 Wi-Fi 会直接弹窗拦截：「WLAN 不可用。已使用了其他数据连接。」界面层不让连。**【途锐实测】**
 
 ## 2. 空闲的 `bcm2` 客户端接口
@@ -48,7 +48,7 @@
 
 ## 6. OpenSSH 7.4 主机密钥与客户端兼容
 
-车机自带的 `sshd` 是 OpenSSH 7.4（2016 年底版本），原厂配置默认只挂了旧式 `ssh-rsa` 主机密钥。现代 macOS、Windows 11 以及基于 Go `x/crypto/ssh` 的移动端客户端（如 DeepSeek Hermes Go —— DeepSeek Hermes 安卓手机客户端，iPhone 暂不支持）默认已禁用 `ssh-rsa` 签名算法，连上去会报 `no matching host key type found`，而在手机客户端里往往不便手填旧版兼容参数。
+车机自带的 `sshd` 是 OpenSSH 7.4（2016 年底版本），原厂配置默认只挂了旧式 `ssh-rsa` 主机密钥。现代 macOS、Windows 11 以及移动端新版本 SSH 客户端（如 [DSH Go](https://github.com/ccch1mneyyy/dsh-go) —— DeepSeek Harness 安卓手机客户端，iPhone 暂无公开包）默认已禁用 `ssh-rsa` 签名算法，连上去会报 `no matching host key type found`，而在手机客户端里往往不便手填旧版兼容参数。
 
 好在车机这版 OpenSSH 7.4 本身已经支持 **`ssh-ed25519`**。在「改装设置」勾选开启无线开发终端时，程序会在电脑本地用标准库随机生成这台车专属的 Ed25519 主机密钥和登录密钥对（私钥存电脑桌面，绝不共用默认密钥），车机启动 `sshd` 时通过 `-h` 追加加载这把 Ed25519 主机密钥，手机和电脑客户端就能免任何额外参数直连 `2012` 端口。
 

@@ -349,8 +349,8 @@ func buildWifiGuide(keyDir, pin string) string {
 三、无线 SSH + AI 自由开发（免查 IP、免填参数，把钥匙和这段话直接发给 AI）
 ==================================================
 支持客户端：
-- 电脑端：DeepSeek Hermes / Claude Code / Cursor（电脑 Wi-Fi 连同一个手机个人热点，私钥在 %s）
-- 手机端：DeepSeek Hermes Go（DeepSeek Hermes 安卓手机客户端，iPhone 暂不支持；把本文件夹里的 touareg_ed25519 发到安卓手机上即可）
+- 电脑端：DeepSeek Harness / Claude Code / Cursor（电脑 Wi-Fi 连同一个手机个人热点，私钥在 %s）
+- 手机端：DSH Go（DeepSeek Harness 安卓手机客户端 https://github.com/ccch1mneyyy/dsh-go ，iPhone 暂无公开包；把本文件夹里的 touareg_ed25519 发到安卓手机上即可）
 
 不需要你自己查车机 IP 或手填端口，打开客户端附上 touareg_ed25519 私钥文件，直接把下面整段话复制发给 AI：
 
