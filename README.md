@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/hero_banner.svg" alt="途锐 CarPlay 改装全家桶与无线自由定制底座（点击前往最新 Releases）" width="100%"></a>
+<img src="docs/img/hero_banner.svg" alt="途锐 CarPlay 改装全家桶与无线自由定制底座" width="100%">
 
 # 途锐 MH2p CarPlay 改装全家桶 & 无线开发底座
 
@@ -13,6 +13,8 @@
 </p>
 
 **不拆一粒螺丝、无需专用网卡 —— 单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与大字运动信息框，并开放手机无线控制台与 AI 自由开发底座。**
+
+当前主线 **v21**（最新版见 **[Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)**）
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载最新版 U 盘包</b></a> ·
