@@ -25,7 +25,7 @@ typedef struct {
     volatile uint32_t magic;
     volatile uint32_t write_pos;   /* writer increments, wraps at CLUSTER_RING_SIZE */
     volatile uint32_t total_bytes; /* total bytes written (monotonic) */
-    volatile uint32_t flags;       /* bit 0: stream active */
+    volatile uint32_t flags;       /* bit 0: stream active; bits 8..31: packet heartbeat counter (v21.1) */
     uint8_t ring[CLUSTER_RING_SIZE];
 } cluster_h264_shm_t;
 

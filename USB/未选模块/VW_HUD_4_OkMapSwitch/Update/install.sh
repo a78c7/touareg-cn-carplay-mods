@@ -1,11 +1,12 @@
 #!/bin/ksh
-# VW Touareg CN (MH2p_CN_VWG36_P2878): Enable steering-wheel OK double-tap to switch CarPlay <-> native map (step 4).
+# VW Touareg CN P-series (MH2p_CN_VWG36_P*): Enable steering-wheel OK double-tap to switch CarPlay <-> native map (step 4).
 
 D=/mnt/app/eso/bin/apps/cluster
 
-if [ "$RELEASE_VERSION" != "MH2p_CN_VWG36_P2878" ]; then
-    echo "abort: built for MH2p_CN_VWG36_P2878, this unit is $RELEASE_VERSION"; exit 0
-fi
+case "$RELEASE_VERSION" in
+    MH2p_CN_VWG36_P*) ;;
+    *) echo "abort: built for CN VW Touareg P-series (MH2p_CN_VWG36_P*), this unit is $RELEASE_VERSION"; exit 0 ;;
+esac
 
 [[ ! -e "/mnt/app/eso" ]] && mount -t qnx6 /dev/mnanda0t177.1 /mnt/app
 if [[ ! -d "$D" ]]; then

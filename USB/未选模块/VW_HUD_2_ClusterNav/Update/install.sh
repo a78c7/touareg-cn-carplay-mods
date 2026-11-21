@@ -1,9 +1,9 @@
 #!/bin/ksh
-# VW Touareg CN (MH2p_CN_VWG36_P2878): CarPlay route guidance -> instrument cluster + HUD, step 2.
-# The jar keeps the file name VWClusterNav_v6.jar; content is v21.0 (also used by VW_HUD_3_CarPlayCluster: display switching, info box & tire/chassis telemetry).
+# VW Touareg CN P-series (MH2p_CN_VWG36_P*): CarPlay route guidance -> instrument cluster + HUD, step 2.
+# The jar keeps the file name VWClusterNav_v6.jar; content is v21.1 (also used by VW_HUD_3_CarPlayCluster: event-driven display switching, info box & tire/chassis telemetry).
 # Needs step 1 (VW_HUD_1_RouteGuidance: dio_cluster.so preloaded into dio_manager) already installed.
 # - copies VWClusterNav_v6.jar (Java 1.4 class files, version 48) to /mnt/app/eso/hmi/lsd/jars/, removes older versions
-# - registers it orthogonally as HMI bundle 97 in Bundle.Startup.Lateload without disturbing other bundles (e.g. 98 VWNoSimPopup)
+# - registers it orthogonally as HMI bundle 97 in Bundle.Startup.Lateload without disturbing other bundles (e.g. 98 VWPopupFilter)
 B=/mnt/app/eso/hmi/lsd/config/bundles.properties
 JD=/mnt/app/eso/hmi/lsd/jars
 JAR=VWClusterNav_v6.jar
@@ -14,9 +14,10 @@ BNAME=VWClusterNav
 BACT=vwcn.Activator
 BCMT="# VWClusterNav: CarPlay route guidance -> cluster/HUD (USB mod VW_ClusterNav)"
 
-if [ "$RELEASE_VERSION" != "MH2p_CN_VWG36_P2878" ]; then
-    echo "abort: built for MH2p_CN_VWG36_P2878, this unit is $RELEASE_VERSION"; exit 0
-fi
+case "$RELEASE_VERSION" in
+    MH2p_CN_VWG36_P*) ;;
+    *) echo "abort: built for CN VW Touareg P-series (MH2p_CN_VWG36_P*), this unit is $RELEASE_VERSION"; exit 0 ;;
+esac
 touch $MOD_PATH/test.txt
 if [[ ! -e $MOD_PATH/test.txt ]]; then echo "abort: USB is write protected"; exit 0; fi
 rm -f $MOD_PATH/test.txt

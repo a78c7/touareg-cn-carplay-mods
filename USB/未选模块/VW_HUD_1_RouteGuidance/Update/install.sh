@@ -1,5 +1,5 @@
 #!/bin/ksh
-# VW Touareg CN (MH2p_CN_VWG36_P2878): CarPlay route-guidance probe, step 1.
+# VW Touareg CN P-series (MH2p_CN_VWG36_P*): CarPlay route-guidance probe, step 1.
 # - copies dio_cluster.so (fifthBro/mh2p-cluster, CC BY-NC-SA, personal non-commercial use)
 #   to /mnt/app/eso/bin/apps/cluster/
 # - adds LD_PRELOAD + DIO_CLUSTER_LOG=1 to the "carplay" child envs in smartphone_integrator.json
@@ -12,9 +12,10 @@ SO_DIR=/mnt/app/eso/bin/apps/cluster
 SO=$SO_DIR/dio_cluster.so
 MARK="LD_PRELOAD=$SO"
 
-if [ "$RELEASE_VERSION" != "MH2p_CN_VWG36_P2878" ]; then
-    echo "abort: built for MH2p_CN_VWG36_P2878, this unit is $RELEASE_VERSION"; exit 0
-fi
+case "$RELEASE_VERSION" in
+    MH2p_CN_VWG36_P*) ;;
+    *) echo "abort: built for CN VW Touareg P-series (MH2p_CN_VWG36_P*), this unit is $RELEASE_VERSION"; exit 0 ;;
+esac
 touch $MOD_PATH/test.txt
 if [[ ! -e $MOD_PATH/test.txt ]]; then echo "abort: USB is write protected"; exit 0; fi
 rm -f $MOD_PATH/test.txt

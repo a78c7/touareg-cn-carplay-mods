@@ -1,5 +1,5 @@
 #!/bin/ksh
-# VW Touareg CN (MH2p_CN_VWG36_P2878): Fix Wireless CarPlay handshake blocked by 5GHz country adaption.
+# VW Touareg CN P-series (MH2p_CN_VWG36_P*): Fix Wireless CarPlay handshake blocked by 5GHz country adaption.
 # On older units (e.g. P9832) upgraded to P2878, the BCM4359 WLAN country code may remain locked to XT/0
 # (2.4GHz channels 1..11 only, no 5GHz channels). P2878 introduced "enable5GHzCountryAdaption":true in
 # /mnt/system/etc/eso/production/smartphone_integrator.json, which aborts wireless CarPlay before
@@ -7,9 +7,10 @@
 same_lines() { a=$(awk 'END{print NR}' "$1" 2>/dev/null); b=$(awk 'END{print NR}' "$2" 2>/dev/null); [ -n "$a" ] && [ "$a" = "$b" ]; }
 J=/mnt/system/etc/eso/production/smartphone_integrator.json
 
-if [ "$RELEASE_VERSION" != "MH2p_CN_VWG36_P2878" ]; then
-    echo "abort: built for MH2p_CN_VWG36_P2878, this unit is $RELEASE_VERSION"; exit 0
-fi
+case "$RELEASE_VERSION" in
+    MH2p_CN_VWG36_P*) ;;
+    *) echo "abort: built for CN VW Touareg P-series (MH2p_CN_VWG36_P*), this unit is $RELEASE_VERSION"; exit 0 ;;
+esac
 touch "$MOD_PATH/test.txt"
 if [[ ! -e "$MOD_PATH/test.txt" ]]; then echo "abort: USB is write protected"; exit 0; fi
 rm -f "$MOD_PATH/test.txt"

@@ -1749,10 +1749,13 @@ static int setup_screen(int width, int height) {
      * just screen_blits canim into the next post_buf and posts it (single
      * window owns disp 33 throughout, no second-window competition). */
     int vis = (g_render_stage == STAGE_PREPARE) ? 0 : 1;
+    int transp = SCREEN_TRANSPARENCY_NONE;
     screen_set_window_property_iv(g_dec.post_win, 0x28, win_size);   /* SIZE */
     screen_set_window_property_iv(g_dec.post_win, 0x05, win_size);   /* BUFFER_SIZE = same as SIZE for RGBA */
     screen_set_window_property_iv(g_dec.post_win, 0x0e, &pfmt);      /* FORMAT=RGBX8888 */
     screen_set_window_property_iv(g_dec.post_win, 0x30, &pusage);    /* USAGE=OPENGL_ES2 */
+    /* 显式锁定窗口 58 为完全不透明（NONE），杜绝底层原车地图窗口 33 在合成时透底闪出 */
+    screen_set_window_property_iv(g_dec.post_win, SCREEN_PROPERTY_TRANSPARENCY, &transp);
     /* OPTION B: post_win IS the cluster displayable. Bind to id_string="33"
      * and make visible so screen_post_window directly displays YV12 on
      * cluster (compositor handles YV12→RGB on the display controller).
@@ -2433,7 +2436,8 @@ static int dash_tick(void) {
     return ch || nch;
 }
 
-static void dash_blit_one(int pidx, screen_buffer_t src, int x, int y, int w, int h) {
+static void dash_blit_one(screen_buffer_t dst, screen_buffer_t src, int x, int y, int w, int h) {
+    if (!dst || !src) return;
     int a[] = {
         SCREEN_BLIT_SOURCE_X, 0, SCREEN_BLIT_SOURCE_Y, 0,
         SCREEN_BLIT_SOURCE_WIDTH, w, SCREEN_BLIT_SOURCE_HEIGHT, h,
@@ -2443,23 +2447,23 @@ static void dash_blit_one(int pidx, screen_buffer_t src, int x, int y, int w, in
         SCREEN_BLIT_END
     };
     if (g_dash_noblend) { a[16] = SCREEN_BLIT_END; }
-    int rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], src, a);
+    int rc = screen_blit(g_dec.scr_ctx, dst, src, a);
     if (rc && !g_dash_noblend) {
         g_dash_noblend = 1;
         a[16] = SCREEN_BLIT_END;
-        rc = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], src, a);
+        rc = screen_blit(g_dec.scr_ctx, dst, src, a);
         LOG("dash: source-over blit not supported (errno=%d), opaque blit rc=%d\n", errno, rc);
     }
 }
 
-static void dash_overlay(int pidx) {
-    if (pidx < 0) return;
+static void dash_overlay_buf(screen_buffer_t dst) {
+    if (!dst) return;
     int nav_side = g_nav_conf.side ? 1 : 0;
     for (int b = 0; b < 2; b++) {
         if (b == nav_side && g_nav_active && g_nav_pix) {
-            dash_blit_one(pidx, g_nav_buf, g_nav_x, g_nav_y, g_nav_w, g_nav_h);
+            dash_blit_one(dst, g_nav_buf, g_nav_x, g_nav_y, g_nav_w, g_nav_h);
         } else if (g_dash_have && g_dash_pix[b]) {
-            dash_blit_one(pidx, g_dash_buf[b], g_dash_x[b], g_dash_y[b], g_dash_bw[b], g_dash_bh[b]);
+            dash_blit_one(dst, g_dash_buf[b], g_dash_x[b], g_dash_y[b], g_dash_bw[b], g_dash_bh[b]);
         }
     }
 }
@@ -2476,6 +2480,12 @@ static void cl_flush_blits_idle(void) {
     else screen_flush_context(g_dec.scr_ctx, SCREEN_WAIT_IDLE);
 }
 
+static screen_buffer_t g_last_posted_buf = NULL;
+static volatile int    g_pinned_didx = -1;
+static int             g_batch_deferred = 0;
+static uint64_t        g_last_real_post_ms = 0;
+static int             g_post_err_cnt = 0;
+
 static int cl_pick_next_pidx(void) {
     int pidx = g_dec.post_buf_idx;
     if (pidx == g_last_posted_pidx) pidx = (pidx + 1) % MAX_SURFACES;
@@ -2483,41 +2493,78 @@ static int cl_pick_next_pidx(void) {
     return pidx;
 }
 
-static int      g_batch_deferred = 0;
-static uint64_t g_last_real_post_ms = 0;
+/* v21.1: 遵循 QNX Screen 缓冲所有权约定，每次送显前向窗口实时查询当前可用的 RENDER_BUFFERS，
+ * 严禁盲目轮转启动时的旧句柄数组或向合成器重提正在扫描输出的 Front Buffer（消除 0.1s 偶发闪屏/透底）。 */
+static screen_buffer_t cl_pick_render_buf(int *out_pidx) {
+    screen_buffer_t rbufs[MAX_SURFACES];
+    memset(rbufs, 0, sizeof(rbufs));
+    if (g_dec.post_win &&
+        screen_get_window_property_pv(g_dec.post_win, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)rbufs) == 0 &&
+        rbufs[0] != NULL) {
+        screen_buffer_t chosen = rbufs[0];
+        if (g_last_posted_buf && chosen == g_last_posted_buf && rbufs[1] != NULL) {
+            chosen = rbufs[1];
+        }
+        if (out_pidx) {
+            int found = -1;
+            for (int i = 0; i < MAX_SURFACES; i++) {
+                if (g_dec.post_bufs[i] == chosen) { found = i; break; }
+            }
+            *out_pidx = found;
+        }
+        return chosen;
+    }
+    int pidx = cl_pick_next_pidx();
+    if (out_pidx) *out_pidx = pidx;
+    return g_dec.post_bufs[pidx];
+}
+
+static void cl_post_buf(screen_buffer_t dst, int pidx, int is_real_frame) {
+    if (!dst || !g_dec.post_win) return;
+    int dd[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
+    int rc = screen_post_window(g_dec.post_win, dst, 1, dd, 0);
+    if (rc != 0 && g_post_err_cnt < 5) {
+        g_post_err_cnt++;
+        rdbg_printf("screen_post_window failed rc=%d errno=%d pidx=%d\n", rc, errno, pidx);
+    }
+    screen_flush_context(g_dec.scr_ctx, 0);
+    g_last_posted_buf  = dst;
+    g_last_posted_pidx = (pidx >= 0) ? pidx : 0;
+    uint64_t now_ms    = now_us() / 1000ULL;
+    g_last_post_ms     = now_ms;
+    if (is_real_frame) g_last_real_post_ms = now_ms;
+}
 
 static void apply_stage_signals(void) {
 #ifdef USE_DASH
-    /* 突发多帧连解节流收尾：距上次真实帧送显满 20ms 后立即补齐最新解码帧的同步 Blit + Post，杜绝追尾 Front Buffer */
+    /* 突发多帧连解节流收尾：距上次真实帧送显满 20ms 后立即补齐最新锁定解码帧的同步 Blit + Post */
     if (g_batch_deferred && g_have_clean_didx && g_last_clean_didx >= 0 &&
         g_dec.scr_ready && g_render_stage == STAGE_RENDERING &&
         (now_us() / 1000ULL) >= g_boot_splash_until_ms &&
         (now_us() / 1000ULL) - g_last_real_post_ms >= 20) {
         g_batch_deferred = 0;
-        int pidx = cl_pick_next_pidx();
-        screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dec.decode_bufs[g_last_clean_didx], g_last_blit_attribs);
-        dash_tick();
-        dash_overlay(pidx);
-        cl_flush_blits_idle();
-        int dd[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
-        screen_post_window(g_dec.post_win, g_dec.post_bufs[pidx], 1, dd, 0);
-        screen_flush_context(g_dec.scr_ctx, 0);
-        g_last_posted_pidx  = pidx;
-        g_last_real_post_ms = g_last_post_ms = now_us() / 1000ULL;
+        int pidx = -1;
+        screen_buffer_t dst = cl_pick_render_buf(&pidx);
+        if (dst) {
+            screen_blit(g_dec.scr_ctx, dst, g_dec.decode_bufs[g_last_clean_didx], g_last_blit_attribs);
+            dash_tick();
+            dash_overlay_buf(dst);
+            cl_flush_blits_idle();
+            cl_post_buf(dst, pidx, 1);
+        }
     }
-    /* idle refresh: no decoded frame for 300 ms -> re-blit clean base frame (avoids double-darkening & toast ghosting) */
+    /* idle refresh: no decoded frame for 300 ms -> re-blit pinned clean base frame into a real back buffer */
     if (dash_tick() && g_dec.scr_ready && g_render_stage == STAGE_RENDERING && g_last_posted_pidx >= 0 &&
         g_have_clean_didx && g_last_clean_didx >= 0 &&
         (now_us() / 1000ULL) - g_last_post_ms > 300 && (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
-        int pidx = cl_pick_next_pidx();
-        screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dec.decode_bufs[g_last_clean_didx], g_last_blit_attribs);
-        dash_overlay(pidx);
-        cl_flush_blits_idle();
-        int dd[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
-        screen_post_window(g_dec.post_win, g_dec.post_bufs[pidx], 1, dd, 0);
-        screen_flush_context(g_dec.scr_ctx, 0);
-        g_last_posted_pidx = pidx;
-        g_last_post_ms = now_us() / 1000ULL;
+        int pidx = -1;
+        screen_buffer_t dst = cl_pick_render_buf(&pidx);
+        if (dst) {
+            screen_blit(g_dec.scr_ctx, dst, g_dec.decode_bufs[g_last_clean_didx], g_last_blit_attribs);
+            dash_overlay_buf(dst);
+            cl_flush_blits_idle();
+            cl_post_buf(dst, pidx, 0);
+        }
     }
 #endif
     if (g_resume_requested) {
@@ -2533,19 +2580,14 @@ static void apply_stage_signals(void) {
          * skips its own screen_post_window during that window. */
         if (!g_boot_splash_shown_in_session && g_dec.scr_ready &&
             g_dec.boot_pixmap && g_dec.boot_pix_buf) {
-            int pidx = g_dec.post_buf_idx;
-            g_dec.post_buf_idx = (pidx + 1) % MAX_SURFACES;
+            int pidx = -1;
+            screen_buffer_t dst = cl_pick_render_buf(&pidx);
             int ba[] = { SCREEN_BLIT_END };
-            int br = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx],
-                                 g_dec.boot_pix_buf, ba);
-            int dirty[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
-            screen_post_window(g_dec.post_win, g_dec.post_bufs[pidx],
-                               1, dirty, 0);
-            screen_flush_context(g_dec.scr_ctx, 0);
+            int br = dst ? screen_blit(g_dec.scr_ctx, dst, g_dec.boot_pix_buf, ba) : -1;
+            cl_flush_blits_idle();
+            cl_post_buf(dst, pidx, 0);
             g_boot_splash_until_ms         = now_us() / 1000ULL + 2000ULL;
             g_boot_splash_shown_in_session = 1;
-            g_last_posted_pidx             = pidx;
-            g_last_post_ms                 = now_us() / 1000ULL;
             LOG("h264: resume → boot splash 2s (blit rc=%d pidx=%d), "
                 "decoder warms in background\n", br, pidx);
         }
@@ -2555,15 +2597,12 @@ static void apply_stage_signals(void) {
     if (g_pause_requested) {
         g_pause_requested = 0;
         if (g_dec.scr_ready && g_dec.canim_pixmap && g_dec.canim_pix_buf) {
-            int pidx = g_dec.post_buf_idx;
-            g_dec.post_buf_idx = (pidx + 1) % MAX_SURFACES;
+            int pidx = -1;
+            screen_buffer_t dst = cl_pick_render_buf(&pidx);
             int blit_attribs[] = { SCREEN_BLIT_END };
-            int br = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx],
-                                 g_dec.canim_pix_buf, blit_attribs);
-            int dirty[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
-            screen_post_window(g_dec.post_win, g_dec.post_bufs[pidx],
-                               1, dirty, 0);
-            screen_flush_context(g_dec.scr_ctx, 0);
+            int br = dst ? screen_blit(g_dec.scr_ctx, dst, g_dec.canim_pix_buf, blit_attribs) : -1;
+            cl_flush_blits_idle();
+            cl_post_buf(dst, pidx, 0);
             LOG("h264: pause → PAUSED, canim blit rc=%d posted to pidx=%d "
                 "(frame=%d)\n", br, pidx, g_dec.frames_displayed);
         } else {
@@ -2574,37 +2613,47 @@ static void apply_stage_signals(void) {
         g_render_stage = STAGE_PAUSED;
     }
 
-    /* After the boot splash 2s window expires, force a post of the last
-     * decoded buffer once. cb_display_picture's post path resumes normally
-     * when frames are arriving, but if the decoder is idle at the 2s mark
-     * no post would happen and the splash would stay. The decode loop's
-     * idle path calls apply_stage_signals every ~1ms so this fires promptly. */
+    /* After the boot splash 2s window expires, force a post of the pinned clean
+     * decoded frame into a fresh back buffer once. */
     if (!g_boot_splash_post_done && g_boot_splash_until_ms > 0 &&
         g_dec.scr_ready && g_render_stage == STAGE_RENDERING &&
         (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
-        int idx = (g_dec.post_buf_idx == 0)
-                      ? (MAX_SURFACES - 1) : (g_dec.post_buf_idx - 1);
-        int dirty[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
-        screen_post_window(g_dec.post_win, g_dec.post_bufs[idx], 1, dirty, 0);
-        screen_flush_context(g_dec.scr_ctx, 0);
         g_boot_splash_post_done = 1;
-        g_last_posted_pidx      = idx;
-        g_last_post_ms          = now_us() / 1000ULL;
-        LOG("h264: boot splash 2s elapsed, posted last decoded pidx=%d\n", idx);
+#ifdef USE_DASH
+        if (g_have_clean_didx && g_last_clean_didx >= 0) {
+            int pidx = -1;
+            screen_buffer_t dst = cl_pick_render_buf(&pidx);
+            if (dst) {
+                screen_blit(g_dec.scr_ctx, dst, g_dec.decode_bufs[g_last_clean_didx], g_last_blit_attribs);
+                dash_tick();
+                dash_overlay_buf(dst);
+                cl_flush_blits_idle();
+                cl_post_buf(dst, pidx, 0);
+                LOG("h264: boot splash 2s elapsed, posted pinned frame pidx=%d\n", pidx);
+            }
+        }
+#endif
     }
 
-    /* Heartbeat: re-post the last buffer every ~250ms when the decoder is
-     * idle (cb_display_picture not firing) so the compositor doesn't
-     * release the buffer and go BLACK (250ms avoids colliding with 15-19fps streams). */
+    /* v21.1 Heartbeat: only when truly idle (>500ms without any post), blit the pinned clean frame
+     * into a genuine back buffer from SCREEN_PROPERTY_RENDER_BUFFERS — NEVER re-post the active front buffer! */
     if (g_dec.scr_ready && g_render_stage == STAGE_RENDERING &&
-        g_last_posted_pidx >= 0) {
+        g_last_posted_pidx >= 0 && (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
         uint64_t now_ms = now_us() / 1000ULL;
-        if (now_ms - g_last_post_ms > 250) {
-            int dirty[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
-            screen_post_window(g_dec.post_win,
-                               g_dec.post_bufs[g_last_posted_pidx],
-                               1, dirty, 0);
-            screen_flush_context(g_dec.scr_ctx, 0);
+        if (now_ms - g_last_post_ms > 500) {
+#ifdef USE_DASH
+            if (g_have_clean_didx && g_last_clean_didx >= 0) {
+                int pidx = -1;
+                screen_buffer_t dst = cl_pick_render_buf(&pidx);
+                if (dst) {
+                    screen_blit(g_dec.scr_ctx, dst, g_dec.decode_bufs[g_last_clean_didx], g_last_blit_attribs);
+                    dash_tick();
+                    dash_overlay_buf(dst);
+                    cl_flush_blits_idle();
+                    cl_post_buf(dst, pidx, 0);
+                }
+            }
+#endif
             g_last_post_ms = now_ms;
         }
     }
@@ -2882,12 +2931,12 @@ static int cb_display_picture(void* user, void* disp_info) {
     };
     carpos_tick(didx);
 #ifdef USE_DASH
+    g_pinned_didx = didx;
     g_last_clean_didx = didx;
     memcpy(g_last_blit_attribs, blit_attribs, sizeof(blit_attribs));
     g_have_clean_didx = 1;
 #endif
-    /* 若 Wi-Fi 抖动积压导致距上次送显不足 20ms，合并跳过中间帧 Blit/Post，仅保留最新解码帧在满 20ms 时送显，
-     * 防止毫秒级连刷 8 个窗口缓冲追尾正在被 displaymanager 扫描输出的 Front Buffer（引发 <1s 偶发闪花屏） */
+    /* 若 Wi-Fi 抖动积压导致距上次送显不足 20ms，合并跳过中间帧 Blit/Post，保留已锁定的最新解码帧在满 20ms 时送显 */
     if (g_render_stage == STAGE_RENDERING &&
         (now_us() / 1000ULL) >= g_boot_splash_until_ms &&
         g_last_posted_pidx >= 0 &&
@@ -2897,18 +2946,20 @@ static int cb_display_picture(void* user, void* disp_info) {
         return 1;
     }
     g_batch_deferred = 0;
-    pidx = cl_pick_next_pidx();
-    dst_sibling = g_dec.scr_siblings[pidx];
-    int mr = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx],
+    screen_buffer_t dst_buf = cl_pick_render_buf(&pidx);
+    if (!dst_buf) return 1;
+    dst_sibling = (pidx >= 0 && pidx < MAX_SURFACES) ? g_dec.scr_siblings[pidx] : NULL;
+    int mr = screen_blit(g_dec.scr_ctx, dst_buf,
                          g_dec.decode_bufs[didx], blit_attribs);
 #ifdef USE_DASH
     dash_tick();
-    dash_overlay(pidx);
+    dash_overlay_buf(dst_buf);
 #endif
     /* 同步等待 GPU 2D Blit 完成（~1ms）：确保送显缓冲 100% 绘制完毕，且返回后解码表面释放不会被下一圈硬件解码提前覆写 */
     cl_flush_blits_idle();
 #elif defined(USE_NVMEDIA2D)
     pidx = cl_pick_next_pidx();
+    screen_buffer_t dst_buf = g_dec.post_bufs[pidx];
     dst_sibling = g_dec.scr_siblings[pidx];
     /* NvMedia2DBlit: YV12 src → RGBA dst. NULL rects = full surface, NULL params = defaults. */
     int mr = -1;
@@ -2920,6 +2971,7 @@ static int cb_display_picture(void* user, void* disp_info) {
     if (nv.SurfaceWait) nv.SurfaceWait(dst_sibling, 0);
 #else
     pidx = cl_pick_next_pidx();
+    screen_buffer_t dst_buf = g_dec.post_bufs[pidx];
     dst_sibling = g_dec.scr_siblings[pidx];
     /* Mixer: YV12 (yuv_surface) → RGBA (dst_sibling) */
     uint32_t video_desc[7] = {0};
@@ -2931,19 +2983,11 @@ static int cb_display_picture(void* user, void* disp_info) {
     clock_gettime(CLOCK_MONOTONIC, &ts2);
 
     /* Post the RGBA buffer to cluster displayable, but ONLY if rendering.
-     * In PREPARE/PAUSED we still blit (so the latest frame is in post_bufs[pidx]
-     * ready to be posted on the next resume) but skip the post itself, leaving
-     * displayable 33 free for splash or whatever else owns it. */
-    int dirty[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
-    /* Skip post during the 2s boot splash window so decoded frames don't
-     * overwrite fifthBro immediately. Heartbeat in apply_stage_signals
-     * re-posts the splash buffer every ~50ms during the window. */
+     * In PREPARE/PAUSED we still blit (so the latest frame is ready to be posted
+     * on the next resume) but skip the post itself. */
     if (g_render_stage == STAGE_RENDERING &&
         (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
-        screen_post_window(g_dec.post_win, g_dec.post_bufs[pidx], 1, dirty, 0);
-        screen_flush_context(g_dec.scr_ctx, 0);
-        g_last_posted_pidx  = pidx;
-        g_last_real_post_ms = g_last_post_ms = now_us() / 1000ULL;
+        cl_post_buf(dst_buf, pidx, 1);
     }
     clock_gettime(CLOCK_MONOTONIC, &ts3);
 
@@ -2982,25 +3026,35 @@ static int cb_alloc_picture(void* user, void** pic_buf) {
             g_dec.num_surfaces > 0 ? g_dec.surfaces[g_dec.num_surfaces - 1] : NULL);
     }
     /* round-robin: never hand back the surface that was just decoded (it is the
-     * reference for the next P-frame when the stream uses 1 ref frame / dpb=1) */
+     * reference for the next P-frame when the stream uses 1 ref frame / dpb=1),
+     * and never overwrite g_pinned_didx while deferred/idle blits still read it. */
     static int rr_next = 0;
-    int i, k;
-    for (k = 0; k < g_dec.num_surfaces; k++) {
-        i = (rr_next + k) % g_dec.num_surfaces;
-        if (g_dec.surf_refcount[i] == 0 && g_dec.surfaces[i]) {
-            rr_next = (i + 1) % g_dec.num_surfaces;
-            /* Build a mini picture buffer struct:
-             * [0]=index, [1]=0, [2]=surface_ptr, [3]=0, [4]=refcount, [5]=0 */
-            static int pic_bufs[MAX_SURFACES][6];
-            pic_bufs[i][0] = i;
-            pic_bufs[i][1] = 0;
-            pic_bufs[i][2] = (int)g_dec.surfaces[i];
-            pic_bufs[i][3] = 0;
-            pic_bufs[i][4] = 1; /* refcount = 1 */
-            pic_bufs[i][5] = g_dec.frames_decoded;
-            g_dec.surf_refcount[i] = 1;
-            *pic_buf = &pic_bufs[i][0];
-            return 1;
+    int i, k, pass;
+    for (pass = 0; pass < 2; pass++) {
+        for (k = 0; k < g_dec.num_surfaces; k++) {
+            i = (rr_next + k) % g_dec.num_surfaces;
+            if (g_dec.surf_refcount[i] == 0 && g_dec.surfaces[i] &&
+                (pass == 1 || i != g_pinned_didx)) {
+                if (pass == 1 && i == g_pinned_didx) {
+                    g_pinned_didx = -1;
+#ifdef USE_DASH
+                    g_have_clean_didx = 0;
+#endif
+                }
+                rr_next = (i + 1) % g_dec.num_surfaces;
+                /* Build a mini picture buffer struct:
+                 * [0]=index, [1]=0, [2]=surface_ptr, [3]=0, [4]=refcount, [5]=0 */
+                static int pic_bufs[MAX_SURFACES][6];
+                pic_bufs[i][0] = i;
+                pic_bufs[i][1] = 0;
+                pic_bufs[i][2] = (int)g_dec.surfaces[i];
+                pic_bufs[i][3] = 0;
+                pic_bufs[i][4] = 1; /* refcount = 1 */
+                pic_bufs[i][5] = g_dec.frames_decoded;
+                g_dec.surf_refcount[i] = 1;
+                *pic_buf = &pic_bufs[i][0];
+                return 1;
+            }
         }
     }
     /* Failure path: dump full state so we can see WHY no surface was free. */

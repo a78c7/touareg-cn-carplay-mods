@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 > [!IMPORTANT]
 > **适用车型与安全边界（必读）**
-> - **途锐专属界面模块**（全屏 CarPlay、导航上 HUD、仪表地图与信息框、OK 切地图、5GHz 修复）严格校验固件 **`MH2p_CN_VWG36_P2878`**，版本不符自动跳过不改任何文件。已在 2023 款途锐（iOS 27）及未改装实车完整验证；另有车友实测反馈 **2838** 与 **2019 款锐锋版**刷入成功（个案供参考）。
+> - **国行途锐 P 版全系自动通刷（`MH2p_CN_VWG36_P*`）**：全屏 CarPlay、导航上 HUD、仪表地图与信息框、OK 切地图、5GHz 修复均已放开至国行途锐全部 `P` 版固件（如 `P2878`、`P2876`、`P2838`、`P9832` 等），非国行途锐 P 版自动跳过不改任何文件。各模块均内置自动指纹校验与安全熔断：`P2878` 已全功能实车验证；其余 P 版下，`cl_probe.so` 通过 Hook 动态截获配对密钥指针（不再硬编码偏移），全屏补丁 `vhpatch` 逐字节校验 CRC32（皮肤一致自动生效、不一致自动跳过不改文件），Java 插件全量判空防呆。
 > - **大众 MH2p 通用弹窗屏蔽**：`VW_NoBtAuthPopup` / `VW_NoSimPopup` 校验大众品牌（`VW`），通过共享 Bundle `98` 精准过滤弹窗，与 HUD 插件互不冲突。
 > - **跨品牌同平台通用底座**：`VW_WiFi_Dev`（手机无线控制台 / 无线 SSH）与 **[`docs/` 平台技术手册](docs/README.md)** 适用于大众集团同平台 **MH2p（MIB2+ High）**——涵盖 **大众途锐、奥迪（A6/A7/A8/Q3/Q7/Q8/e-tron）、保时捷（PCM 5）、宾利、兰博基尼（Urus LIS III）**。
 > - **免费开源，严禁任何形式的转售或付费代刷**。使用前请先阅读文末[免责声明](#免责声明)。
@@ -64,14 +64,14 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 | 分类 | 模块名称 | 核心效果 | 适用范围 |
 | :--- | :--- | :--- | :---: |
-| **中控与投屏** | **🖥️ 全屏 CarPlay** | 车机端就地修补 38 字节去掉黑边，铺满整块中控屏 | 途锐 P2878 |
+| **中控与投屏** | **🖥️ 全屏 CarPlay** | 车机端就地修补 38 字节去掉黑边，铺满整块中控屏（自动校验皮肤 CRC32，不符安全跳过） | 国行途锐 P 版 |
 | | **📡 无线 CarPlay** | 开启原厂未激活的无线 CarPlay（集成 LawPaul 模块） | MH2p 通用 |
 | | **🤖 Android Auto** | 开启原厂未激活的安卓投屏（集成 LawPaul 模块） | MH2p 通用 |
-| **HUD 与仪表** | **🧭 导航上 HUD** | 苹果/高德/百度转向箭头、距离、路名、车道直投 HUD（有线/无线双栈） | 途锐 P2878 |
-| | **🗺️ 仪表地图 + 大字运动信息框** | CarPlay 地图投射 `1920×639` 全液晶仪表（高德自动居中、方向盘缩放）；左右 `295px` 对称 **46px 粗体 + 斜切运动刻度条**（43 项实车物理数据）与**大字导航卡**（支持常驻待机） | 途锐 P2878 |
-| | **🔄 方向盘 OK 双击切原车地图** | 方向盘右侧 `OK` 键 2 秒内连按 2 下，在 CarPlay 地图与原车地图间无缝秒切（`VW_HUD_4_OkMapSwitch`） | 途锐 P2878 |
+| **HUD 与仪表** | **🧭 导航上 HUD** | 苹果/高德/百度转向箭头、距离、路名、车道直投 HUD（有线/无线双栈） | 国行途锐 P 版 |
+| | **🗺️ 仪表地图 + 大字运动信息框** | CarPlay 地图投射 `1920×639` 全液晶仪表（高德自动居中、方向盘缩放）；左右 `295px` 对称 **46px 粗体 + 斜切运动刻度条**（43 项实车物理数据）与**大字导航卡**（支持常驻待机） | 国行途锐 P 版 |
+| | **🔄 方向盘 OK 双击切原车地图** | 方向盘右侧 `OK` 键 2 秒内连按 2 下，在 CarPlay 地图与原车地图间无缝秒切（`VW_HUD_4_OkMapSwitch`） | 国行途锐 P 版 |
 | **无线与数据** | **📱 手机无线控制台 & SSH** | 手机热点打开 `http://touareg.local:8080` 秒改信息框、调车标、无线下载 10Hz 34 列行车记录 CSV；可选开 `2012` 无线 SSH 供 AI 自由开发 | MH2p 通用 |
-| **修复与降噪** | **📶 升 P2878 无线 5GHz 修复** | 仅旧固件（如 P9832）升级 P2878 后有线正常但无线连不上时勾选（解除 `enable5GHzCountryAdaption` 拦截） | 途锐 P2878 |
+| **修复与降噪** | **📶 升 P2878 无线 5GHz 修复** | 仅旧固件（如 P9832）升级 P2878 后有线正常但无线连不上时勾选（解除 `enable5GHzCountryAdaption` 拦截） | 国行途锐 P 版 |
 | | **🔕 去除蓝牙「输入用户名」弹窗** | 共享 Bundle `98` 仅拦截蓝牙 OBEX 认证弹窗（`Busrlo`），不影响通话、音乐与 CarPlay | 大众 MH2p |
 | | **🔕 屏蔽「SIM 仅用于数据」弹窗** | 共享 Bundle `98` 仅拦截连接投屏时的 `PHONE_SIM_DATAONLY` 提示，不影响联网与 SOS | 大众 MH2p |
 
@@ -230,7 +230,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 ## VW Touareg (CN) & MH2p Open Cockpit
 
-One zero-disassembly USB flash for the China-market VW Touareg (`MH2p_CN_VWG36_P2878` — Touareg-specific patches safely skip other firmwares), plus an open wireless web console & SSH development base for **MH2p (MIB2+ High)** units across **VW, Audi, Porsche PCM 5, Bentley, and Lamborghini**:
+One zero-disassembly USB flash for China-market VW Touareg P-series units (`MH2p_CN_VWG36_P*` — full end-to-end verified on `P2878`, auto-probing & safe-skipping incompatible sub-patches on other CN `P*` builds, and skipping non-CN/other vehicles), plus an open wireless web console & SSH development base for **MH2p (MIB2+ High)** units across **VW, Audi, Porsche PCM 5, Bentley, and Lamborghini**:
 
 - **10 Opt-in Modules (all disabled by default under `USB/未选模块/`, independently installable & uninstallable)**: Full-screen CarPlay (38-byte in-place patch), wireless CarPlay & Android Auto (upstream LawPaul modules), HUD turn-by-turn (wireless `libesoiap2` & wired Cinemo iAP2), `1920×639` cluster map with vision-based AMap centering & `OK` double-tap stock-map toggle (`VW_HUD_4_OkMapSwitch`), symmetrical `295px` **46px bold telemetry boxes with inline sport gauge bars (43 real physical DSI channels)** & **large-font navigation card** (auto-popup or always-on standby `nav_box=2`), 10 Hz 34-column CSV drive logger, `VW_Wireless5GHzFix`, and shared Bundle 98 popup filters (`VW_NoBtAuthPopup` / `VW_NoSimPopup`).
 - **Wireless Console & SSH (`VW_WiFi_Dev`)**: Connects via idle `bcm2` STA (`dhcp.client -n -R`, preserving 5 GHz RSDB wireless CarPlay and `ecm0` telematics). Open `http://touareg.local:8080` (PIN-protected, CSRF/rate-limit hardened, parked-only lock) or enable key-only **Wireless SSH (`:2012`)** for live AI-assisted cluster development.
@@ -245,5 +245,5 @@ Ein-USB-Stick-Modifikationspaket ohne Ausbau für den **VW Touareg III (CR)** mi
 
 - **10 optionale Module (standardmäßig alle deaktiviert unter `USB/未选模块/`, einzeln installier- und deinstallierbar)**: Vollbild-CarPlay (38-Byte-In-Place-Patch), Wireless CarPlay & Android Auto (LawPaul), HUD-Abbiegehinweise (Wireless & Wired Cinemo), `1920×639` Kombiinstrument-Karte inkl. **OK-Doppelklick-Umschaltung zur Werkskarte (`VW_HUD_4_OkMapSwitch`)**, symmetrische `295px` **Großschrift-Sport-Infoboxen mit integrierten Balkenanzeigen (43 echte DSI-Kanäle)** & **Großschrift-Navigationskarte** (`nav_box=1/2`), 10-Hz-CSV-Fahrtenlogger, `VW_Wireless5GHzFix` sowie gemeinsame Bundle-98-Popup-Filter (`VW_NoBtAuthPopup` / `VW_NoSimPopup`).
 - **Drahtlose Web-Konsole & WLAN-SSH (`VW_WiFi_Dev`)**: Hintergrundverbindung über `bcm2` (`http://touareg.local:8080`, PIN-geschützt, Park-Sperre > 3 km/h) sowie optionales Key-only **WLAN-SSH (Port `2012`)** im RSDB-Parallelbetrieb zu Wireless CarPlay und Werks-eSIM `ecm0`.
-- **Hinweis für EU-Fahrzeuge (z. B. `P2869`)**: Touareg-UI-Skripte prüfen auf `MH2p_CN_VWG36_P2878` und brechen auf anderen Ständen sicher ohne Änderungen ab; Architektur, `docs/` (`01–07`, `R1–R5`), Quellcode (`src/`) und `VW_WiFi_Dev` dienen direkt als Basis (siehe auch [Touareg-Freunde-Thread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)).
+- **Hinweis für EU-Fahrzeuge (z. B. `P2869`)**: Touareg-UI-Skripte prüfen auf chinesische P-Stände (`MH2p_CN_VWG36_P*`) und brechen auf EU-/anderen Ständen sicher ohne Änderungen ab; Architektur, `docs/` (`01–07`, `R1–R5`), Quellcode (`src/`) und `VW_WiFi_Dev` dienen direkt als Basis (siehe auch [Touareg-Freunde-Thread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)).
 - **Lizenz & Haftungsausschluss**: Eigener Code unter **GPL-3.0 ODER CC BY-NC-SA 4.0**; Drittkomponenten gemäß `LICENSES/`. **Ausschließlich für den privaten, nicht-kommerziellen Gebrauch; Nutzung auf eigene Gefahr.**

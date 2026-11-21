@@ -1,7 +1,13 @@
 package vwcn;
 
+import de.vw.mib.asl.framework.api.dsiproxy.DSIProxy;
+import de.vw.mib.asl.framework.api.dsiproxy.DSIProxyFactory;
 import de.vw.mib.graphics.display.DisplayManager;
 import java.io.File;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import org.dsi.ifc.base.DSIListener;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
 
@@ -38,8 +44,106 @@ public final class Rebind implements Runnable {
     static volatile boolean userNative;
     static volatile boolean toggleRequested;
     static volatile de.vw.mib.display.DisplayManagementService holdSvc;
-    static final int HOLD_MS = 3000;
+    static final int HOLD_FALLBACK_MS = 5000;
     static final File TOGGLE_FILE = new File("/tmp/vwcn_toggle");
+    /* v21.1: 事件驱动监听 DSIDisplayManagementListener（display 4 的 showDisplayablesResult / activeContext），
+     * 平时 [58,33] 在位时 0 次多余 showDisplayables 盲刷（消除 3 秒盲刷引起的 0.1s 透底闪原车地图），
+     * 一旦原车把仪表屏切走，<=100ms 立刻拉回；若特定固件挂不上监听器，自动退回 5 秒兜底（零 NPE）。 */
+    static volatile boolean dsiWatchInstalled;
+    static volatile boolean dsiWatchConfirmed;
+    static volatile boolean restoreNeeded;
+    static volatile String lastSeenCluster;
+    static volatile long lastAssertAt;
+    static int ctxLogCnt;
+
+    private static boolean sameIds(int[] a, int[] b) {
+        if (a == null || b == null || a.length != b.length) return false;
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] != b[i]) return false;
+        }
+        return true;
+    }
+
+    private static synchronized void ensureDsiWatcher() {
+        if (dsiWatchInstalled) return;
+        dsiWatchInstalled = true;
+        try {
+            DSIProxy p = DSIProxyFactory.getDSIProxyAPI().getDSIProxy();
+            if (p == null) { Log.log("rebind: DSIProxy null, using fallback hold"); return; }
+            Class lsnCls = Class.forName("org.dsi.ifc.displaymanagement.DSIDisplayManagementListener");
+            Class targetCls = Class.forName("de.vw.mib.genericevents.Target");
+            ClassLoader cl = lsnCls.getClassLoader();
+            if (cl == null) cl = Thread.currentThread().getContextClassLoader();
+            if (cl == null) cl = ClassLoader.getSystemClassLoader();
+            DSIListener dsiLsn = (DSIListener) Proxy.newProxyInstance(cl, new Class[] { lsnCls }, new InvocationHandler() {
+                public Object invoke(Object proxy, Method m, Object[] args) throws Throwable {
+                    String name = m.getName();
+                    if ("equals".equals(name)) return (args != null && args.length == 1 && proxy == args[0]) ? Boolean.TRUE : Boolean.FALSE;
+                    if ("hashCode".equals(name)) return new Integer(System.identityHashCode(proxy));
+                    if ("toString".equals(name)) return "vwcn.Rebind.DMListener";
+                    try {
+                        if ("showDisplayablesResult".equals(name) && args != null && args.length >= 2
+                            && args[0] instanceof Number && args[1] instanceof int[]) {
+                            int did = ((Number) args[0]).intValue();
+                            int[] ids = (int[]) args[1];
+                            if (did == CLUSTER_DISPLAY) {
+                                if (!dsiWatchConfirmed) {
+                                    dsiWatchConfirmed = true;
+                                    Log.log("rebind: DSI display 4 watcher confirmed active " + list(ids));
+                                }
+                                int[] h = hold;
+                                if (h != null && !sameIds(ids, h)) {
+                                    lastSeenCluster = list(ids);
+                                    restoreNeeded = true;
+                                }
+                            }
+                        } else if ("activeContext".equals(name) && args != null && args.length >= 2
+                            && args[0] instanceof Number && args[1] instanceof Number) {
+                            int did = ((Number) args[1]).intValue();
+                            if (did == CLUSTER_DISPLAY && hold != null
+                                && (System.currentTimeMillis() - lastAssertAt) >= 600L) {
+                                if (ctxLogCnt < 10) {
+                                    ctxLogCnt++;
+                                    Log.log("rebind: display 4 activeContext=" + args[0] + " -> restore");
+                                }
+                                lastSeenCluster = "ctx=" + args[0];
+                                restoreNeeded = true;
+                            }
+                        }
+                    } catch (Throwable t) {
+                    }
+                    Class rt = m.getReturnType();
+                    if (rt == Boolean.TYPE) return Boolean.FALSE;
+                    if (rt == Integer.TYPE) return new Integer(0);
+                    if (rt == Long.TYPE) return new Long(0L);
+                    return null;
+                }
+            });
+            Method mAdd = p.getClass().getMethod("addResponseListener", new Class[] { targetCls, Class.class, DSIListener.class });
+            try {
+                mAdd.invoke(p, new Object[] { null, lsnCls, dsiLsn });
+                Log.log("rebind: DSIDisplayManagementListener registered (null target)");
+            } catch (Throwable t1) {
+                Object dummyTarget = Proxy.newProxyInstance(cl, new Class[] { targetCls }, new InvocationHandler() {
+                    public Object invoke(Object proxy, Method m, Object[] args) throws Throwable {
+                        String n = m.getName();
+                        if ("equals".equals(n)) return (args != null && args.length == 1 && proxy == args[0]) ? Boolean.TRUE : Boolean.FALSE;
+                        if ("hashCode".equals(n)) return new Integer(0x7777);
+                        if ("toString".equals(n)) return "vwcn.Rebind.Target";
+                        Class rt = m.getReturnType();
+                        if (rt == Integer.TYPE) return new Integer(0x7777);
+                        if (rt == Boolean.TYPE) return Boolean.FALSE;
+                        if (rt == Long.TYPE) return new Long(0L);
+                        return null;
+                    }
+                });
+                mAdd.invoke(p, new Object[] { dummyTarget, lsnCls, dsiLsn });
+                Log.log("rebind: DSIDisplayManagementListener registered (proxy target)");
+            }
+        } catch (Throwable t) {
+            Log.log("rebind: DSI watcher unavailable (" + t + "), using fallback hold");
+        }
+    }
 
     /** 异步请求在 CarPlay 仪表地图与原车仪表地图之间切换（避免在 BAP 回调线程阻塞）。 */
     static void requestToggle(String reason) {
@@ -143,17 +247,20 @@ public final class Rebind implements Runnable {
                     continue;
                 }
                 if (g.startsWith("hold")) {
+                    ensureDsiWatcher();
                     int[] parsed = parse(g.substring(4));
                     streamHold = parsed;
                     userNative = false;
                     hold = parsed;
                     holdSvc = s;
+                    restoreNeeded = false;
+                    lastAssertAt = System.currentTimeMillis();
                     s.showDisplayables(CLUSTER_DISPLAY, hold);
                     Log.log("rebind: hold display " + CLUSTER_DISPLAY + " -> " + list(hold));
                     Thread.sleep(400);
                     continue;
                 }
-                if (g.equals("unhold")) { hold = null; streamHold = null; userNative = false; Log.log("rebind: unhold"); continue; }
+                if (g.equals("unhold")) { hold = null; streamHold = null; userNative = false; restoreNeeded = false; Log.log("rebind: unhold"); continue; }
                 if (g.startsWith("sleep")) { Thread.sleep(Integer.parseInt(g.substring(5).trim())); continue; }
                 int[] ids = parse(g);
                 s.showDisplayables(CLUSTER_DISPLAY, ids);
@@ -206,9 +313,22 @@ public final class Rebind implements Runnable {
                     }
                 }
                 int[] h = hold;
-                if (h != null && holdSvc != null && (now - lastHold) >= HOLD_MS) {
-                    lastHold = now;
-                    try { holdSvc.showDisplayables(CLUSTER_DISPLAY, h); } catch (Throwable t) { Log.log("hold error: " + t); }
+                if (h != null && holdSvc != null) {
+                    if (restoreNeeded && (now - lastAssertAt) >= 500L) {
+                        restoreNeeded = false;
+                        lastAssertAt = now;
+                        lastHold = now;
+                        String prev = lastSeenCluster;
+                        lastSeenCluster = null;
+                        try {
+                            holdSvc.showDisplayables(CLUSTER_DISPLAY, h);
+                            Log.log("rebind: restored display " + CLUSTER_DISPLAY + " -> " + list(h) + (prev != null ? " (was " + prev + ")" : ""));
+                        } catch (Throwable t) { Log.log("hold restore error: " + t); }
+                    } else if (!dsiWatchConfirmed && (now - lastHold) >= HOLD_FALLBACK_MS) {
+                        lastHold = now;
+                        lastAssertAt = now;
+                        try { holdSvc.showDisplayables(CLUSTER_DISPLAY, h); } catch (Throwable t) { Log.log("hold error: " + t); }
+                    }
                 }
             } catch (Throwable t) { Log.log("rebind loop error: " + t); }
         }

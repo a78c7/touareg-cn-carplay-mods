@@ -177,7 +177,7 @@ static void init_once(void) {
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v21.0.1 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
+    plog("cl_alt v21.1 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -326,22 +326,50 @@ static void write_status(const char *ev) {
     if (fd >= 0) { write(fd, b, n); close(fd); }
 }
 
-/* ---------- crypto (VW 320.17.1: master key at session+0x1F8) ---------- */
-#define SESSION_KEY_OFF 0x1F8
-typedef void (*fn_derive_t)(const uint8_t *, int, uint64_t, uint8_t *, uint8_t *);
-typedef int (*fn_ctr_init_t)(void *, const uint8_t *, const uint8_t *);
-typedef int (*fn_ctr_upd_t)(void *, const uint8_t *, uint32_t, uint8_t *);
-static uint8_t g_key[16], g_iv[16]; static int g_have_key;
-static void hex16(char *o, const uint8_t *b) { for (int i = 0; i < 16; i++) sprintf(o + 2 * i, "%02x", b[i]); }
-/* HomeKit pairing session at session+0x3E4 (AirPlayReceiverSessionSetHomeKitSecurityContext) */
-#define SESSION_PAIRING_OFF 0x3E4
+/* ---------- crypto (v21.1: dynamic HomeKit pairing capture across CN Touareg P-series firmwares) ---------- */
 typedef int (*fn_pderive_t)(void *, const void *, size_t, const void *, size_t, size_t, uint8_t *);
+typedef int (*fn_sethk_t)(void *, void *);
+static void hex16(char *o, const uint8_t *b) { for (int i = 0; i < 16; i++) sprintf(o + 2 * i, "%02x", b[i]); }
 static uint8_t g_ckey[32]; static int g_have_ckey;
+static void *volatile g_pairing_sess;
+static void *volatile g_pairing_obj;
+static void *resolve(const char *name);
+
+/* Fallback only if libairplay invokes SetHomeKitSecurityContext internally (bypassing PLT):
+ * inspect Thumb-2 store instruction in the real symbol to extract the exact struct offset safely. */
+static int probe_pairing_offset(void) {
+    void *fn = resolve("AirPlayReceiverSessionSetHomeKitSecurityContext");
+    if (!fn) fn = dlsym(RTLD_DEFAULT, "AirPlayReceiverSessionSetHomeKitSecurityContext");
+    uintptr_t addr = (uintptr_t)fn;
+    if (!addr || !(addr & 1u)) return -1;
+    const uint16_t *p = (const uint16_t *)(addr & ~(uintptr_t)1u);
+    for (int i = 0; i < 16; i++) {
+        uint16_t hw1 = p[i];
+        if (hw1 == 0xf8c5u || hw1 == 0xf8c4u || hw1 == 0xf8c0u) {
+            unsigned off = p[i + 1] & 0x0fffu;
+            if (off >= 0x100u && off <= 0x0ff0u && (off & 3u) == 0u) return (int)off;
+        }
+    }
+    return -1;
+}
+
 static int derive_keys(void *session, int64_t connID) {
-    g_have_key = 0; g_have_ckey = 0;
-    void *pairing = session ? *(void **)((uint8_t *)session + SESSION_PAIRING_OFF) : NULL;
+    g_have_ckey = 0;
+    void *pairing = NULL;
+    const char *src = "none";
+    if (session && g_pairing_sess == session && g_pairing_obj) {
+        pairing = g_pairing_obj;
+        src = "hook";
+    } else if (session) {
+        int off = probe_pairing_offset();
+        if (off > 0) {
+            pairing = *(void **)((uint8_t *)session + off);
+            src = "probed";
+            plog("crypto: SetHomeKitSecurityContext hook missed, probed offset=0x%x", off);
+        }
+    }
     fn_pderive_t pd = (fn_pderive_t)dlsym(RTLD_DEFAULT, "PairingSessionDeriveKey");
-    plog("crypto: pairing=%p derive=%p connID=%llu", pairing, (void *)pd, (unsigned long long)connID);
+    plog("crypto: pairing=%p (%s) derive=%p connID=%llu", pairing, src, (void *)pd, (unsigned long long)connID);
     if (pairing && pd) {
         char salt[64]; int sl = snprintf(salt, sizeof salt, "DataStream-Salt%llu", (unsigned long long)connID);
         static const char info[] = "DataStream-Output-Encryption-Key";
@@ -349,6 +377,8 @@ static int derive_keys(void *session, int64_t connID) {
         char a[33]; hex16(a, g_ckey);
         plog("crypto: chacha key r=%d prefix=%.8s...", r, a);
         if (r == 0) g_have_ckey = 1;
+    } else {
+        plog("crypto: pairing unavailable on this libairplay, skipping cluster stream");
     }
     return g_have_ckey ? 0 : -1;
 }
@@ -421,7 +451,8 @@ static void *rx_thread(void *arg) {
     plog("rx: phone connected fd=%d chacha=%d", fd, g_have_ckey);
     st_rx = 1; st_frames = 0; st_idr = 0; st_ui = 0; write_status("rx_connected");
     shm_init();
-    if (g_shm) g_shm->flags |= 1;
+    uint32_t shm_hb = 1;
+    if (g_shm) g_shm->flags = (shm_hb << 8) | 1u;
     uint8_t hdr[128]; uint8_t *body = NULL, *ab = NULL; size_t cap = 0, abcap = 0;
     uint8_t ps[512]; size_t psn = 0; int lensz = 4;
     unsigned long frames = 0, bytes = 0, idr = 0, badnal = 0, cfg = 0, opc[256] = {0}, small0 = 0; uint64_t nonce = 0;
@@ -444,6 +475,15 @@ static void *rx_thread(void *arg) {
         if (bs > cap) { body = realloc(body, bs); cap = bs; }
         if (bs && read_exact(fd, body, bs)) break;
         bytes += bs; opc[op & 255]++;
+        /* v21.1: update liveness heartbeat on EVERY received stream-111 packet (incl. op=5 keepalive & wait_idr),
+         * stored in upper 24 bits of g_shm->flags so clusterd never mistakes a static screen for a dead dio_manager. */
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        g_last_rx_ms = (long long)t.tv_sec * 1000 + t.tv_nsec / 1000000;
+        if (g_shm) {
+            shm_hb = (shm_hb + 1u) & 0x00ffffffu;
+            if (shm_hb == 0u) shm_hb = 1u;
+            g_shm->flags = (shm_hb << 8) | 1u;
+        }
         if ((op != 0 && op != 5 && opc[op] <= 5) || (op == 0 && bs <= 16 && ++small0 <= 5))
             plog("rx: op=%u body=%u hdr=%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x", op, bs, hdr[4],hdr[5],hdr[6],hdr[7],hdr[8],hdr[9],hdr[10],hdr[11],hdr[12],hdr[13],hdr[14],hdr[15]);
         if (op == 1 && bs >= 7) {           /* avcC: keep SPS/PPS as Annex-B */
@@ -452,6 +492,9 @@ static void *rx_thread(void *arg) {
             for (int k = 0; k < ns && p + 2 <= bs; k++) { int n = body[p] << 8 | body[p + 1]; p += 2; if (p + n <= bs && psn + 4 + n <= sizeof ps) { memcpy(ps + psn, sc, 4); memcpy(ps + psn + 4, body + p, n); psn += 4 + n; } p += n; }
             if (p < bs) { int np = body[p++]; for (int k = 0; k < np && p + 2 <= bs; k++) { int n = body[p] << 8 | body[p + 1]; p += 2; if (p + n <= bs && psn + 4 + n <= sizeof ps) { memcpy(ps + psn, sc, 4); memcpy(ps + psn + 4, body + p, n); psn += 4 + n; } p += n; } }
             if (cfg <= 3) plog("rx: avcC lensz=%d ps=%u bytes", lensz, (unsigned)psn);
+        } else if (op == 0 && bs == 16 && g_have_ckey) {
+            /* v21.1: 0-byte encrypted frame with 16-byte AEAD tag still consumes a ChaCha20 nonce */
+            nonce++;
         } else if (op == 0 && bs > 16 && g_have_ckey) {
             uint32_t n = bs - 16;
             cc_aead_decrypt(g_ckey, nonce++, body, n);
@@ -580,7 +623,7 @@ static void *rx_thread(void *arg) {
     }
     plog("rx: ended frames=%lu idr=%lu badnal=%lu", frames, idr, badnal);
     st_rx = 0; write_status("rx_ended");
-    if (g_shm) g_shm->flags &= ~1u;
+    if (g_shm) g_shm->flags = 0u;
     free(body); free(ab);
     close(fd);
 out:
@@ -743,8 +786,10 @@ EXPORT int AirPlayReceiverSessionSetup(void *session, void *req, void **resp, vo
         } else if (want111) {
             g_session = session;
             st_s111++; write_status("setup111");
-            derive_keys(session, connID);
-            int port = rx_start();
+            int port = -1;
+            if (derive_keys(session, connID) == 0) {
+                port = rx_start();
+            }
             plog("media SETUP: stream 111 requested connID=%lld -> listener port %d", (long long)connID, port);
             if (port > 0) {
                 void *rd = *resp ? cf_dictmcopy(0, 0, *resp) : cf_dictm(0, 0, dkey_cb, dval_cb);
@@ -798,6 +843,18 @@ EXPORT int AirPlayReceiverSessionSetNightMode(void *session, int night, void *cb
     return rc;
 }
 
+EXPORT int AirPlayReceiverSessionSetHomeKitSecurityContext(void *session, void *pairing) {
+    INIT();
+    static fn_sethk_t real; if (!real) real = (fn_sethk_t)resolve("AirPlayReceiverSessionSetHomeKitSecurityContext");
+    int rc = real ? real(session, pairing) : -6714;
+    if (rc == 0) {
+        g_pairing_sess = session;
+        g_pairing_obj = pairing;
+        if (g_log || g_alt) plog("SetHomeKitSecurityContext session=%p pairing=%p", session, pairing);
+    }
+    return rc;
+}
+
 EXPORT int AirPlayReceiverSessionTearDown(void *session, void *req, void *c, void *d) {
     INIT();
     static fn4_t real; if (!real) real = (fn4_t)resolve("AirPlayReceiverSessionTearDown");
@@ -812,7 +869,11 @@ EXPORT int AirPlayReceiverSessionTearDown(void *session, void *req, void *c, voi
             }
         }
         if (full || has111) rx_stop(full ? "full teardown" : "111 teardown");
-        if (full) { g_session = NULL; clear_rg_state("teardown"); }
+        if (full) {
+            g_session = NULL;
+            if (g_pairing_sess == session) { g_pairing_sess = NULL; g_pairing_obj = NULL; }
+            clear_rg_state("teardown");
+        }
     }
     return real ? (int)(long)real(session, req, c, d) : 0;
 }

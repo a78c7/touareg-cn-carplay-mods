@@ -339,7 +339,9 @@ public final class Bridge implements Runnable {
             }
         }
         if (beat) {
-            ServiceManager.aslPropertyManager.valueChangedInteger(DP_RG_STATE, 1);
+            if (ServiceManager.aslPropertyManager != null) {
+                ServiceManager.aslPropertyManager.valueChangedInteger(DP_RG_STATE, 1);
+            }
             lastHeartbeat = now;
         }
     }
@@ -357,6 +359,7 @@ public final class Bridge implements Runnable {
             return;
         }
         ASLNavBAPAPI api = ASLNavBAPFactory.getNavBAPApi();
+        if (api == null) return;
         if (min >= 0) {
             api.updateBapTimeToDestination2(min / 60, min % 60, 0);
         } else {
@@ -383,7 +386,9 @@ public final class Bridge implements Runnable {
         if (!beat && p.equals(lastPos)) {
             return;
         }
-        ServiceManager.aslPropertyManager.valueChangedString(DP_CUR_POSITION, p);
+        if (ServiceManager.aslPropertyManager != null) {
+            ServiceManager.aslPropertyManager.valueChangedString(DP_CUR_POSITION, p);
+        }
         if (!p.equals(lastPos)) {
             Log.log("position \"" + p + "\"");
         }
@@ -392,7 +397,9 @@ public final class Bridge implements Runnable {
 
     private void activate() {
         Log.log("ACTIVATE: routeGuidanceState=1");
-        ServiceManager.aslPropertyManager.valueChangedInteger(DP_RG_STATE, 1);
+        if (ServiceManager.aslPropertyManager != null) {
+            ServiceManager.aslPropertyManager.valueChangedInteger(DP_RG_STATE, 1);
+        }
         Rebind.restoreCarPlayOnNavStart();
         active = true;
         lastMain = -999;
@@ -408,23 +415,27 @@ public final class Bridge implements Runnable {
         Log.log("DEACTIVATE (" + why + ")");
         active = false;
         try {
-            ListManager.getGenericASLList(LIST_MANEUVER).updateList(new Object[0]);
-            ListManager.getGenericASLList(LIST_MANEUVER2).updateList(new Object[0]);
+            if (ListManager.getGenericASLList(LIST_MANEUVER) != null)
+                ListManager.getGenericASLList(LIST_MANEUVER).updateList(new Object[0]);
+            if (ListManager.getGenericASLList(LIST_MANEUVER2) != null)
+                ListManager.getGenericASLList(LIST_MANEUVER2).updateList(new Object[0]);
         } catch (Throwable t) {
             Log.log("clear maneuver: " + t);
         }
         try {
             ASLNavBAPAPI api = ASLNavBAPFactory.getNavBAPApi();
-            api.updateBapDistanceToNextManeuver(0, 0, false, 0);
-            api.updateBapTurnToInfo("", "");
-            api.updateBapLaneGuidance(new Lane[0], false);
-            lastLaneKey = "";
-            if (!new File(TRIP_OFF).exists()) {
-                api.updateBapTimeToDestination2(-1, -1, 0);
+            if (api != null) {
+                api.updateBapDistanceToNextManeuver(0, 0, false, 0);
+                api.updateBapTurnToInfo("", "");
+                api.updateBapLaneGuidance(new Lane[0], false);
+                if (!new File(TRIP_OFF).exists()) {
+                    api.updateBapTimeToDestination2(-1, -1, 0);
+                }
             }
+            lastLaneKey = "";
             lastTripDist = -2;
             lastTripMin = -2;
-            if (!new File(POS_OFF).exists() && lastPos != null) {
+            if (!new File(POS_OFF).exists() && lastPos != null && ServiceManager.aslPropertyManager != null) {
                 ServiceManager.aslPropertyManager.valueChangedString(DP_CUR_POSITION, "");
             }
             lastPos = null;
@@ -432,7 +443,9 @@ public final class Bridge implements Runnable {
             Log.log("clear navbap: " + t);
         }
         try {
-            ServiceManager.aslPropertyManager.valueChangedInteger(DP_RG_STATE, 0);
+            if (ServiceManager.aslPropertyManager != null) {
+                ServiceManager.aslPropertyManager.valueChangedInteger(DP_RG_STATE, 0);
+            }
         } catch (Throwable t) {
             Log.log("clear 732: " + t);
         }
@@ -452,8 +465,10 @@ public final class Bridge implements Runnable {
         gc.setIntItem(2, 0);
         gc.setStringItem(3, "");
         Object[] items = new GenericCollector[] { gc };
-        ListManager.getGenericASLList(LIST_MANEUVER).updateList(items);
-        ListManager.getGenericASLList(LIST_MANEUVER2).updateList(items);
+        if (ListManager.getGenericASLList(LIST_MANEUVER) != null)
+            ListManager.getGenericASLList(LIST_MANEUVER).updateList(items);
+        if (ListManager.getGenericASLList(LIST_MANEUVER2) != null)
+            ListManager.getGenericASLList(LIST_MANEUVER2).updateList(items);
         if (main != lastMain || dir != lastDir) {
             Log.log("maneuver main=" + main + " dir=" + dir);
         }
@@ -488,7 +503,8 @@ public final class Bridge implements Runnable {
         if (!beat && k.equals(lastLaneKey)) {
             return;
         }
-        ASLNavBAPFactory.getNavBAPApi().updateBapLaneGuidance(lanes, n > 0);
+        ASLNavBAPAPI api = ASLNavBAPFactory.getNavBAPApi();
+        if (api != null) api.updateBapLaneGuidance(lanes, n > 0);
         if (!k.equals(lastLaneKey)) {
             Log.log("lanes " + k);
         }
@@ -496,7 +512,8 @@ public final class Bridge implements Runnable {
     }
 
     private void pushTurnTo(String street, String sign) {
-        ASLNavBAPFactory.getNavBAPApi().updateBapTurnToInfo(street, sign);
+        ASLNavBAPAPI api = ASLNavBAPFactory.getNavBAPApi();
+        if (api != null) api.updateBapTurnToInfo(street, sign);
         if (!street.equals(lastStreet)) {
             Log.log("turnTo street=\"" + street + "\" sign=\"" + sign + "\"");
         }
@@ -505,7 +522,8 @@ public final class Bridge implements Runnable {
     }
 
     private void pushDistance(int dist, int barOn, int bar) {
-        ASLNavBAPFactory.getNavBAPApi().updateBapDistanceToNextManeuver(dist, 0, barOn == 1, bar);
+        ASLNavBAPAPI api = ASLNavBAPFactory.getNavBAPApi();
+        if (api != null) api.updateBapDistanceToNextManeuver(dist, 0, barOn == 1, bar);
         lastDist = dist;
         lastBarOn = barOn;
         lastBar = bar;

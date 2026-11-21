@@ -1,5 +1,20 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v21.1
+- **国行途锐 P 版全系安全通刷（`MH2p_CN_VWG36_P*`）+ 根治 0.1s 仪表瞬闪原车地图 + 消除静止流 6 秒误断连**：
+  - **国行途锐 P 版全系自动通刷与安全熔断**：
+    - `VW_FullScreenCarPlay`、`VW_HUD_1/2/3/4`、`VW_Wireless5GHzFix` 全部由死锁 `P2878` 放开至国行途锐全部 P 版固件 **`MH2p_CN_VWG36_P*`**（覆盖 `P2878`、`P2876`、`P2838`、`P9832` 等，仍严格拦截海外及非途锐车型）；
+    - **`cl_probe.so` 彻底消除 `0x3E4` 结构体硬编码偏移**：改为直接通过 PLT Hook 截获 `AirPlayReceiverSessionSetHomeKitSecurityContext(session, pairing)` 动态取得配对会话指针（并带 Thumb-2 指令自动探针兜底与安全熔断，未知版本不解引用野指针、不搞崩 CarPlay）；
+    - **全屏与 Java 插件自动防呆**：`vhpatch` 原生校验 `viewhandler.zip` 大小、CRC32 与 38 字节指纹，皮肤不一致自动跳过不改任何文件；`Bridge.java` 补齐 `ListManager` / `ASLNavBAPAPI` / `aslPropertyManager` 判空保护。
+  - **彻底修复仪表盘约 0.1 秒瞬闪回原车地图 / 透底闪烁（`cl_render` + `Rebind.java` 双层根治）**：
+    - **`cl_render`（`cluster.c`）**：显式锁定窗口 `58` 为 `SCREEN_TRANSPARENCY_NONE`（杜绝底层原车地图 `33` 透底）；严格遵循 QNX Screen 缓冲所有权约定，每次送显前实时查询 `SCREEN_PROPERTY_RENDER_BUFFERS` 仅向真正的后缓冲绘制，**彻底移除空闲心跳向合成器重复提交当前 Front Buffer 的违规操作**；新增 `g_pinned_didx` 锁定最近一帧已解码 YV12 表面，防止 20ms 节流补帧或 300ms 信息框空闲重绘与下一帧 NVDEC 硬解争抢同一解码缓冲；
+    - **`Rebind.java`（`VWClusterNav_v6.jar`）**：改为基于 `DSIProxy` 注册 `DSIDisplayManagementListener` 监听仪表屏 4 的 `showDisplayablesResult` / `activeContext` 事件驱动守护——平时 `[58, 33]` 在位时 **0 次多余 3 秒盲刷 `showDisplayables`**，原车切屏时 ≤100ms 立刻顶回，不再调用在仪表屏 4 必抛 `NullPointerException` 的 `widgets.DisplayManager.getActiveDisplayables(4)`（不可用固件自动降级 5 秒兜底）。
+  - **修复静止画面 / 测试版 iOS 下误判断连跳回原车地图（`cl_probe.so` + `clusterd`）**：
+    - `cl_probe.so` 在收到第二屏（stream 111）的**任意有效报文**（含每秒一次的 `op=5` 保活包及等待关键帧 `wait_idr` 期间）时，均递增 `/cluster_h264_shm` `flags` 高 24 位心跳计数（100% 兼容现有 SHM 布局），并修复 `op=0` 空载荷加密包（`bs==16`）漏增 `nonce` 导致后续解密永久错位的问题；
+    - `clusterd` 将 `dio_manager` 崩溃兜底判据改为同时监控心跳计数与视频字节数且超时放宽至 10 秒，不再把等红灯/静止画面/iOS 停发视频帧超过 6 秒误杀切回原车地图（正常断开仍立即清标志 3 秒恢复原车地图）。
+  - **电脑端「改装设置」更新至 `v21.1`**（Windows x64 / macOS Universal 双端同步重编）。
+- 包含 v21.0.1 的全部内容
+
 ## v21.0.1
 - **紧急稳定性、安全与体验热修复（强烈建议所有 `v21.0` 用户直接替换本版）**：
   - **修复桌面「改装设置」启动白板崩溃（Mac / Windows 均受影响）**：移除 `tools/configurator/web/index.html` 中遗留的 `$('maxrows')` 空节点引用，新增预览区「大字导航信息卡」实时可视化预览、修复 Windows OneDrive 桌面路径探测与 Wi-Fi SSID 32 字节标准校验，并去掉行车记录 AI 模板里的 3.0T 写死字样

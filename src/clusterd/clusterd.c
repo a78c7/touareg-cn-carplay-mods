@@ -265,7 +265,7 @@ int main(int argc, char **argv) {
     signal(SIGHUP, SIG_IGN);
     shm_head_t *s = NULL;
     pid_t child = 0;
-    uint32_t last_total = 0; int stall = 0;
+    uint32_t last_total = 0, last_hb = 0; int stall = 0, stall_logged = 0;
     int inactive = 0, zoom_n = getenv("CL_ZOOM") ? atoi(getenv("CL_ZOOM")) : 3;
     time_t started = 0, last_auto = 0; int auto_va = -1; char app[64];
     /* v19.3: the map sometimes stayed hidden (stock map on the cluster although the list was [58,33]), after boot
@@ -293,10 +293,20 @@ int main(int argc, char **argv) {
                 if (p != MAP_FAILED) { s = (shm_head_t *)p; logm("shm attached", 0); }
             }
         }
-        int active = s && s->magic == 0x48323634u && (s->flags & 1);
-        /* fallback: flag stuck (dio_manager died) -> treat >3 s without new bytes as inactive */
-        if (s) { uint32_t t = s->total_bytes; if (t == last_total) stall++; else { stall = 0; last_total = t; } }
-        if (active && stall >= 6) active = 0;
+        uint32_t flags = s ? s->flags : 0u;
+        int flag_on = s && s->magic == 0x48323634u && (flags & 1u);
+        int active = flag_on;
+        /* v21.1 fallback: cl_probe increments upper 24 bits of flags on EVERY stream-111 packet (incl. op=5 keepalive
+         * and wait_idr). Only treat a live flag as a crashed dio_manager if BOTH heartbeat and total_bytes freeze for 10 s. */
+        if (s) {
+            uint32_t t = s->total_bytes, hb = flags >> 8;
+            if (t != last_total || hb != last_hb) { stall = 0; stall_logged = 0; last_total = t; last_hb = hb; }
+            else stall++;
+        }
+        if (active && stall >= 20) {
+            active = 0;
+            if (!stall_logged) { logm("shm stall timeout (s*2)", stall); stall_logged = 1; }
+        }
         if (child > 0 && waitpid(child, NULL, WNOHANG) == child) { logm("renderer exited", child); child = 0; }
         if (active) {
             inactive = 0;
@@ -351,7 +361,7 @@ int main(int argc, char **argv) {
                         uint32_t db = cur_b - wd_bytes;
                         wd_bytes = cur_b;
                         float spd = nav ? read_speed_kmh() : -1.0f;
-                        if (nav && spd >= 18.0f && db > 0 && db < 75000u) {
+                        if (nav && spd >= 18.0f && db < 75000u) {
                             if (++wd_frozen >= 6 && now_t - wd_last_wake >= 25) {
                                 char cmd[48];
                                 snprintf(cmd, sizeof cmd, "wake 2 #w%u\n", ++wd_seq);

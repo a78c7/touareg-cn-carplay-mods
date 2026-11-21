@@ -1,8 +1,8 @@
 #!/bin/ksh
-# VW Touareg CN (MH2p_CN_VWG36_P2878): CarPlay map on the instrument cluster, step 3.
+# VW Touareg CN P-series (MH2p_CN_VWG36_P*): CarPlay map on the instrument cluster, step 3.
 # Needs VW_HUD_1_RouteGuidance (dio_cluster.so preloaded into dio_manager) and VW_HUD_2_ClusterNav.
 # - cl_probe.so : preloaded into dio_manager next to dio_cluster.so; advertises a cluster display to the iPhone
-#                 (altScreen), receives + decrypts the 2nd video stream -> /cluster_h264_shm
+#                 (altScreen), dynamically captures HomeKit pairing pointer, receives + decrypts stream 111 -> /cluster_h264_shm
 # - cl_render   : H.264 decoder/renderer for the cluster window (based on fifthBro/mh2p-cluster cluster.c, CC BY-NC-SA 4.0)
 # - clusterd    : starts cl_render while the stream is live, switches the cluster back to the stock map when it ends
 # - dash.conf   : info box on the cluster map (which values, order, position)
@@ -15,9 +15,10 @@ SI=/mnt/system/etc/eso/production/smartphone_integrator.json
 DIO=$D/dio_cluster.so
 PR=$D/cl_probe.so
 
-if [ "$RELEASE_VERSION" != "MH2p_CN_VWG36_P2878" ]; then
-    echo "abort: built for MH2p_CN_VWG36_P2878, this unit is $RELEASE_VERSION"; exit 0
-fi
+case "$RELEASE_VERSION" in
+    MH2p_CN_VWG36_P*) ;;
+    *) echo "abort: built for CN VW Touareg P-series (MH2p_CN_VWG36_P*), this unit is $RELEASE_VERSION"; exit 0 ;;
+esac
 touch $MOD_PATH/test.txt
 if [[ ! -e $MOD_PATH/test.txt ]]; then echo "abort: USB is write protected"; exit 0; fi
 rm -f $MOD_PATH/test.txt
