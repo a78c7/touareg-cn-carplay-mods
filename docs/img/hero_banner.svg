@@ -62,7 +62,7 @@
       <text x="464" y="19.5" fill="#7efce6" text-anchor="middle">无线网页 + SSH</text>
     </g>
 
-    <text x="0" y="222" fill="#64748b" font-size="12.5" letter-spacing="1.2" font-weight="600">OPEN COCKPIT SUITE FOR VW TOUAREG (MH2p) · v21.0</text>
+    <text x="0" y="222" fill="#64748b" font-size="12" letter-spacing="0.6" font-weight="600">OPEN COCKPIT SUITE FOR VW TOUAREG (MH2p) · v21 · <tspan fill="#7efce6">最新版见 Releases ↗</tspan></text>
   </g>
 
   <!-- Right Upper Card: 1920x639 Instrument Cluster Preview (v21 Sport Bars + Symmetrical Nav Card) -->
@@ -155,7 +155,7 @@
   <rect x="0" y="472" width="1280" height="48" fill="#05080f" fill-opacity="0.92"/>
   <line x1="0" y1="472" x2="1280" y2="472" stroke="#1e293b" stroke-width="1"/>
   <g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="12.5" font-weight="600">
-    <text x="56" y="501" fill="#00f2d3">大众途锐实车验证 (P2878)</text>
+    <text x="56" y="501" fill="#00f2d3">国行途锐 P 版通刷 (MH2p)</text>
     <text x="224" y="501" fill="#475569">|</text>
     <text x="242" y="501" fill="#94a3b8">同平台 MH2p 参考：</text>
     <text x="366" y="501" fill="#f1f5f9" letter-spacing="1.0">VW TOUAREG · AUDI MIB2+ · PORSCHE PCM5 · BENTLEY · LAMBORGHINI</text>
