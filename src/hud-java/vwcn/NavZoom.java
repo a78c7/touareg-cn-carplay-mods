@@ -19,19 +19,20 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
     static final String CMD = "/tmp/cl_alt_cmd";
     static final File FLIP = new File("/mnt/app/eso/bin/apps/cluster/zoom_flip");
     static final File SWITCH_OFF = new File("/mnt/app/eso/bin/apps/cluster/switch_off");
-    static final long DEACT_DELAY_MS = 100L;     // 缩放键附带的 deactivateAutozoom 会在 1~20ms 内紧跟 zoomIndex，100ms 可彻底过滤
-    static final long DOUBLE_TAP_MAX_MS = 2000L; // 2 秒内连按 2 下方向盘右侧 OK 键触发地图切换
-    static final long SWITCH_COOLDOWN_MS = 2500L;
+    static final long DEACT_DELAY_MS = 100L;      // 缩放键附带的 deactivateAutozoom 会在 1~20ms 内紧跟 zoomIndex，100ms 可彻底过滤
+    static final long DOUBLE_TAP_MAX_MS = 2000L;  // 第 1 击与第 2 击最大间隔（连按 2 下切换 CarPlay ↔ 原车地图）
+    static final long MAP_COOLDOWN_MS = 2500L;    // 切地图后 2.5s 冷却（过滤仪表在 167ms/1345ms 自动补发的 Autozoom 回弹）
     final de.vw.mib.bap.mqbab2.common.api.navigation.NavigationService d;
     private int pending;
     private long lastSent;
     private int seq;
     private boolean logged;
-    // v19.8: 方向盘右侧 OK 键双击检测状态
+    // 方向盘右侧 OK 键双击（切换 CarPlay 地图 ↔ 原车地图）状态
     private long pendingDeactAt;      // 待确认的独立 deactivateAutozoom 时间戳（0=无）
     private long lastOkTapAt;         // 上次已确认的独立 OK 按键时间
     private int  lastOkAct;           // 1=activateAutozoom, -1=deactivateAutozoom
-    private long lastSwitchAt;        // 上次切换触发时间（冷却防连跳）
+    private int  okTapCount;          // 当前连击次数 (0, 1)
+    private long cooldownUntil;       // 防连跳冷却截止时间戳
 
     NavZoom(de.vw.mib.bap.mqbab2.common.api.navigation.NavigationService d) {
         this.d = d;
@@ -50,31 +51,34 @@ public final class NavZoom implements de.vw.mib.bap.mqbab2.common.api.navigation
         pendingDeactAt = 0; // 原车地图下按缩放键同样取消附带的 deactivateAutozoom
     }
 
-    /** 记录一次已确认的独立 OK 键按下（act: 1=activate, -1=deactivate）。 */
+    /** 记录一次已确认的独立 OK 键按下（act: 1=activate, -1=deactivate）。
+     *  交互规则：2 秒内连按 2 下 = 切换 CarPlay 地图 ↔ 原车地图。 */
     private void recordOkTap(long ts, int act) {
         if (SWITCH_OFF.exists()) return;
         if (Rebind.streamHold == null) {
-            // 未连 CarPlay 地图流时不做切换，重置状态
             lastOkTapAt = 0;
+            okTapCount = 0;
             return;
         }
-        if (ts - lastSwitchAt < SWITCH_COOLDOWN_MS) {
+        if (ts < cooldownUntil) {
             Log.log("switch: ok tap ignored (cooldown) act=" + act);
             return;
         }
         long dt = ts - lastOkTapAt;
-        if (lastOkTapAt > 0 && dt >= 120L && dt <= DOUBLE_TAP_MAX_MS) {
-            // 若是同方向事件且精准落在 540~660ms，过滤掉可能残留的 BAP 600ms 重试帧
-            if (act == lastOkAct && dt >= 540L && dt <= 660L) {
-                Log.log("switch: ignored possible 600ms BAP retry dt=" + dt + "ms act=" + act);
-                return;
-            }
+        // 过滤同方向 540~660ms 的 BAP 重试帧
+        if (lastOkTapAt > 0 && act == lastOkAct && dt >= 540L && dt <= 660L) {
+            Log.log("switch: ignored possible 600ms BAP retry dt=" + dt + "ms act=" + act);
+            return;
+        }
+        if (okTapCount == 1 && lastOkTapAt > 0 && dt >= 120L && dt <= DOUBLE_TAP_MAX_MS) {
+            okTapCount = 0;
             lastOkTapAt = 0;
             lastOkAct = 0;
-            lastSwitchAt = ts;
-            Log.log("switch: OK double-tap detected dt=" + dt + "ms (" + act + ")");
+            cooldownUntil = ts + MAP_COOLDOWN_MS;
+            Log.log("switch: OK double-tap detected dt=" + dt + "ms (" + act + ") -> toggle map");
             Rebind.requestToggle("ok-double-tap");
         } else {
+            okTapCount = 1;
             lastOkTapAt = ts;
             lastOkAct = act;
             Log.log("switch: OK tap #1 act=" + act + " cpHold=" + (Rebind.hold != null ? 1 : 0));

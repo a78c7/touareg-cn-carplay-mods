@@ -36,6 +36,8 @@ mkdir -p $MOD_PATH/backup
 [[ ! -e $MOD_PATH/backup/smartphone_integrator.json ]] && cp -v $SI $MOD_PATH/backup/smartphone_integrator.json
 
 mount -uw /mnt/app
+HAD_CLUSTER=0
+[[ -f $D/dash.conf ]] && HAD_CLUSTER=1
 mkdir -p $D
 # 1) binaries (copy then rename: a running dio_manager keeps the old inode)
 for f in cl_probe.so cl_render clusterd; do
@@ -45,15 +47,29 @@ done
 cp -v $MOD_PATH/cl.conf $D/cl.conf.default && chmod 644 $D/cl.conf.default
 [[ ! -f $D/cl.conf ]] && cp -v $MOD_PATH/cl.conf $D/cl.conf && chmod 644 $D/cl.conf
 [[ -f $MOD_PATH/cl.sh ]] && cp -v $MOD_PATH/cl.sh $D/cl.sh && chmod 755 $D/cl.sh
-# info box items/order/position (v17): the USB copy is the owner's choice, always installed
-[[ -f $MOD_PATH/dash.conf ]] && cp -v $MOD_PATH/dash.conf $D/dash.conf && chmod 644 $D/dash.conf
-# steering-wheel OK double-tap map switch (v19.8): enabled by default unless switch_off is present on USB
-if [[ -f $MOD_PATH/switch_off ]]; then
-    cp -v $MOD_PATH/switch_off $D/switch_off && chmod 644 $D/switch_off
-else
-    rm -f $D/switch_off
+# info box items/order/position (v17+): if upgrading an existing install while VW_HUD_4_OkMapSwitch is "skip",
+# preserve existing trip_base and existing switch_off; if VW_HUD_4_OkMapSwitch is also in Mods/, it runs right after step 3.
+if [[ -f $MOD_PATH/dash.conf ]]; then
+    cp -v $MOD_PATH/dash.conf $D/dash.conf.new
+    if [ "$HAD_CLUSTER" = "1" ] && [[ -f $D/dash.conf ]]; then
+        oldv=$(awk '/^trip_base=/{ sub(/\r$/, ""); v=$0 } END{ print v }' $D/dash.conf 2>/dev/null || true)
+        newv=$(awk '/^trip_base=/{ sub(/\r$/, ""); v=$0 } END{ print v }' $D/dash.conf.new 2>/dev/null || true)
+        if [ -n "$oldv" ] && [ "$newv" = "trip_base=0" ]; then
+            awk -v kv="$oldv" 'index($0, "trip_base=") == 1 { print kv; next } { print }' \
+                $D/dash.conf.new > $D/dash.conf.tmp && mv -f $D/dash.conf.tmp $D/dash.conf.new
+        fi
+    fi
+    chmod 644 $D/dash.conf.new && mv -f $D/dash.conf.new $D/dash.conf
 fi
-rm -f $D/disable
+# Clean first-time install: OK double-tap map switch defaults to OFF unless VW_HUD_4_OkMapSwitch is installed
+if [ "$HAD_CLUSTER" = "0" ]; then
+    if [[ -f $MOD_PATH/switch_off ]]; then
+        : > $D/switch_off && chmod 644 $D/switch_off
+    else
+        rm -f $D/switch_off
+    fi
+fi
+rm -f $D/disable $D/triple_off $D/tire_ref.state /tmp/ultra_theme /tmp/media_cp.state /tmp/rdk_probe.log
 ls -l $D
 
 # 2) json: append cl_probe.so to the dio_cluster.so LD_PRELOAD entry
@@ -68,7 +84,9 @@ else
     echo "patched:"; grep LD_PRELOAD $SI
 fi
 
-# 3) remove the hand-installed development copy of the boot script, if any
+# 3) remove legacy pre-v19 Persist directory so two Persist loops never run side-by-side
+[[ ! -e "/mnt/ota" ]] && mount -t qnx6 /dev/mnanda0t177.16 /mnt/ota 2>/dev/null
+mount -uw /mnt/ota 2>/dev/null || true
 rm -rf /mnt/ota/modkit/Mods/VW_CarPlayCluster 2>/dev/null
 sync
 echo "done"

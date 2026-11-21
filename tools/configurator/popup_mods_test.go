@@ -8,15 +8,16 @@ import (
 
 func TestOptionalPopupModsLifecycle(t *testing.T) {
 	tmp := t.TempDir()
-	// 创建基础 USB 目录结构（默认模块在 Mods/，可选弹窗模块在 未选模块/）
+	// 创建基础 USB 目录结构（所有模块初始均在 未选模块/，默认不开启）
 	for _, d := range []string{
-		"Data", "Meta",
-		"Mods/VW_FullScreenCarPlay",
-		"Mods/AppleCarPlay",
-		"Mods/AndroidAuto",
-		"Mods/VW_HUD_1_RouteGuidance",
-		"Mods/VW_HUD_2_ClusterNav",
-		"Mods/VW_HUD_3_CarPlayCluster/Update",
+		"Data", "Meta", "Mods",
+		"未选模块/VW_FullScreenCarPlay",
+		"未选模块/AppleCarPlay",
+		"未选模块/AndroidAuto",
+		"未选模块/VW_HUD_1_RouteGuidance",
+		"未选模块/VW_HUD_2_ClusterNav",
+		"未选模块/VW_HUD_3_CarPlayCluster/Update",
+		"未选模块/VW_HUD_4_OkMapSwitch/Update",
 		"未选模块/VW_Wireless5GHzFix",
 		"未选模块/VW_NoBtAuthPopup/Update",
 		"未选模块/VW_NoSimPopup/Update",
@@ -29,8 +30,10 @@ func TestOptionalPopupModsLifecycle(t *testing.T) {
 
 	p := pkg{Root: tmp}
 	st := p.state()
-	if st.States["nobtauth"] != "skip" || st.States["nosimpopup"] != "skip" {
-		t.Fatalf("expected default skip state, got nobtauth=%q nosimpopup=%q", st.States["nobtauth"], st.States["nosimpopup"])
+	for _, f := range features {
+		if st.States[f.ID] != "skip" {
+			t.Fatalf("expected default skip state for %s, got %q", f.ID, st.States[f.ID])
+		}
 	}
 
 	baseReq := func(bt, ns string) applyReq {
@@ -41,6 +44,7 @@ func TestOptionalPopupModsLifecycle(t *testing.T) {
 				"aa":         "skip",
 				"hud":        "skip",
 				"cluster":    "skip",
+				"mapswitch":  "skip",
 				"wifi5gfix":  "skip",
 				"nobtauth":   bt,
 				"nosimpopup": ns,

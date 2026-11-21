@@ -93,5 +93,8 @@ cp -v /tmp/bp_new $B.new && chmod 644 $B.new && mv -f $B.new $B
 rm -f /tmp/bp_new
 echo "bundles.properties updated:"; grep -n 'Startup.Lateload' $B
 rm -fv /mnt/app/eso/hmi/lsd/jars/VWClusterNav_*.jar
+[[ ! -e "/mnt/ota" ]] && mount -t qnx6 /dev/mnanda0t177.16 /mnt/ota 2>/dev/null
+mount -uw /mnt/ota 2>/dev/null || true
+rm -rf /mnt/ota/modkit/Mods/VW_ClusterNav 2>/dev/null
 sync
 echo "done"

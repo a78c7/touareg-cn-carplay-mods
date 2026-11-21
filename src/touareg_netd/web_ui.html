@@ -81,19 +81,20 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
       <div class="card">
         <h2>左信息框 <label style="font-weight:400;display:flex;align-items:center;gap:6px"><input type="checkbox" id="show">启用</label></h2>
         <div id="lSel" class="sel-list"></div>
-        <div class="sub">点下方标签添加或取消（最多 10 项，1～6 项大字）：</div>
+        <div class="sub">点下方标签添加或取消（最多 10 项，1～5 项超大字 + 内嵌运动仪表条）：</div>
         <div id="lPool" class="pool"></div>
       </div>
 
       <div class="card">
         <h2>右信息框 <label style="font-weight:400;display:flex;align-items:center;gap:6px"><input type="checkbox" id="r_show">启用</label></h2>
         <div id="rSel" class="sel-list"></div>
-        <div class="sub">点下方标签添加或取消（最多 10 项）：</div>
+        <div class="sub">点下方标签添加或取消（最多 10 项，未导航时显示；开启导航自动切换为大字导航信息框）：</div>
         <div id="rPool" class="pool"></div>
       </div>
 
       <div class="card">
         <h2>车标位置与通用参数</h2>
+        <div class="row"><label>显示行内运动进度条<span class="sub">转速/功率/扭矩/油门斜切运动格、G值/转向/坡度中心游标、油温/胎压刻度条</span></label><input type="checkbox" id="bars" checked></div>
         <div class="row"><label>地图常驻上移 (0~90)<span class="sub">车标被底部驾驶辅助图案挡住时调大</span></label><input type="number" id="car_up" min="0" max="90"></div>
         <div class="row"><label>开 ACC 时再上移 (0~90)<span class="sub">car_up + acc_up 最多 90</span></label><input type="number" id="acc_up" min="0" max="90"></div>
         <div class="row"><label>高德车标居中<span class="sub">只对高德生效</span></label>
@@ -104,10 +105,12 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
             <option value="2">2 · 收到车道信息时不补偿</option>
           </select>
         </div>
-        <div class="row"><label>导航信息卡<span class="sub">导航时在选定侧自动显示转向、完整路名、车道与到达时间</span></label>
+        <div class="row"><label>大字导航信息框<span class="sub">可选仅导航时弹出，或常驻显示（未导航时显示待机导航框）</span></label>
           <select id="nav_mode">
-            <option value="right">显示在右边框（默认）</option>
-            <option value="left">显示在左边框</option>
+            <option value="right">右边框 · 仅导航时弹出（默认）</option>
+            <option value="right_always">右边框 · 常驻显示（未导航显示待机框）</option>
+            <option value="left">左边框 · 仅导航时弹出</option>
+            <option value="left_always">左边框 · 常驻显示（未导航显示待机框）</option>
             <option value="off">关闭</option>
           </select>
         </div>
@@ -145,8 +148,8 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
       <h2>仪表功能开关</h2>
       <div class="row"><label>临时停用仪表地图 (disable)<span class="sub">下次重启后生效，不卸载模块</span></label><input type="checkbox" id="tg_disable" onchange="doToggle('disable',this.checked)"></div>
       <div class="row"><label>关闭 CarPlay 切原车保活 (ka_off)<span class="sub">默认关闭此项以防 30 秒断联</span></label><input type="checkbox" id="tg_ka_off" onchange="doToggle('ka_off',this.checked)"></div>
-      <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放反转</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
-      <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">默认开启：2 秒内连按 2 下右侧 OK 键在 CarPlay/原车地图间切换</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
+      <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放反向</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
+      <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">默认开启：连按 2 下右侧 OK 键在 CarPlay 地图与原车地图间切换</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
     </div>
     <div class="card">
       <h2>快捷运维（仅停车可用）</h2>
@@ -154,7 +157,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
         <button class="btn pri" type="button" onclick="doAct('toggle_map')">切换仪表地图 (CarPlay ↔ 原车)</button>
         <button class="btn" type="button" onclick="doAct('restart_render')">刷新仪表画面 (slay cl_render)</button>
         <button class="btn" type="button" onclick="doAct('restart_carplay')">重连 CarPlay (slay dio_manager)</button>
-        <button class="btn dan" type="button" onclick="if(confirm('确认软重启车机？过程约 30 秒'))doAct('reboot_hu')">软重启车机 (gem-reset)</button>
+        <button class="btn dan" type="button" onclick="confirmReboot()">软重启车机 (gem-reset)</button>
       </div>
     </div>
   </section>
@@ -217,7 +220,9 @@ const ITEMS=[
 ["trip","本次油耗","L/100km"],["tripdist","本次里程","km"],["tripspeed","本次均速","km/h"],["triptime","本次时长","h"],
 ["refuel","加油后油耗","L/100km"],["refueldist","加油后里程","km"],["refuelspeed","加油后均速","km/h"],["refueltime","加油后时长","h"],
 ["total","累计油耗","L/100km"],["totaldist","累计里程","km"],["totalspeed","累计均速","km/h"],["totaltime","累计时长","h"],
-["t100","0-100","s"],["pmax","最大功率","kW"],["tqmax","最大扭矩","Nm"],["gmax","最大G值","g"],["tripkm","Trip","km"]
+["t100","0-100","s"],["pmax","最大功率","kW"],["tqmax","最大扭矩","Nm"],["gmax","最大G值","g"],["tripkm","Trip","km"],
+["tires","四轮胎压","bar"],["tpfl","左前胎压","bar"],["tpfr","右前胎压","bar"],["tprl","左后胎压","bar"],["tprr","右后胎压","bar"],
+["pitch","俯仰角","°"],["roll","侧倾角","°"],["alt","海拔","m"]
 ];
 const IMAP={};ITEMS.forEach(x=>IMAP[x[0]]=x);
 let S=null,L=[],R=[],PIN=localStorage.getItem('mh2p_pin')||'';
@@ -277,11 +282,17 @@ function renderBox(arr,selId,poolId){
 async function postForm(url,obj){
   const body=new URLSearchParams();
   Object.keys(obj).forEach(k=>body.append(k,String(obj[k])));
-  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Pin':PIN},body:body.toString()});
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Pin':PIN,'X-Requested-With':'touareg-webui'},body:body.toString()});
   const j=await r.json();
   if(r.status===401||j.need_pin){document.getElementById('pinModal').classList.add('on');throw new Error('需要验证管理口令');}
   if(!r.ok||!j.ok)throw new Error(j.msg||('HTTP '+r.status));
   return j;
+}
+
+function confirmReboot(){
+  const noSpd=!S||S.speed<0;
+  const msg=noSpd?'当前未读取到实时车速，请先确认车辆已停稳！\n确定软重启车机（过程约 35 秒）？':'确认软重启车机？过程约 35 秒。';
+  if(confirm(msg))doAct('reboot_hu');
 }
 
 async function loadStatus(){
@@ -292,7 +303,8 @@ async function loadStatus(){
     S=j;
     const b=document.getElementById('spdBadge');
     if(S.speed>3){b.textContent='行驶中 '+S.speed.toFixed(0)+' km/h (只读)';b.className='badge err';}
-    else{b.textContent='停车就绪';b.className='badge ok';}
+    else if(S.speed>=0){b.textContent='停车就绪';b.className='badge ok';}
+    else{b.textContent='已连接';b.className='badge warn';}
     document.getElementById('ipTxt').textContent='地址: touareg.local ('+S.bcm2_ip+')';
     document.getElementById('procTxt').textContent='进程: clusterd='+(S.clusterd?'开':'关')+' render='+(S.cl_render?'开':'关');
     document.getElementById('odoTxt').textContent=S.odo>0?('总里程: '+S.odo.toFixed(1)+' km'):'';
@@ -312,10 +324,12 @@ async function loadStatus(){
     R=(d.r_items||'').split(',').map(x=>x.trim()).filter(x=>x&&IMAP[x]);
     document.getElementById('show').checked=d.show!=0;
     document.getElementById('r_show').checked=d.r_show==1;
+    document.getElementById('bars').checked=d.bars!==0;
     ['car_up','acc_up','amap_turn','alpha','tank_l','trip_base','nav_tz'].forEach(k=>{
       if(d[k]!==undefined)document.getElementById(k).value=d[k];
     });
-    document.getElementById('nav_mode').value=d.nav_box==0?'off':(d.nav_side==='left'?'left':'right');
+    const nb = Number(d.nav_box == null ? 1 : d.nav_box);
+    document.getElementById('nav_mode').value = nb === 0 ? 'off' : ((d.nav_side === 'left' ? 'left' : 'right') + (nb >= 2 ? '_always' : ''));
     document.getElementById('lat_flip').checked=d.lat_flip==1;
     renderBox(L,'lSel','lPool');
     renderBox(R,'rSel','rPool');
@@ -354,14 +368,15 @@ document.getElementById('btnSaveDash').onclick=async()=>{
     const j=await postForm('/api/dash',{
       items:L.join(','),show:document.getElementById('show').checked?1:0,
       r_items:R.join(','),r_show:document.getElementById('r_show').checked?1:0,
+      bars:document.getElementById('bars').checked?1:0,
       car_up:document.getElementById('car_up').value||0,
       acc_up:document.getElementById('acc_up').value||0,
       amap_turn:document.getElementById('amap_turn').value||3,
       alpha:document.getElementById('alpha').value||200,
       tank_l:document.getElementById('tank_l').value||90,
       lat_flip:document.getElementById('lat_flip').checked?1:0,
-      nav_box:document.getElementById('nav_mode').value==='off'?0:1,
-      nav_side:document.getElementById('nav_mode').value==='left'?'left':'right',
+      nav_box:document.getElementById('nav_mode').value==='off'?0:(document.getElementById('nav_mode').value.endsWith('_always')?2:1),
+      nav_side:document.getElementById('nav_mode').value.startsWith('left')?'left':'right',
       nav_tz:document.getElementById('nav_tz').value||8,
       trip_base:document.getElementById('trip_base').value||0
     });

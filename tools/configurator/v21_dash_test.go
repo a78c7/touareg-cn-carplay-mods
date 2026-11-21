@@ -1,0 +1,160 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
+	tmp := t.TempDir()
+	// 模拟无预置空 Mods/ 目录时也能从 未选模块/ 正常移入 Mods/
+	for _, d := range []string{
+		"Data", "Meta",
+		"未选模块/VW_FullScreenCarPlay",
+		"未选模块/AppleCarPlay",
+		"未选模块/AndroidAuto",
+		"未选模块/VW_HUD_1_RouteGuidance",
+		"未选模块/VW_HUD_2_ClusterNav",
+		"未选模块/VW_HUD_3_CarPlayCluster/Update",
+		"未选模块/VW_HUD_4_OkMapSwitch/Update",
+		"未选模块/VW_Wireless5GHzFix",
+		"未选模块/VW_NoBtAuthPopup/Update",
+		"未选模块/VW_NoSimPopup/Update",
+		"未选模块/VW_WiFi_Dev/Update",
+	} {
+		if err := os.MkdirAll(filepath.Join(tmp, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	p := pkg{Root: tmp}
+
+	// 验证前置依赖校验：单独装 mapswitch 或 cluster 而未勾 hud 应被后端拒绝
+	badReq := applyReq{
+		Features: map[string]string{
+			"fullscreen": "skip", "carplay": "skip", "aa": "skip",
+			"hud": "skip", "cluster": "skip", "mapswitch": "install",
+			"wifi5gfix": "skip", "nobtauth": "skip", "nosimpopup": "skip", "wifi": "skip",
+		},
+		Dash: defaultDash(),
+	}
+	if _, _, err := p.apply(badReq); err == nil {
+		t.Fatalf("expected dependency validation error when mapswitch=install without hud+cluster")
+	}
+
+	req := applyReq{
+		Features: map[string]string{
+			"fullscreen": "install",
+			"carplay":    "install",
+			"aa":         "skip",
+			"hud":        "install",
+			"cluster":    "install",
+			"mapswitch":  "install",
+			"wifi5gfix":  "skip",
+			"nobtauth":   "skip",
+			"nosimpopup": "skip",
+			"wifi":       "skip",
+		},
+		Dash: dashConf{
+			Show:     true,
+			Bars:     true,
+			Items:    []string{"torque", "rpm", "g", "oil", "cons"},
+			RShow:    true,
+			RItems:   []string{"tires", "tpfl", "tpfr", "tprl", "tprr", "pitch", "roll", "alt"},
+			X:        5,
+			Y:        164,
+			Alpha:    200,
+			TankL:    90,
+			LatFlip:  0,
+			CarUp:    40,
+			AccUp:    80,
+			AmapTurn: 3,
+			NavBox:   2,
+			NavSide:  "right",
+			NavTz:    8,
+		},
+	}
+
+	if _, _, err := p.apply(req); err != nil {
+		t.Fatalf("apply v21 dash failed: %v", err)
+	}
+	if !isDir(filepath.Join(tmp, "Mods", "VW_HUD_4_OkMapSwitch")) {
+		t.Fatalf("expected VW_HUD_4_OkMapSwitch in Mods/ when mapswitch=install")
+	}
+
+	got, found := p.readDash()
+	if !found {
+		t.Fatalf("expected dash.conf to be found")
+	}
+	if !got.Bars || !got.OkSwitch || got.NavBox != 2 || got.NavSide != "right" {
+		t.Fatalf("unexpected v21 dash fields: %+v", got)
+	}
+	if strings.Join(got.Items, ",") != "torque,rpm,g,oil,cons" {
+		t.Fatalf("unexpected left items: %v", got.Items)
+	}
+	if strings.Join(got.RItems, ",") != "tires,tpfl,tpfr,tprl,tprr,pitch,roll,alt" {
+		t.Fatalf("unexpected right items: %v", got.RItems)
+	}
+
+	// 关闭运动条并卸载 mapswitch
+	req.Features["mapswitch"] = "uninstall"
+	req.Dash.Bars = false
+	if _, _, err := p.apply(req); err != nil {
+		t.Fatalf("re-apply failed: %v", err)
+	}
+	if !isFile(filepath.Join(tmp, "Mods", "VW_HUD_4_OkMapSwitch", "uninstall.txt")) {
+		t.Fatalf("expected uninstall.txt in Mods/VW_HUD_4_OkMapSwitch")
+	}
+	got2, _ := p.readDash()
+	if got2.Bars || got2.OkSwitch {
+		t.Fatalf("expected Bars=false OkSwitch=false, got %+v", got2)
+	}
+
+	// Switch to record mode and verify AI guide contains 34 real sensor columns
+	if _, err := p.setUsbMode("record"); err != nil {
+		t.Fatalf("setUsbMode(record) failed: %v", err)
+	}
+	guideBytes, err := os.ReadFile(filepath.Join(tmp, "drive_logs", aiGuideName))
+	if err != nil {
+		t.Fatalf("read aiGuide failed: %v", err)
+	}
+	for _, col := range []string{"pitch_deg", "roll_deg", "alt_m", "tp_fl", "ZF 8HP65A"} {
+		if !strings.Contains(string(guideBytes), col) {
+			t.Fatalf("aiGuide missing %q", col)
+		}
+	}
+}
+
+func TestRealUSBPackageAllDefaultOffAndUninstallable(t *testing.T) {
+	realUSB := filepath.Clean("../../USB")
+	if !isDir(filepath.Join(realUSB, "Data")) {
+		t.Skip("real ../../USB directory not present in this test environment")
+	}
+	p := pkg{Root: realUSB}
+	st := p.state()
+	if len(st.Errors) > 0 {
+		t.Fatalf("unexpected USB package errors: %v", st.Errors)
+	}
+	if len(features) != 10 {
+		t.Fatalf("expected 10 streamlined features, got %d", len(features))
+	}
+	for _, f := range features {
+		if st.States[f.ID] != "skip" {
+			t.Fatalf("real USB feature %s (%s) must default to skip (off), got %q", f.ID, f.Name, st.States[f.ID])
+		}
+		for _, d := range f.Dirs {
+			upDir := filepath.Join(realUSB, parkDir, d, "Update")
+			if !isFile(filepath.Join(upDir, "install.sh")) {
+				t.Fatalf("missing install.sh in %s", upDir)
+			}
+			if !isFile(filepath.Join(upDir, "uninstall.sh")) {
+				t.Fatalf("missing uninstall.sh in %s", upDir)
+			}
+		}
+	}
+	if st.Dash.OkSwitch || !st.Dash.Bars {
+		t.Fatalf("expected OkSwitch=false and Bars=true by default, got OkSwitch=%v Bars=%v", st.Dash.OkSwitch, st.Dash.Bars)
+	}
+}

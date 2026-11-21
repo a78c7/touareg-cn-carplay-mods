@@ -184,18 +184,37 @@ static int turn_areas(const char *app, int *left, int *right) {
     }
     return 0;
 }
+static void write_det_state(char mode_ch) {
+    static char cur_mode = 0;
+    if (mode_ch == 0) {
+        if (cur_mode != 0 || access("/tmp/cl_det_on", F_OK) == 0) unlink("/tmp/cl_det_on");
+        cur_mode = 0;
+        return;
+    }
+    if (cur_mode == mode_ch && access("/tmp/cl_det_on", F_OK) == 0) return;
+    int fd = open("/tmp/cl_det_on", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd >= 0) { char b[2] = { mode_ch, '\n' }; write(fd, b, 2); close(fd); cur_mode = mode_ch; }
+}
+static float read_speed_kmh(void) {
+    char b[1024];
+    if (read_file("/tmp/dash.state", b, sizeof b) <= 0) return -1.0f;
+    char *p = strstr(b, " spd=");
+    return p ? (float)atof(p + 5) : -1.0f;
+}
 static int vision_va(const char *app, int nav, int base, int cur) {
     static unsigned last_seq; static int want = -1, cnt, frozen, nsw, chosen = -1, last_base = -1, kept = -1;
-    static time_t sw_t[6], last_sw, gone_t, last_diag;
+    static time_t sw_t[6], last_sw, gone_t, last_diag, det_hold_until;
     int on = g_mode == 3 && nav && app[0] && strstr(app, "高德");
     if (!on) {
-        if (access("/tmp/cl_det_on", F_OK) == 0) unlink("/tmp/cl_det_on");
+        time_t now0 = time(NULL);
         if (!nav) { want = -1; cnt = 0; frozen = 0; nsw = 0; }
-        if (chosen >= 0) { kept = chosen; gone_t = time(NULL); }
+        if (chosen >= 0) { kept = chosen; gone_t = now0; det_hold_until = now0 + 10; }
+        write_det_state(now0 < det_hold_until ? '0' : 0);
         chosen = -1;
         return base;
     }
-    if (access("/tmp/cl_det_on", F_OK) != 0) { int fd = open("/tmp/cl_det_on", O_WRONLY | O_CREAT, 0666); if (fd >= 0) close(fd); }
+    det_hold_until = time(NULL) + 10;
+    write_det_state('1');
     /* start from the normal area of this app; a picture result moves it to a turn= area. The area actually
      * applied (cur) is what the icon position is measured against. v19.4: AMap ends and restarts the guidance
      * when it re-routes (seen 3 times within 20 s); a guidance that comes back within 30 s keeps the last area
@@ -258,6 +277,7 @@ int main(int argc, char **argv) {
      * window created later. So the list is now set only after the renderer reports its window
      * (/tmp/cl_render_ready = its pid); a renderer that never reports within 12 s is restarted. */
     int new_stream = 1, stage = 0, zoomed = 0;
+    uint32_t wd_bytes = 0; int wd_init = 0, wd_frozen = 0; time_t wd_last_wake = 0; unsigned wd_seq = 0;
     time_t shown_t = 0;
     const char *did = getenv("CL_DISPID");
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
@@ -284,7 +304,7 @@ int main(int argc, char **argv) {
                 child = fork();
                 if (child == 0) { execv(argv[1], argv + 1); _exit(127); }
                 started = time(NULL); stage = 0;
-                if (new_stream) { unlink("/tmp/cl_pan_mode"); new_stream = 0; zoomed = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
+                if (new_stream) { unlink("/tmp/cl_pan_mode"); new_stream = 0; zoomed = 0; wd_init = 0; wd_frozen = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
                 logm("renderer started", child);
             } else if (stage == 0 && time(NULL) - started >= 2) {
                 /* get a fresh key frame: the renderer creates its window on it. v19.4.1: the renderer also asks by itself
@@ -315,12 +335,35 @@ int main(int argc, char **argv) {
             } else if (stage == 3 && time(NULL) - last_auto >= 1) {
                 int nav, v = pick_va(app, sizeof app, &nav);
                 v = vision_va(app, nav, v, auto_va);
-                last_auto = time(NULL);
+                time_t now_t = time(NULL);
+                last_auto = now_t;
                 if (v >= 0 && v != auto_va) {
                     char b[32]; snprintf(b, sizeof b, "va %d", v); send_cmd(b);
                     FILE *f = fopen("/tmp/clusterd.log", "a");
-                    if (f) { fprintf(f, "[%ld] auto va %d (app=%s nav=%d)\n", (long)time(NULL), v, app, nav); fclose(f); }
+                    if (f) { fprintf(f, "[%ld] auto va %d (app=%s nav=%d)\n", (long)now_t, v, app, nav); fclose(f); }
                     auto_va = v;
+                    if (s) { wd_init = 1; wd_bytes = s->total_bytes; wd_frozen = 0; }
+                } else if (s) {
+                    /* 行车静止流看门狗：车速 >= 18 km/h 正常导航行驶时若连续 6 秒码率 < 600 kbps，自动唤醒高德副屏 */
+                    uint32_t cur_b = s->total_bytes;
+                    if (!wd_init) { wd_init = 1; wd_bytes = cur_b; }
+                    else {
+                        uint32_t db = cur_b - wd_bytes;
+                        wd_bytes = cur_b;
+                        float spd = nav ? read_speed_kmh() : -1.0f;
+                        if (nav && spd >= 18.0f && db > 0 && db < 75000u) {
+                            if (++wd_frozen >= 6 && now_t - wd_last_wake >= 25) {
+                                char cmd[48];
+                                snprintf(cmd, sizeof cmd, "wake 2 #w%u\n", ++wd_seq);
+                                send_cmd(cmd);
+                                logs("watchdog: cluster stream static while driving, sent wake");
+                                wd_last_wake = now_t;
+                                wd_frozen = 0;
+                            }
+                        } else {
+                            wd_frozen = 0;
+                        }
+                    }
                 }
             }
         } else if (child > 0 && ++inactive >= 6) {   /* ~3 s without stream: release window 33 */

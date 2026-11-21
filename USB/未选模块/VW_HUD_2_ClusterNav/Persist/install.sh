@@ -69,7 +69,7 @@ while true; do
                 mkdir $m/cluster_logs/boot_$n 2>/dev/null && echo boot_$n > /tmp/cl_bootdir
             fi
             D=$m/cluster_logs/$(cat /tmp/cl_bootdir 2>/dev/null)
-            cp -f /tmp/vwcn.log /tmp/vwcn_persist.log /tmp/dio_cluster.log $ST /tmp/Performance.txt /tmp/disableReasons $D/ 2>/dev/null
+            cp -f /tmp/vwcn.log /tmp/vwcn_persist.log /tmp/dio_cluster.log $ST /tmp/dash.state /tmp/Performance.txt /tmp/disableReasons $D/ 2>/dev/null
             ls -l /dev/shmem/ > $D/tmp_list.txt 2>&1
             ls -l /mnt/app/eso/hmi/lsd/jars /eso/hmi/lsd/jars > $D/jars_list.txt 2>&1
             grep -n 'Startup.Lateload' /mnt/app/eso/hmi/lsd/config/bundles.properties > $D/bundles_97.txt 2>&1

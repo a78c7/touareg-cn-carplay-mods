@@ -76,6 +76,12 @@ public final class Dash implements Runnable {
     volatile int rpm = Integer.MIN_VALUE, pedal = Integer.MIN_VALUE, steer = Integer.MIN_VALUE, range = Integer.MIN_VALUE;
     volatile float speed = Float.NaN, brake = Float.NaN, outside = Float.NaN;
     volatile int torque = Integer.MIN_VALUE, lever = Integer.MIN_VALUE, gear = Integer.MIN_VALUE;
+    volatile int estGear = 0;
+    private int candGear = 0, candHits = 0;
+    // 2023 途锐 3.0T (ZF 8HP65A + 3.076 主减速比) 实车路测校准的 D1..D8 锁止态 rpm/spd 中心比值
+    private static final float[] GEAR_RATIOS = new float[] {
+        103.0f, 68.5f, 46.0f, 36.8f, 28.3f, 21.7f, 17.9f, 14.1f
+    };
     volatile int gbt = Integer.MIN_VALUE, consUnit = Integer.MIN_VALUE, tank = Integer.MIN_VALUE;
     volatile float oil = Float.NaN, coolant = Float.NaN;
     volatile double odo = Double.NaN;
@@ -99,19 +105,23 @@ public final class Dash implements Runnable {
     public void run() {
         try {
             Thread.sleep(8000);
-            Log.log("dash: ready");
+            boolean hasCluster = new File("/mnt/app/eso/bin/apps/cluster/cl_render").exists();
+            boolean hasNetd = new File("/mnt/app/eso/bin/apps/wifi_dev/touareg_netd").exists();
+            Log.log("dash: ready (cluster=" + hasCluster + " netd=" + hasNetd + ")");
             while (!stop) {
+                long nowMs = System.currentTimeMillis();
                 boolean log = new File(LOG_ON).exists();
                 if (log != logging) {
                     logging = log;
                     if (!log) DriveLog.stop();
                     Log.log("dash: drive log " + (log ? "on" : "off"));
                 }
-                boolean want = (Rebind.hold != null || logging) && !new File(OFF).exists();
+                boolean want = ((hasCluster && Rebind.hold != null) || hasNetd || logging || new File("/tmp/dash_on").exists())
+                    && !new File(OFF).exists();
                 if (want && !subscribed) subscribe();
                 else if (!want && subscribed) unsubscribe();
                 if (subscribed) write();
-                if (subscribed && logging) DriveLog.flush(System.currentTimeMillis());
+                if (subscribed && logging) DriveLog.flush(nowMs);
                 Thread.sleep(subscribed ? 200 : 1000);
             }
             if (subscribed) unsubscribe();
@@ -129,6 +139,7 @@ public final class Dash implements Runnable {
             if (kol == null) kol = new KoListener();
             vs.setNotification(VS_ATTRS, vsl);
             ko.setNotification(KO_ATTRS, kol);
+            ExtraDSI.subscribeAll();
             subscribed = true;
             Log.log("dash: subscribed");
         } catch (Throwable t) {
@@ -139,13 +150,67 @@ public final class Dash implements Runnable {
     private void unsubscribe() {
         try { vs.clearNotification(VS_ATTRS, vsl); } catch (Throwable t) { Log.log("dash clear vs: " + t); }
         try { ko.clearNotification(KO_ATTRS, kol); } catch (Throwable t) { Log.log("dash clear kombi: " + t); }
+        try { ExtraDSI.unsubscribeAll(); } catch (Throwable t) { Log.log("dash clear extradsi: " + t); }
         subscribed = false;
         new File(STATE).delete();
         Log.log("dash: unsubscribed");
     }
 
+    private void updateEstGear() {
+        // 1=P, 2=R, 3=N; 4/13=D, 5/11=S, 6/7/10/12=M, 8=E
+        if (lever < 4 || lever > 13) {
+            estGear = 0;
+            candGear = 0;
+            candHits = 0;
+            return;
+        }
+        if (gear >= 1 && gear <= 8) {
+            estGear = gear;
+            return;
+        }
+        if (Float.isNaN(speed) || speed < 2.5f) {
+            estGear = 1;
+            candGear = 1;
+            candHits = 0;
+            return;
+        }
+        if (rpm == Integer.MIN_VALUE || rpm < 750 || speed < 6.5f) {
+            if (estGear == 0) estGear = 1;
+            return;
+        }
+        // 高速松油门滑行脱开态（怠速转速但车速较高）保持上一锁定挡位
+        if (pedal != Integer.MIN_VALUE && pedal == 0 && rpm < 960 && speed > 42.0f && estGear >= 4) {
+            return;
+        }
+        float r = ((float) rpm) / speed;
+        int best = 0;
+        float bestErr = 999.0f;
+        for (int i = 0; i < GEAR_RATIOS.length; i++) {
+            float err = Math.abs(r - GEAR_RATIOS[i]) / GEAR_RATIOS[i];
+            if (err < bestErr) {
+                bestErr = err;
+                best = i + 1;
+            }
+        }
+        if (bestErr <= 0.085f) {
+            if (best == candGear) {
+                candHits++;
+                if (candHits >= 2) estGear = best;
+            } else {
+                candGear = best;
+                candHits = 1;
+            }
+        } else if (estGear == 0 && best > 0 && bestErr <= 0.22f) {
+            estGear = best;
+        }
+    }
+
+    private int effectiveGear() {
+        return (gear >= 1 && gear <= 8) ? gear : estGear;
+    }
+
     private void write() {
-        StringBuffer b = new StringBuffer(320);
+        StringBuffer b = new StringBuffer(512);
         if (!Float.isNaN(power)) b.append(" p=").append(round1(power));
         if (torque != Integer.MIN_VALUE) b.append(" tq=").append(torque);
         if (rpm != Integer.MIN_VALUE) b.append(" rpm=").append(rpm);
@@ -155,7 +220,7 @@ public final class Dash implements Runnable {
         if (steer != Integer.MIN_VALUE) b.append(" str=").append(steer);
         if (!Float.isNaN(gxS)) b.append(" gx=").append(round2(gxS));
         if (!Float.isNaN(gyS)) b.append(" gy=").append(round2(gyS));
-        if (lever != Integer.MIN_VALUE) b.append(" gm=").append(lever).append(" gc=").append(gear);
+        if (lever != Integer.MIN_VALUE) b.append(" gm=").append(lever).append(" gc=").append(effectiveGear());
         if (gbt != Integer.MIN_VALUE) b.append(" gbt=").append(gbt);
         if (!Float.isNaN(oil)) b.append(" oil=").append(Math.round(oil));
         if (!Float.isNaN(coolant)) b.append(" cool=").append(Math.round(coolant));
@@ -177,6 +242,15 @@ public final class Dash implements Runnable {
             if (!Float.isNaN(bcSpeed[m])) b.append(BK[m][3]).append(round1(bcSpeed[m]));
             if (bcMin[m] != Integer.MIN_VALUE) b.append(BK[m][4]).append(bcMin[m]);
         }
+        // v21: 途锐原厂真实传感器扩展项（四轮胎压、俯仰/侧倾角、海拔）
+        if (!Float.isNaN(ExtraDSI.tpFL)) b.append(" tpfl=").append(round1(ExtraDSI.tpFL));
+        if (!Float.isNaN(ExtraDSI.tpFR)) b.append(" tpfr=").append(round1(ExtraDSI.tpFR));
+        if (!Float.isNaN(ExtraDSI.tpRL)) b.append(" tprl=").append(round1(ExtraDSI.tpRL));
+        if (!Float.isNaN(ExtraDSI.tpRR)) b.append(" tprr=").append(round1(ExtraDSI.tpRR));
+        if (ExtraDSI.tpWarn != 0) b.append(" tpst=").append(ExtraDSI.tpWarn);
+        if (!Float.isNaN(ExtraDSI.pitchDeg)) b.append(" pitch=").append(round1(ExtraDSI.pitchDeg));
+        if (!Float.isNaN(ExtraDSI.rollDeg)) b.append(" roll=").append(round1(ExtraDSI.rollDeg));
+        if (ExtraDSI.altM != Integer.MIN_VALUE) b.append(" alt=").append(ExtraDSI.altM);
         String body = b.toString();
         long now = System.currentTimeMillis();
         if (body.equals(lastLine) && now - lastWrite < 1000) return;
@@ -314,17 +388,20 @@ public final class Dash implements Runnable {
     private static String i0(int v) { return v == Integer.MIN_VALUE ? "" : String.valueOf(v); }
 
     private void logLine(long now, Object d) {
-        StringBuffer b = new StringBuffer(200);
+        StringBuffer b = new StringBuffer(260);
         b.append(now).append(',').append(f1(speed)).append(',').append(f1(realSpeed)).append(',').append(i0(rpm))
          .append(',').append(f1(power)).append(',').append(i0(torque)).append(',').append(i0(pedal))
          .append(',').append(f1(brake)).append(',').append(i0(steer)).append(',').append(f1(yaw))
          .append(',').append(f2(axRaw)).append(',').append(f2(ayRaw)).append(',').append(i0(lever))
-         .append(',').append(i0(gear)).append(',').append(i0(gbt)).append(',').append(Float.isNaN(oil) ? "" : String.valueOf(Math.round(oil)))
+         .append(',').append(i0(effectiveGear())).append(',').append(i0(gbt)).append(',').append(Float.isNaN(oil) ? "" : String.valueOf(Math.round(oil)))
          .append(',').append(Float.isNaN(coolant) ? "" : String.valueOf(Math.round(coolant)))
          .append(',').append(f1(consumption)).append(',').append(i0(consUnit)).append(',').append(i0(tank))
          .append(',').append(Float.isNaN(outside) ? "" : String.valueOf(Math.round(outside))).append(',').append(i0(range));
         for (int k = 0; k < 4; k++) b.append(',').append(k < fWheel.length ? f1(num(fWheel[k], d)) : "");
-        b.append(',').append(i0(accOn));
+        b.append(',').append(i0(accOn))
+         .append(',').append(f1(ExtraDSI.pitchDeg)).append(',').append(f1(ExtraDSI.rollDeg)).append(',').append(i0(ExtraDSI.altM))
+         .append(',').append(f2(ExtraDSI.tpFL)).append(',').append(f2(ExtraDSI.tpFR))
+         .append(',').append(f2(ExtraDSI.tpRL)).append(',').append(f2(ExtraDSI.tpRR));
         DriveLog.add(b.toString());
     }
 
@@ -340,6 +417,7 @@ public final class Dash implements Runnable {
             pedal = d.acceleratorPosition;
             brake = d.brakePressure;
             steer = d.wheelAngle;
+            updateEstGear();
             // longitudinal in m/s^2, lateral already in g (same as the stock SportHmi G-meter)
             // signed: longitudinal + accelerating / - braking; lateral sign as the car reports it
             float gx = d.longitudinalAcceleration / 9.81f, gy = d.lateralAcceleration;

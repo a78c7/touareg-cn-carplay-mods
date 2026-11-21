@@ -1,6 +1,6 @@
 #!/bin/ksh
 # VW Touareg CN (MH2p_CN_VWG36_P2878): CarPlay route guidance -> instrument cluster + HUD, step 2.
-# The jar keeps the file name VWClusterNav_v6.jar; content is v20.1 (also used by VW_HUD_3_CarPlayCluster: display switching, info box data).
+# The jar keeps the file name VWClusterNav_v6.jar; content is v21.0 (also used by VW_HUD_3_CarPlayCluster: display switching, info box & tire/chassis telemetry).
 # Needs step 1 (VW_HUD_1_RouteGuidance: dio_cluster.so preloaded into dio_manager) already installed.
 # - copies VWClusterNav_v6.jar (Java 1.4 class files, version 48) to /mnt/app/eso/hmi/lsd/jars/, removes older versions
 # - registers it orthogonally as HMI bundle 97 in Bundle.Startup.Lateload without disturbing other bundles (e.g. 98 VWNoSimPopup)
@@ -143,6 +143,10 @@ ls -l $JD
 # 2) install updated bundles.properties atomically
 cp -v /tmp/bp_new $B.new && chmod 644 $B.new && mv -f $B.new $B
 rm -f /tmp/bp_new
+# 3) clean legacy pre-v19 Persist directory so two Persist loops never run side-by-side
+[[ ! -e "/mnt/ota" ]] && mount -t qnx6 /dev/mnanda0t177.16 /mnt/ota 2>/dev/null
+mount -uw /mnt/ota 2>/dev/null || true
+rm -rf /mnt/ota/modkit/Mods/VW_ClusterNav 2>/dev/null
 sync
 echo "now:"
 grep -n 'Startup.Lateload' $B

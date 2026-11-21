@@ -393,6 +393,7 @@ public final class Bridge implements Runnable {
     private void activate() {
         Log.log("ACTIVATE: routeGuidanceState=1");
         ServiceManager.aslPropertyManager.valueChangedInteger(DP_RG_STATE, 1);
+        Rebind.restoreCarPlayOnNavStart();
         active = true;
         lastMain = -999;
         lastDir = -999;

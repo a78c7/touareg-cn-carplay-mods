@@ -71,20 +71,27 @@ ol.order li.drag{opacity:.4} ol.order li.over{border-color:var(--acc);box-shadow
 .presets{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
 .btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;color:var(--sub)}
 .btn:hover{border-color:#b9c0cc;color:var(--ink)}
-.preview-wrap{margin-top:12px;border-radius:12px;padding:16px;background:linear-gradient(135deg,#3d4b45 0%,#2f3a36 45%,#46534d 100%);overflow:auto}
+.preview-wrap{margin-top:12px;border-radius:12px;padding:16px;background:linear-gradient(135deg,#2a3942 0%,#1f2a30 50%,#31424b 100%);overflow:auto}
 .pv-title{font-size:12px;color:#c9d1cc;margin:0 0 8px}
 .pv-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
 .sides{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:0 0 10px}
 .sides button{border:0;background:#fff;padding:7px 16px;font:inherit;font-size:14px;color:var(--sub);cursor:pointer;border-left:1px solid var(--line)}
 .sides button:first-child{border-left:0}
 .sides button.on{background:var(--acc);color:#fff}
-.pv{display:inline-grid;grid-template-columns:auto auto auto;column-gap:14px;border-radius:16px;color:#fff;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
-.pv .l{color:#a5a5a5;font-weight:500;align-self:center;white-space:nowrap}
-.pv .l2{display:flex;flex-direction:column;justify-content:center;line-height:1.05;align-self:center}
-.pv .l2 .m{color:#777;font-weight:400}
-.pv .l2 .l{align-self:flex-start}
-.pv .v{font-weight:700;text-align:right;align-self:center;white-space:nowrap;font-variant-numeric:tabular-nums}
-.pv .u{color:#969696;align-self:center;white-space:nowrap;margin-left:-6px}
+.pv{display:inline-flex;flex-direction:column;min-width:280px;border-radius:6px;border:1px solid rgba(255,255,255,.12);color:#fff;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
+.pv-r{display:flex;flex-direction:column;justify-content:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.09)}
+.pv-r:last-child{border-bottom:0}
+.pv-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.pv .l{color:#dcdcdc;font-weight:700;white-space:nowrap}
+.pv .vu{display:flex;align-items:baseline;gap:4px;margin-left:auto}
+.pv .v{font-weight:800;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;line-height:1.05}
+.pv .u{color:#bebebe;font-weight:600;white-space:nowrap}
+.pv-bar{height:7px;margin-top:4px;border-radius:2px;background:rgba(255,255,255,.1);position:relative;overflow:hidden}
+.pv-bar.seg{background:repeating-linear-gradient(108deg,#19d6d2 0 11px,transparent 11px 14px);clip-path:polygon(0 0,100% 0,99% 100%,0 100%)}
+.pv-bar.seg::after{content:"";position:absolute;right:0;top:0;bottom:0;width:32%;background:repeating-linear-gradient(108deg,rgba(195,38,52,.55) 0 11px,transparent 11px 14px)}
+.pv-bar.bi::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;background:#fff}
+.pv-bar.bi::after{content:"";position:absolute;left:50%;width:18%;top:1px;bottom:1px;background:#22dcda}
+.pv-bar.rng::after{content:"";position:absolute;left:0;width:62%;top:0;bottom:0;background:#20deb8}
 details{margin-top:12px}
 summary{cursor:pointer;color:var(--sub);font-size:14px}
 .adv{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:10px}
@@ -105,6 +112,11 @@ summary{cursor:pointer;color:var(--sub);font-size:14px}
 .steps li{margin:3px 0}
 footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 .hidden{display:none!important}
+.modal-mask{position:fixed;inset:0;background:rgba(15,20,28,.48);display:grid;place-items:center;z-index:999;padding:20px}
+.modal{background:#fff;border-radius:14px;max-width:440px;width:100%;padding:20px 22px;box-shadow:0 18px 48px rgba(0,0,0,.22)}
+.modal h3{margin:0 0 8px;font-size:17px;color:var(--ink)}
+.modal p{margin:0 0 16px;font-size:14.5px;color:var(--sub);line-height:1.6}
+.modal-act{display:flex;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -116,26 +128,36 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 
   <section class="card">
     <h2><span class="num">1</span>选择功能</h2>
-    <p class="hint">「安装」包括第一次装和升级；「卸载」恢复原车；「不处理」这次不碰它（车上已经装的保持原样）。</p>
+    <p class="hint">所有模块默认均为「不处理」（默认不开启）。按需把要开启或升级的模块点为「安装」，需要恢复原车的点为「卸载」，不改动的保持「不处理」（车上已装功能保持原样）。单独勾选需要前置模块配合的功能时，会自动弹窗提醒并帮您一并勾选。</p>
+    <div class="presets" style="margin:0 0 8px">
+      <span class="hint" style="margin:6px 4px 0 0">快捷选装：</span>
+      <button class="btn" type="button" data-fpreset="base">基础四件套（全屏 + 无线CarPlay + HUD + 仪表地图）</button>
+      <button class="btn" type="button" data-fpreset="full">驾驶推荐全套（四件套 + 方向盘 OK 双击切地图）</button>
+      <button class="btn" type="button" data-fpreset="none">全部恢复「不处理」</button>
+    </div>
     <div id="feats"></div>
   </section>
 
   <section class="card dash" id="dash">
-    <h2><span class="num">2</span>仪表信息框</h2>
-    <p class="hint">连着 CarPlay、仪表显示地图时，叠在地图上的半透明小框。左右各可以放一个框（左边框在挡位上方，右边框在车速上方），分别选择项目、拖动排序，每个最多 <span id="maxrows">10</span> 项。</p>
-    <div class="msg info dash-off-msg">要显示信息框，先在上面把「仪表地图 + 信息框」选为「安装」。</div>
+    <h2><span class="num">2</span>仪表大字运动信息框与导航卡</h2>
+    <p class="hint">连接 CarPlay 投屏仪表地图时，左右两侧可分别定制行车数据（左框对齐挡位斜边，右框对齐车速斜边，左右字号独立自适应，建议每侧 5～6 项特大粗体）。</p>
+    <div class="msg info dash-off-msg">要设置仪表信息框，请先在上面第 1 步把「仪表地图 + 大字运动信息框」选为「安装」。</div>
     <div class="dash-body">
       <div class="sides" id="sides"><button data-side="l" class="on">左边框</button><button data-side="r">右边框</button></div>
-      <label class="switch"><input type="checkbox" id="show"> <span id="showlab">显示左边框</span></label>
+      <div class="row" style="gap:20px;margin-bottom:4px">
+        <label class="switch"><input type="checkbox" id="show"> <span id="showlab">显示左边框</span></label>
+        <label class="switch"><input type="checkbox" id="bars" checked> <span>显示运动刻度进度条（转速/扭矩斜切分段条、G 值双向滑块、油温/胎压区间条）</span></label>
+      </div>
       <div class="grid">
         <div>
           <div id="cat"></div>
           <div class="presets">
             <span class="hint" style="margin:6px 4px 0 0">快速选择：</span>
-            <button class="btn" data-preset="power,torque,g,rpm,oil,gearbox">默认（动力）</button>
-            <button class="btn" data-preset="trip,tripdist,tripspeed,triptime,cons,range">行驶数据</button>
-            <button class="btn" data-preset="t100,pmax,tqmax,gmax,power,torque">性能</button>
-            <button class="btn" data-preset="oil,gearbox,coolant,outside">温度</button>
+            <button class="btn" data-preset="torque,rpm,g,oil,cons">推荐 5 项大字（扭矩·转速·G值·油温·油耗）</button>
+            <button class="btn" data-preset="power,torque,g,rpm,oil,gearbox">经典动力 6 项</button>
+            <button class="btn" data-preset="tripdist,tripspeed,cons,trip,refueldist,tripkm">行程统计 6 项</button>
+            <button class="btn" data-preset="tires,pitch,roll,alt,oil">胎压与越野 5 项</button>
+            <button class="btn" data-preset="t100,pmax,tqmax,gmax,power">性能极值</button>
             <button class="btn" data-preset="">清空</button>
           </div>
         </div>
@@ -145,21 +167,20 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
         </div>
       </div>
       <div class="preview-wrap">
-        <div class="pv-title">效果示意（数字是举例；车上用的字体和位置以实车为准）</div>
+        <div class="pv-title">效果示意（左右字号独立计算；实车采用预渲染抗锯齿粗体 + 斜切运动刻度条）</div>
         <div class="pv-row"><div class="pv" id="pv"></div><div class="pv" id="pv2"></div></div>
       </div>
       <div class="wbox" style="margin-top:12px">
-        <div class="row" style="margin-bottom:4px">
-          <label style="font-weight:600">导航信息卡（转向大箭头、完整路名、车道/下下路口、剩余路程/时间与到达时间）：</label>
+        <div class="row">
+          <label style="font-weight:600">大字导航信息卡（与左框严格等宽对称，含转向大箭头、完整路名、剩余路程 · 剩余时间 · 预计到达）：</label>
           <select id="navmode" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);font-size:14px">
-            <option value="right">显示在右边框（默认）</option>
-            <option value="left">显示在左边框</option>
+            <option value="right">右边框 · 仅导航时弹出（默认）</option>
+            <option value="right_always">右边框 · 常驻显示（不导航时显示待机导航框）</option>
+            <option value="left">左边框 · 仅导航时弹出</option>
+            <option value="left_always">左边框 · 常驻显示（不导航时显示待机导航框）</option>
             <option value="off">关闭</option>
           </select>
         </div>
-        <p class="hint" style="margin:4px 0 10px">支持高德、百度、苹果地图；导航时自动接管选定那一侧的框，结束导航自动恢复该侧原信息框（未启用则隐藏）。</p>
-        <label class="switch"><input type="checkbox" id="okswitch"> <span>方向盘右侧 OK 键 2 秒内连按 2 下切换 CarPlay 地图 ↔ 原车地图</span></label>
-        <p class="hint" style="margin:4px 0 0">单按 OK 键仍保持原车自动缩放，不干扰上下缩放键。</p>
       </div>
       <details>
         <summary>高级：左边框位置、透明度、油箱容积、导航到达时区</summary>
@@ -174,7 +195,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
       </details>
       <details id="carpos">
         <summary>仪表地图的车标位置（被仪表底部的图标挡住时调这里）</summary>
-        <p class="hint" style="margin:8px 0 0">地图上移：车标被仪表底部的驾驶辅助图案挡住时调大。两项加起来最多 90 行。高德车标位置（只对高德生效）：高德导航时会把车标往目的地方向挪约 3 厘米。"看画面自动居中"每秒识别仪表画面里的车标，偏了自动挪回时钟下方；"关"＝不处理。按路口补偿是旧做法，常常补反，不建议。</p>
+        <p class="hint" style="margin:8px 0 0">地图上移：车标被仪表底部的驾驶辅助图案挡住时调大。两项加起来最多 90 行。高德车标位置（只对高德生效）："看画面自动居中"每秒识别仪表画面里的车标，偏了自动挪回时钟下方。</p>
         <div class="adv">
           <label>地图上移 <span id="carupv"></span> 行<input type="range" id="carup" min="0" max="90" step="5"></label>
           <label>开 ACC（自适应巡航）时再上移 <span id="accupv"></span> 行<input type="range" id="accup" min="0" max="90" step="5"></label>
@@ -186,7 +207,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 
   <section class="card dash" id="wificard">
     <h2><span class="num">3</span>手机无线控制台（与可选 SSH 开发）</h2>
-    <p class="hint">刷入后只需打开手机个人热点，车机后台自动连上。手机浏览器打开 <code>http://touareg.local:8080</code> 即可随时改仪表信息框、调车标、无线把 U 盘行车记录 CSV 下载到手机发给 AI 分析，不用再插拔 U 盘。同平台 MH2p 车型（大众、奥迪、保时捷 PCM5、宾利、兰博基尼）也可单独勾选本模块使用。</p>
+    <p class="hint">刷入后只需打开手机个人热点，车机后台自动连上。手机浏览器打开 <code>http://touareg.local:8080</code> 即可随时改仪表信息框、调车标、无线把 U 盘行车记录 CSV 下载到手机发给 AI 分析，不用再插拔 U 盘。同平台 MH2p 车型也可单独勾选本模块使用。</p>
     <div class="msg info dash-off-msg">要启用手机无线控制台，先在上面第 1 步把「手机无线控制台（可选 SSH 开发）」选为「安装」。</div>
     <div class="dash-body">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -208,7 +229,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
           <input class="winput" id="wpin" maxlength="8" style="width:140px;font-weight:600;letter-spacing:1px" placeholder="4～8位口令">
           <button class="btn" type="button" id="wrandpin">随机换一个</button>
         </div>
-        <p class="hint" style="margin:6px 0 0">手机浏览器首次打开 <code>http://touareg.local:8080</code> 时输入一次即自动记住；防止车机连上公司/公共 Wi-Fi 时局域网他人改动你的设置。</p>
+        <p class="hint" style="margin:6px 0 0">手机浏览器首次打开 <code>http://touareg.local:8080</code> 时输入一次即自动记住；防止车机连上公共 Wi-Fi 时他人改动设置。</p>
       </div>
       <div class="wbox">
         <label class="switch"><input type="checkbox" id="wssh"> <span>同时开启 SSH 无线开发终端（端口 2012，供电脑 DeepSeek Harness 或安卓手机客户端 DSH Go 自由开发，iPhone 暂无公开包）</span></label>
@@ -230,7 +251,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 
   <section class="card" id="usbcard">
     <h2><span class="num">5</span>U 盘用途：刷机 / 行车记录</h2>
-    <p class="hint">刷完改装后，可以把这个 U 盘改成「行车记录 U 盘」一直插在车上：车机不会再刷机，每次开车把功率、扭矩、车速、油温等约 10 次/秒记到 U 盘的 drive_logs 文件夹（每次车机启动一个 CSV 文件，每小时约 5 MB）。需要车上已装 v18 的「导航上 HUD」。要再刷机时改回「刷机 U 盘」。drive_logs 里会放一份「给AI分析行车记录.txt」，把 CSV 和它一起传给豆包、千问等 AI 就能分析。</p>
+    <p class="hint">刷完改装后，可以把这个 U 盘改成「行车记录 U 盘」一直插在车上：车机不会再刷机，每次开车把功率、扭矩、车速、油温、四轮胎压、海拔坡度等 34 项真实物理数据约 10 次/秒记到 U 盘的 drive_logs 文件夹（每小时约 5 MB）。需要车上已装「导航上 HUD」。drive_logs 里会放一份「给AI分析行车记录.txt」，把 CSV 和它一起传给豆包、千问、DeepSeek 等 AI 就能分析。</p>
     <div class="summary" id="usbnow"></div>
     <button class="btn" id="torecord">改成行车记录 U 盘</button>
     <button class="btn" id="toflash">改回刷机 U 盘</button>
@@ -239,8 +260,18 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 
   <footer>
     本程序只修改这个 U 盘里的文件：不选的功能文件夹移到「未选模块」（车机不会刷它），卸载的功能里放一个 uninstall.txt，信息框设置写进 dash.conf，并删掉 Mac 自动生成的隐藏文件（._ 开头的文件和 .DS_Store）。不联网、不上传任何东西。<br>
-    全屏 CarPlay、HUD、仪表地图与 5GHz 区域修复仅适用于车机版本 MH2p_CN_VWG36_P2878（其它版本刷机时自动跳过）；蓝牙与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。
+    全屏 CarPlay、HUD、仪表地图、OK 键切换与 5GHz 区域修复仅适用于车机版本 MH2p_CN_VWG36_P2878（其它版本刷机时自动跳过）；蓝牙与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。
   </footer>
+</div>
+
+<div class="modal-mask hidden" id="depmodal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="depmodal-title">已自动关联模块</h3>
+    <p id="depmodal-body"></p>
+    <div class="modal-act">
+      <button class="primary" type="button" id="depmodal-ok" style="padding:8px 22px;font-size:14.5px">知道了</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -251,6 +282,17 @@ const curItems = () => side === 'l' ? dash.items : dash.r_items;
 const setCurItems = v => { if (side === 'l') dash.items = v; else dash.r_items = v; };
 const NAMES = {install:'安装', uninstall:'卸载', skip:'不处理'};
 const NOW = {install:'U 盘里现在：安装', uninstall:'U 盘里现在：卸载', skip:'U 盘里现在：不处理', missing:'U 盘里没有这个功能的文件夹', mixed:'U 盘里现在：不完整'};
+
+function showModal(title, body){
+  $('depmodal-title').textContent = title;
+  $('depmodal-body').textContent = body;
+  $('depmodal').classList.remove('hidden');
+  $('depmodal-ok').focus();
+}
+function closeModal(){ $('depmodal').classList.add('hidden'); }
+$('depmodal-ok').addEventListener('click', closeModal);
+$('depmodal').addEventListener('click', e => { if (e.target === $('depmodal')) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('depmodal').classList.contains('hidden')) closeModal(); });
 
 async function api(path, body){
   const r = await fetch(path, {method: body ? 'POST' : 'GET', headers: {'X-Token': T, 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
@@ -263,9 +305,16 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const item = k => S.catalogue.find(i => i.key === k);
 const plain = l => l.replace('|','');
 
+function barKind(k){
+  if (['rpm','power','torque','pedal','brake'].includes(k)) return 'seg';
+  if (['g','glong','glat','steer','pitch','roll'].includes(k)) return 'bi';
+  if (['oil','gearbox','coolant','tires','tpfl','tpfr','tprl','tprr','fuel'].includes(k)) return 'rng';
+  return '';
+}
+
 function renderStatus(){
   const v = S.vol, st = [];
-  const where = S.os === 'windows' ? (v.mount || S.root) : (v.mount || S.root);
+  const where = v.mount || S.root;
   st.push(v.isRoot ? `<span class="pill ok">✓ 在 U 盘根目录（${esc(where)}）</span>` : `<span class="pill warn">⚠ 不在 U 盘根目录</span>`);
   if (v.fs) st.push(v.fat ? `<span class="pill ok">✓ 格式 ${esc(v.fs)}</span>` : `<span class="pill bad">✗ 格式 ${esc(v.fs)}，车机不认</span>`);
   if (v.totalGB) st.push(`<span class="pill ${v.totalGB > 33 ? 'warn' : ''}">容量 ${v.totalGB} GB</span>`);
@@ -276,16 +325,85 @@ function renderStatus(){
   if (!v.isRoot) al.push(`<div class="msg warn">改装包现在在「${esc(S.root)}」，不在 U 盘根目录。车机只认 U 盘根目录下的 Data、Meta、Mods。可以先在这里设置好，再把这个文件夹里的<b>全部内容</b>复制到 U 盘根目录${S.os === 'darwin' ? '；Mac 复制到 U 盘后请在 U 盘里再运行一次本程序并保存，用来清理复制时产生的隐藏文件' : ''}。</div>`);
   if (v.fs && !v.fat) al.push(`<div class="msg bad">这个 U 盘是 ${esc(v.fs)} 格式，车机只认 FAT32。请先把 U 盘格式化成 FAT32（Windows：右键 U 盘 → 格式化；Mac：磁盘工具 → 抹掉 → MS-DOS (FAT)，会清空 U 盘），再复制改装包。</div>`);
   if (v.fat && v.totalGB > 33) al.push(`<div class="msg warn">U 盘大于 32GB，部分车机不认。刷机没反应的话换一个 32GB 以内的 U 盘。</div>`);
-  if (S.dash.unknown && S.dash.unknown.length) al.push(`<div class="msg warn">原来的 dash.conf 里有不认识的项目，已忽略：${esc(S.dash.unknown.join('、'))}</div>`);
+  if (S.dash.unknown && S.dash.unknown.length) al.push(`<div class="msg warn">原来的 dash.conf 里有不认识或已移除的项目，已自动忽略：${esc(S.dash.unknown.join('、'))}</div>`);
   $('alerts').innerHTML = al.join('');
 }
 
 function setFeat(id, v){
   notes = {};
   sel[id] = v;
-  if (id === 'cluster' && v === 'install' && sel.hud !== 'install') { sel.hud = 'install'; notes.hud = ['info', '「仪表地图 + 信息框」需要它，已同时选为安装。']; }
-  if (id === 'hud' && v === 'uninstall' && sel.cluster !== 'uninstall') { sel.cluster = 'uninstall'; notes.cluster = ['info', '卸载「导航上 HUD」时它也要一起卸载，已同时选为卸载。']; }
-  if (id === 'hud' && v === 'skip' && sel.cluster === 'install') { sel.cluster = 'skip'; notes.cluster = ['info', '它需要「导航上 HUD」一起装，已同时改为不处理。']; }
+  if (id === 'cluster' && v === 'install' && sel.hud !== 'install') {
+    sel.hud = 'install';
+    notes.hud = ['info', '「仪表地图 + 大字运动信息框」需要它配合工作，已自动为您勾选为「安装」。'];
+    showModal('已自动开启前置模块', '「仪表地图 + 大字运动信息框」需要「导航上 HUD」底层驱动配合工作，已自动为您同步设为「安装」。');
+  } else if (id === 'mapswitch' && v === 'install') {
+    const need = [];
+    if (sel.hud !== 'install') {
+      sel.hud = 'install';
+      notes.hud = ['info', '「方向盘 OK 双击切地图」需要它配合，已自动勾选为「安装」。'];
+      need.push('导航上 HUD');
+    }
+    if (sel.cluster !== 'install') {
+      sel.cluster = 'install';
+      notes.cluster = ['info', '「方向盘 OK 双击切地图」需要它配合，已自动勾选为「安装」。'];
+      need.push('仪表地图 + 大字运动信息框');
+    }
+    if (need.length) {
+      showModal('已自动开启前置模块', '「方向盘 OK 双击切换 CarPlay / 原车地图」需要「' + need.join('」与「') + '」配合工作，已自动为您一并设为「安装」。');
+    }
+  } else if (id === 'hud' && v === 'uninstall') {
+    const sub = [];
+    if (sel.cluster !== 'uninstall') {
+      sel.cluster = 'uninstall';
+      notes.cluster = ['info', '卸载「导航上 HUD」时需同步卸载。'];
+      sub.push('仪表地图 + 大字运动信息框');
+    }
+    if (sel.mapswitch !== 'uninstall') {
+      sel.mapswitch = 'uninstall';
+      notes.mapswitch = ['info', '卸载「导航上 HUD」时需同步卸载。'];
+      sub.push('方向盘 OK 双击切换地图');
+    }
+    if (sub.length) {
+      showModal('已同步设为卸载', '卸载「导航上 HUD」时，依赖它的「' + sub.join('」与「') + '」无法单独运行，已自动同步设为「卸载」。');
+    }
+  } else if (id === 'cluster' && v === 'uninstall') {
+    if (sel.mapswitch !== 'uninstall') {
+      sel.mapswitch = 'uninstall';
+      notes.mapswitch = ['info', '卸载「仪表地图 + 大字运动信息框」时需同步卸载。'];
+      showModal('已同步设为卸载', '卸载「仪表地图 + 大字运动信息框」时，依赖它的「方向盘 OK 双击切换地图」已自动同步设为「卸载」。');
+    }
+  } else if (id === 'hud' && v === 'skip') {
+    const sub = [];
+    if (sel.cluster === 'install') {
+      sel.cluster = 'skip';
+      notes.cluster = ['info', '需要「导航上 HUD」配合，已同步改为不处理。'];
+      sub.push('仪表地图 + 大字运动信息框');
+    }
+    if (sel.mapswitch === 'install') {
+      sel.mapswitch = 'skip';
+      notes.mapswitch = ['info', '需要「导航上 HUD」配合，已同步改为不处理。'];
+      sub.push('方向盘 OK 双击切换地图');
+    }
+    if (sub.length) {
+      showModal('已同步取消关联模块', '已将「导航上 HUD」设为不处理，依赖它的「' + sub.join('」与「') + '」已自动恢复为「不处理」。');
+    }
+  } else if (id === 'cluster' && v === 'skip' && sel.mapswitch === 'install') {
+    sel.mapswitch = 'skip';
+    notes.mapswitch = ['info', '需要「仪表地图 + 大字运动信息框」配合，已同步改为不处理。'];
+    showModal('已同步取消关联模块', '已将「仪表地图 + 大字运动信息框」设为不处理，依赖它的「方向盘 OK 双击切换地图」已自动恢复为「不处理」。');
+  }
+  renderAll();
+}
+
+function applyFeatPreset(kind){
+  notes = {};
+  S.features.forEach(f => { sel[f.id] = 'skip'; });
+  if (kind === 'base' || kind === 'full') {
+    ['fullscreen','carplay','hud','cluster'].forEach(id => { if (S.states[id] !== 'missing') sel[id] = 'install'; });
+  }
+  if (kind === 'full') {
+    if (S.states.mapswitch !== 'missing') sel.mapswitch = 'install';
+  }
   renderAll();
 }
 
@@ -310,25 +428,29 @@ function renderFeats(){
   }).join('');
 }
 
-function sizeClass(n){ return n <= 6 ? 0 : n <= 8 ? 1 : 2; }
-const SZ = [ // same metrics as dash.c / gen_dash_font.py
-  {row:52, pad:12, val:40, lab:26, unit:22, top:18, bot:23, name:'大字'},
-  {row:40, pad:12, val:32, lab:22, unit:18, top:15, bot:19, name:'中字'},
-  {row:32, pad:10, val:26, lab:18, unit:15, top:13, bot:15, name:'小字'}];
+function sizeClass(n){ return n <= 5 ? 0 : n === 6 ? 1 : n <= 8 ? 2 : 3; }
+const SZ = [ // matches v21 dash.c / gen_dash_font.py independent per-box sizing
+  {row:62, pad:10, val:38, lab:22, unit:16, name:'特大粗体（46px）'},
+  {row:52, pad:10, val:34, lab:20, unit:15, name:'大号粗体（41px）'},
+  {row:40, pad:9,  val:28, lab:18, unit:14, name:'中字（34px）'},
+  {row:33, pad:8,  val:23, lab:15, unit:12, name:'紧凑（28px）'}];
 
 function pvBox(pv, show, list, sd){
-  const n = list.length, sc = SZ[sizeClass(Math.max(dash.show ? dash.items.length : 0, dash.r_show ? dash.r_items.length : 0))];
-  pv.style.outline = sd === side ? '2px solid rgba(158,193,251,.8)' : 'none';
-  if (!show || !n) { pv.style.cssText += ';padding:12px 16px;background:rgba(16,18,22,.5);grid-auto-rows:auto'; pv.innerHTML = `<div style="grid-column:1/-1;color:#ccc;font-size:13px">${sd === 'l' ? '左边框' : '右边框'}${show ? '（没有选项目）' : '：不显示'}</div>`; return; }
-  const both = dash.show && dash.items.length && dash.r_show && dash.r_items.length, hn = Math.max(dash.items.length, dash.r_items.length);
-  pv.style.cssText = `padding:${sc.pad}px 18px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});grid-auto-rows:${sc.row}px;align-content:start;${both ? `height:${hn * sc.row}px;box-sizing:content-box;` : ''}outline:${sd === side ? '2px solid rgba(158,193,251,.8)' : 'none'}`;
+  const n = list.length, sc = SZ[sizeClass(n || 1)];
+  pv.style.outline = sd === side ? '2px solid rgba(158,193,251,.85)' : 'none';
+  if (!show || !n) {
+    pv.style.cssText = `padding:12px 16px;background:rgba(16,18,22,.5);outline:${sd === side ? '2px solid rgba(158,193,251,.85)' : 'none'}`;
+    pv.innerHTML = `<div style="color:#ccc;font-size:13px">${sd === 'l' ? '左边框' : '右边框'}${show ? '（还没有选项目）' : '：常驻不显示' + (sd === 'r' && Number(dash.nav_box) > 0 && dash.nav_side !== 'left' ? (Number(dash.nav_box) >= 2 ? '（常驻大字导航卡，未导航时显示待机框）' : '（导航时自动弹出大字导航卡）') : '')}</div>`;
+    return;
+  }
+  pv.style.cssText = `padding:${sc.pad}px 14px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});outline:${sd === side ? '2px solid rgba(158,193,251,.85)' : 'none'}`;
   pv.innerHTML = list.map(k => {
     const i = item(k);
-    const lab = i.label.includes('|') ? `<div class="l2"><span class="m" style="font-size:${sc.top}px">${esc(i.label.split('|')[0])}</span><span class="l" style="font-size:${sc.bot}px">${esc(i.label.split('|')[1])}</span></div>` : `<div class="l" style="font-size:${sc.lab}px">${esc(i.label)}</div>`;
     let val = i.sample;
     if (k === 'fuel' && !dash.tank_l) val = '46';
     const unit = k === 'fuel' && !dash.tank_l ? '%' : i.unit;
-    return `${lab}<div class="v" style="font-size:${sc.val}px">${esc(val)}</div><div class="u" style="font-size:${sc.unit}px">${esc(unit)}</div>`;
+    const bk = dash.bars !== false && n <= 6 ? barKind(k) : '';
+    return `<div class="pv-r" style="min-height:${sc.row}px"><div class="pv-top"><div class="l" style="font-size:${sc.lab}px">${esc(plain(i.label))}</div><div class="vu"><div class="v" style="font-size:${sc.val}px">${esc(val)}</div>${unit ? `<div class="u" style="font-size:${sc.unit}px">${esc(unit)}</div>` : ''}</div></div>${bk ? `<div class="pv-bar ${bk}"></div>` : ''}</div>`;
   }).join('');
 }
 
@@ -337,27 +459,28 @@ function renderDash(){
   $('dash').classList.toggle('off', !on);
   const items = curItems(), shown = side === 'l' ? dash.show : dash.r_show;
   $('show').checked = shown;
-  $('showlab').textContent = side === 'l' ? '显示左边框' : '显示右边框';
+  $('bars').checked = dash.bars !== false;
+  $('showlab').textContent = side === 'l' ? '显示左边框' : '显示常驻右边框';
   document.querySelectorAll('#sides button').forEach(b => { b.classList.toggle('on', b.dataset.side === side); b.textContent = (b.dataset.side === 'l' ? '左边框' : '右边框') + ((b.dataset.side === 'l' ? dash.show : dash.r_show) ? ` · ${(b.dataset.side === 'l' ? dash.items : dash.r_items).length} 项` : ' · 不显示'); });
   const n = items.length, full = n >= S.maxRows;
   const groups = [];
   S.catalogue.forEach(i => { let g = groups.find(x => x.name === i.group); if (!g) groups.push(g = {name: i.group, items: []}); g.items.push(i); });
   $('cat').innerHTML = groups.map(g => `<div class="grp"><div class="gt">${esc(g.name)}${['自启动起','自上次加油起','累计'].includes(g.name) ? '（行驶数据存储器）' : ''}</div><div class="chips">${g.items.map(i => {
     const ix = items.indexOf(i.key);
-    const lab = i.label.includes('|') ? i.label.split('|')[1] : i.label;
+    const lab = plain(i.label);
     return `<button class="chip${ix >= 0 ? ' sel' : ''}" data-k="${i.key}" title="${esc(i.note || '')}" ${ix < 0 && full ? 'disabled' : ''}>${ix >= 0 ? `<span class="ix">${ix + 1}</span>` : ''}${esc(lab)}</button>`;
   }).join('')}</div></div>`).join('');
-  const sc = SZ[sizeClass(n)];
-  $('count').innerHTML = n ? `<b>${n}</b> / ${S.maxRows} 项 · ${sc.name}${n >= 9 ? '（偏小，建议不超过 8 项）' : ''}` : `0 / ${S.maxRows} 项`;
+  const sc = SZ[sizeClass(n || 1)];
+  $('count').innerHTML = n ? `<b>${n}</b> / ${S.maxRows} 项 · ${sc.name}${n >= 7 ? '（建议 5～6 项以获得大字与刻度条最佳观感）' : ''}` : `0 / ${S.maxRows} 项`;
   $('order').innerHTML = n ? items.map((k, ix) => {
     const i = item(k);
     return `<li draggable="true" data-ix="${ix}"><span class="grip" title="拖动排序">⠿</span><span class="oi">${ix + 1}</span><span class="oname">${esc(plain(i.label))}${i.unit ? ` <span style="color:var(--mute);font-size:12px">${esc(i.unit)}</span>` : ''}</span><button class="ib" data-up="${ix}" title="上移" ${ix === 0 ? 'disabled' : ''}>↑</button><button class="ib" data-down="${ix}" title="下移" ${ix === n - 1 ? 'disabled' : ''}>↓</button><button class="ib" data-del="${ix}" title="去掉">✕</button></li>`;
   }).join('') : `<li class="empty" style="border:0">还没有选项目，点左边的项目加入。</li>`;
-  // preview: both boxes (left, right)
   pvBox($('pv'), dash.show, dash.items, 'l'); pvBox($('pv2'), dash.r_show, dash.r_items, 'r');
   $('x').value = dash.x; $('y').value = dash.y; $('alpha').value = dash.alpha; $('alphav').textContent = dash.alpha; $('tank').value = dash.tank_l; $('latflip').checked = !!dash.lat_flip;
-  $('navmode').value = dash.nav_box === false ? 'off' : (dash.nav_side === 'left' ? 'left' : 'right');
-  $('navtz').value = dash.nav_tz == null ? 8 : dash.nav_tz; $('okswitch').checked = dash.ok_switch !== false;
+  const nb = Number(dash.nav_box == null ? 1 : dash.nav_box);
+  $('navmode').value = nb === 0 ? 'off' : ((dash.nav_side === 'left' ? 'left' : 'right') + (nb >= 2 ? '_always' : ''));
+  $('navtz').value = dash.nav_tz == null ? 8 : dash.nav_tz;
   $('carup').value = dash.car_up; $('carupv').textContent = dash.car_up; $('accup').value = dash.acc_up; $('accupv').textContent = dash.acc_up; $('amapturn').value = String(dash.amap_turn == null ? 3 : dash.amap_turn);
 }
 
@@ -392,15 +515,19 @@ function renderSummary(){
   const by = {install: [], uninstall: [], skip: []};
   S.features.forEach(f => by[sel[f.id]].push(f.name));
   const lines = [];
+  if (!by.install.length && !by.uninstall.length) {
+    lines.push(`<div style="color:var(--warn)"><b>当前所有模块均为「不处理」（默认不开启任何改装）</b>——请先在第 1 步把想要开启的模块点为「安装」，或把要移除的已装模块点为「卸载」。</div>`);
+  }
   if (by.install.length) lines.push(`<div>安装 / 升级：<b>${esc(by.install.join('、'))}</b></div>`);
   if (by.uninstall.length) lines.push(`<div>卸载（恢复原车）：<b>${esc(by.uninstall.join('、'))}</b></div>`);
   if (by.skip.length) lines.push(`<div>不处理：${esc(by.skip.join('、'))}</div>`);
   const lst = (show, l) => show ? (l.length ? esc(l.map(k => plain(item(k).label)).join('、')) : '<span style="color:var(--bad)">还没有选项目</span>') : '不显示';
   if (sel.cluster === 'install') {
-    lines.push(`<div>左边信息框：${lst(dash.show, dash.items)}</div>`);
+    lines.push(`<div>左边信息框：${lst(dash.show, dash.items)}（运动刻度条：<b>${dash.bars !== false ? '开启' : '关闭'}</b>）</div>`);
     lines.push(`<div>右边信息框：${lst(dash.r_show, dash.r_items)}</div>`);
-    const navTxt = dash.nav_box === false ? '关闭' : (dash.nav_side === 'left' ? '放左边框' : '放右边框');
-    lines.push(`<div>导航信息卡：<b>${navTxt}</b> · 方向盘 OK 双击切地图：<b>${dash.ok_switch !== false ? '开启' : '关闭'}</b></div>`);
+    const nb = Number(dash.nav_box == null ? 1 : dash.nav_box);
+    const navTxt = nb === 0 ? '关闭' : ((dash.nav_side === 'left' ? '左边框' : '右边框') + (nb >= 2 ? ' · 常驻（未导航显示待机框）' : ' · 仅导航时弹出'));
+    lines.push(`<div>大字导航信息卡：<b>${navTxt}</b></div>`);
   }
   const werr = wifiInvalidMsg();
   if (sel.wifi === 'install') {
@@ -432,6 +559,7 @@ function renderAll(){ renderFeats(); renderDash(); renderWifi(); renderSummary()
 document.addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || b.disabled) return;
+  if (b.dataset.fpreset) return applyFeatPreset(b.dataset.fpreset);
   if (b.dataset.f) return setFeat(b.dataset.f, b.dataset.v);
   if (b.dataset.side) { side = b.dataset.side; renderDash(); return; }
   const L = dash && curItems();
@@ -442,17 +570,18 @@ document.addEventListener('click', e => {
   if (b.dataset.preset !== undefined) { setCurItems(b.dataset.preset ? b.dataset.preset.split(',') : []); if (side === 'r' && curItems().length) dash.r_show = true; renderDash(); renderSummary(); return; }
 });
 $('show').addEventListener('change', e => { if (side === 'l') dash.show = e.target.checked; else dash.r_show = e.target.checked; renderDash(); renderSummary(); });
+$('bars').addEventListener('change', e => { dash.bars = e.target.checked; renderDash(); renderSummary(); });
 const num = (id, key, lo, hi) => $(id).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dash[key] = Math.max(lo, Math.min(hi, v)); if (id === 'alpha') { $('alphav').textContent = dash.alpha; } renderDashPreviewOnly(); } });
 function renderDashPreviewOnly(){ const a = document.activeElement && document.activeElement.id; renderDash(); if (a && $(a)) $(a).focus(); }
 num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); num('tank', 'tank_l', 0, 200); num('navtz', 'nav_tz', -12, 14);
 $('latflip').addEventListener('change', e => { dash.lat_flip = e.target.checked ? 1 : 0; });
 $('navmode').addEventListener('change', e => {
   const v = e.target.value;
-  dash.nav_box = v !== 'off';
-  if (v === 'left' || v === 'right') dash.nav_side = v;
-  renderSummary();
+  dash.nav_box = v === 'off' ? 0 : (v.endsWith('_always') ? 2 : 1);
+  if (v.startsWith('left')) dash.nav_side = 'left';
+  else if (v.startsWith('right')) dash.nav_side = 'right';
+  renderDash(); renderSummary();
 });
-$('okswitch').addEventListener('change', e => { dash.ok_switch = e.target.checked; renderSummary(); });
 $('carup').addEventListener('input', e => { dash.car_up = +e.target.value; $('carupv').textContent = dash.car_up; });
 $('accup').addEventListener('input', e => { dash.acc_up = +e.target.value; $('accupv').textContent = dash.acc_up; });
 $('amapturn').addEventListener('change', e => { dash.amap_turn = +e.target.value; });
@@ -473,21 +602,22 @@ $('order').addEventListener('drop', e => { const li = e.target.closest('li[data-
 $('save').addEventListener('click', async () => {
   const btn = $('save'); btn.disabled = true; btn.textContent = '正在保存…';
   try {
-    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn, nav_box: dash.nav_box !== false, nav_side: dash.nav_side === 'left' ? 'left' : 'right', nav_tz: dash.nav_tz == null ? 8 : dash.nav_tz, ok_switch: dash.ok_switch !== false}, wifi: collectWifi()});
+    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, bars: dash.bars !== false, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn, nav_box: Number(dash.nav_box == null ? 1 : dash.nav_box), nav_side: dash.nav_side === 'left' ? 'left' : 'right', nav_tz: dash.nav_tz == null ? 8 : dash.nav_tz, ok_switch: sel.mapswitch === 'install'}, wifi: collectWifi()});
     if (!r.ok) { $('result').innerHTML = `<div class="msg bad">没有保存：${esc(r.error)}</div>`; return; }
     lastSSHKey = r.sshPrivKey || ''; lastSSHGuide = r.sshGuide || '';
     const sshBanner = lastSSHKey ? `<div class="msg info" style="margin:10px 0"><b>已生成本车专属 SSH 密钥对</b>${r.sshKeySavedDir ? `，私钥已自动保存到电脑：<code>${esc(r.sshKeySavedDir)}</code>` : ''}（U 盘内不保留私钥，请妥善保存）。<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="dlpriv">下载私钥 touareg_ed25519</button><button class="btn" type="button" id="dlguide">下载连接说明.txt</button></div></div>` : '';
+    const hasAction = S.features.some(f => sel[f.id] !== 'skip');
     const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip' || sel.nosimpopup !== 'skip' || sel.nobtauth !== 'skip';
     $('result').innerHTML = `<div class="msg ok"><b>已保存。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>
       ${sshBanner}
-      <b>接下来：</b><ol class="steps">
+      ${hasAction ? `<b>接下来：</b><ol class="steps">
         <li>${S.os === 'darwin' ? '在访达左侧点 U 盘旁边的 ⏏ 推出 U 盘' : '在任务栏右下角「安全删除硬件」里弹出 U 盘'}，再拔下来。</li>
         <li>到车上<b>发动车辆</b>，插入 U 盘。约 10 秒后车机自动重启并开始刷机，过程几分钟，会重启几次、可能出现红色工程界面，<b>期间不要操作车机</b>。</li>
         <li>屏幕提示移除介质时拔出 U 盘，车机重启后就生效了。</li>
       </ol>
-      ${keepNote ? '<p class="hint" style="margin-top:8px">刷机时会把原厂文件备份到这个 U 盘，建议保留这个 U 盘，平时不要插在车上（插着会再次进入刷机）。</p>' : ''}
+      ${keepNote ? '<p class="hint" style="margin-top:8px">刷机时会把原厂文件备份到这个 U 盘，建议保留这个 U 盘，平时不要插在车上（插着会再次进入刷机）。</p>' : ''}` : `<div class="msg warn">当前所有模块均设为「不处理」（已全部归位到「未选模块」文件夹，默认不开启任何功能）。如需上车安装或卸载模块，请在上方第 1 步点选「安装」或「卸载」后再次保存。</div>`}
       <button class="btn" id="quit">完成，退出程序</button>`;
-    S = await api('/api/state'); if ($('wregen')) $('wregen').checked = false; renderStatus(); renderWifi();
+    S = await api('/api/state'); if ($('wregen')) $('wregen').checked = false; renderStatus(); renderAll();
   } catch (err) {
     $('result').innerHTML = `<div class="msg bad">${esc(err.message)}</div>`;
   } finally { btn.disabled = false; btn.textContent = '保存到 U 盘'; renderSummary(); }
@@ -505,9 +635,11 @@ document.addEventListener('click', async e => {
   $('ver').textContent = S.version;
   $('maxrows').textContent = S.maxRows;
   S.features.forEach(f => { const s = S.states[f.id]; sel[f.id] = s === 'missing' ? 'skip' : (s === 'mixed' ? 'install' : s); });
+  if (sel.mapswitch === 'install') { sel.cluster = 'install'; sel.hud = 'install'; }
   if (sel.cluster === 'install' && sel.hud !== 'install') sel.hud = 'install';
-  if (sel.hud === 'uninstall' && sel.cluster !== 'uninstall') sel.cluster = 'uninstall';
-  dash = Object.assign({}, S.dash, {items: (S.dash.items || []).slice(), r_items: (S.dash.r_items || []).slice(), r_show: !!S.dash.r_show});
+  if (sel.hud === 'uninstall') { sel.cluster = 'uninstall'; sel.mapswitch = 'uninstall'; }
+  if (sel.cluster === 'uninstall') { sel.mapswitch = 'uninstall'; }
+  dash = Object.assign({}, S.dash, {bars: S.dash.bars !== false, items: (S.dash.items || []).slice(), r_items: (S.dash.r_items || []).slice(), r_show: !!S.dash.r_show});
   if (S.wifi) {
     (S.wifi.networks || []).slice(0, 3).forEach((n, i) => { $('wssid' + i).value = n.ssid || ''; $('wpsk' + i).value = n.psk || ''; });
     $('wpin').value = S.wifi.pin || '';

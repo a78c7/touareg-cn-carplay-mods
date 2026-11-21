@@ -13,6 +13,9 @@ slay -f wpa_supplicant-2.5-wapi 2>/dev/null
 for p in $(pidin arg | awk '/dhcp\.client/ && /bcm2/ {print $1}'); do kill -9 "$p" 2>/dev/null; done
 
 rm -rf "$D"
+[[ ! -e "/mnt/ota" ]] && mount -t qnx6 /dev/mnanda0t177.16 /mnt/ota 2>/dev/null
+mount -uw /mnt/ota 2>/dev/null || true
+rm -rf /mnt/ota/modkit/Mods/VW_WiFi_Dev 2>/dev/null || true
 
 # 只移除本模块追加的公钥行，保留原有其他公钥
 if [ -f "$AK" ]; then

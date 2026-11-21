@@ -177,7 +177,7 @@ static void init_once(void) {
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v19.5 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
+    plog("cl_alt v21.0 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -308,6 +308,7 @@ static int send_cluster_night(int night) {
 }
 static char g_cluster_url[512];      /* from the phone's suggestUI (AMap sends none) */
 static volatile int g_ui = -1;        /* runtime override ("ui N" command), else g_cfg_ui */
+static volatile int g_suggest_ui_seq; /* incremented on PlatformControl 'suggestUI' to re-assert showUI from rx_thread */
 static const char *cluster_url(void) {
     int u = g_ui >= 0 ? g_ui : g_cfg_ui;
     if (u >= 0 && u < UI_N) return UI_URLS[u];
@@ -427,6 +428,7 @@ static void *rx_thread(void *arg) {
     static const uint8_t sc[4] = {0, 0, 0, 1};
     struct timespec t0, t; clock_gettime(CLOCK_MONOTONIC, &t0); time_t lastrep = t0.tv_sec;
     int kf1 = 0, kf2 = 0, ui_sent = 0, cmd_seen = 0, kf_retry = 0; time_t last_cmd_mtime = 0, last_status = 0;
+    int seen_sui = g_suggest_ui_seq; long long sui_due_ms = 0;
     long long last_cmd_poll_ms = 0; char last_cb[64] = "";
     /* v19.5 (garbled cluster map): a frame we cannot use was dropped, so every following frame until the next key
      * frame decodes against missing data and the whole map turns to garbage. Now: after a bad frame nothing more
@@ -508,6 +510,19 @@ static void *rx_thread(void *arg) {
          * v19.2: polled every 100 ms and acted on when its content or mtime changes (writers add "#<seq>" so repeated
          * commands differ); before, once a second on mtime only (1 s resolution), which made steering-wheel zoom laggy */
         long long now_ms = (long long)t.tv_sec * 1000 + t.tv_nsec / 1000000;
+        if (ui_sent) {
+            int cur_sui = g_suggest_ui_seq;
+            if (cur_sui != seen_sui) {
+                seen_sui = cur_sui;
+                sui_due_ms = now_ms + 180;
+            }
+            if (sui_due_ms > 0 && now_ms >= sui_due_ms) {
+                sui_due_ms = 0;
+                plog("suggestUI follow-up: re-assert showUI + updateViewArea(%d)", g_cfg_va);
+                send_cmd("showUI", CLUSTER_URL);
+                send_cmd_ex("updateViewArea", NULL, "viewAreaIndex", g_cfg_va, "animationDurationMillis", 0, 1);
+            }
+        }
         if (now_ms - last_cmd_poll_ms >= 100) {
             struct stat st; last_cmd_poll_ms = now_ms;
             char cb[64] = "";
@@ -521,8 +536,9 @@ static void *rx_thread(void *arg) {
                 strncpy(last_cb, cb, sizeof last_cb - 1);
                 if (first && el < 2) { plog("cmd file present at start, ignoring: %s", cb); }
                 else {
-                    int n = 1; char w[16] = ""; sscanf(cb, "%15s %d", w, &n); if (n < 1) n = 1; if (n > 10) n = 10;
-                    plog("cmd file: %s %d", w, n);
+                    int raw_n = 1; char w[16] = ""; int has_n = (sscanf(cb, "%15s %d", w, &raw_n) >= 2);
+                    int n = raw_n < 1 ? 1 : (raw_n > 10 ? 10 : raw_n);
+                    plog("cmd file: %s %d", w, has_n ? raw_n : 1);
                     if (!strcmp(w, "idr")) send_cmd("forceKeyFrame", NULL);
                     else if (!strcmp(w, "va")) {      /* "va N": switch safe-area preset live */
                         int v = 0; sscanf(cb, "%*s %d", &v);
@@ -531,6 +547,17 @@ static void *rx_thread(void *arg) {
                         int v = -1; sscanf(cb, "%*s %d", &v);
                         g_ui = (v >= 0 && v < UI_N) ? v : -1;
                         send_cmd("showUI", CLUSTER_URL); write_status("ui");
+                    } else if (!strcmp(w, "wake")) {  /* "wake 1": showUI+va; "wake 2": showUI+va+zoom nudge for frozen AMap */
+                        send_cmd("showUI", CLUSTER_URL);
+                        send_cmd_ex("updateViewArea", NULL, "viewAreaIndex", g_cfg_va, "animationDurationMillis", 0, 1);
+                        if (raw_n >= 2) {
+                            usleep(50000);
+                            send_cmd_ex("changeMapZoomLevel", NULL, "zoomDirection", 0, NULL, 0, 0);
+                            usleep(60000);
+                            send_cmd_ex("changeMapZoomLevel", NULL, "zoomDirection", 1, NULL, 0, 0);
+                        }
+                        send_cmd("forceKeyFrame", NULL);
+                        write_status("wake");
                     }
                     else if (!strcmp(w, "zoomin") || !strcmp(w, "zoomout"))
                         for (int z = 0; z < n; z++) {   /* v19.2: no 300 ms stall of this receive loop per step */
@@ -754,7 +781,8 @@ EXPORT int AirPlayReceiverSessionPlatformControl(void *session, uint32_t flags, 
         if (is_arr(u) && cf_arrcount(u) > 0) first = cf_arrget(u, 0);
         if (!first) first = get_obj(params, "url");
         if (first && gcs && gcs(first, g_cluster_url, sizeof g_cluster_url, CFENC_UTF8)) plog("suggestUI: will showUI url=%s", g_cluster_url);
-        else { g_cluster_url[0] = 0; plog("suggestUI: no url found"); }
+        else { g_cluster_url[0] = 0; plog("suggestUI: no url found (will re-assert cluster showUI)"); }
+        g_suggest_ui_seq++;
     }
     return real ? real(session, flags, command, qualifier, params, outParams) : -6714;
 }

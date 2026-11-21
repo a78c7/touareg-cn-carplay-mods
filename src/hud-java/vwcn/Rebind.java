@@ -32,7 +32,7 @@ public final class Rebind implements Runnable {
     /** while set (CarPlay cluster stream live): re-assert this displayable list on the cluster every HOLD_MS,
      *  so native context switches (VIEW key, junction view) cannot hide the CarPlay layer. */
     static volatile int[] hold;
-    /** v19.8: 保存当前活跃 CarPlay 流的 displayable 列表（如 [58,33]），
+    /** v19.8 / v21: 保存当前活跃 CarPlay 流的 displayable 列表（如 [58,33]），
      *  即使用户通过方向盘 OK 双击临时切回原车地图，也保留以便随时一键切回 CarPlay 地图。 */
     static volatile int[] streamHold;
     static volatile boolean userNative;
@@ -49,6 +49,14 @@ public final class Rebind implements Runnable {
         }
         Log.log("switch: requested (" + reason + ") cur=" + (hold != null ? "carplay" : "native"));
         toggleRequested = true;
+    }
+
+    /** 新开启 CarPlay 路线指引时，若用户此前手动停留在原车地图，自动切回 CarPlay 仪表地图。 */
+    static void restoreCarPlayOnNavStart() {
+        if (userNative && hold == null && streamHold != null) {
+            Log.log("switch: new CarPlay guidance started -> auto restore CarPlay map");
+            toggleRequested = true;
+        }
     }
 
     private static String csv(int[] a) {

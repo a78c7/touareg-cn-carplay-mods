@@ -5,7 +5,7 @@ import org.osgi.framework.BundleContext;
 
 public class Activator implements BundleActivator {
     public void start(BundleContext ctx) throws Exception {
-        Log.log("VWClusterNav v19.8-switch Activator.start called");
+        Log.log("VWClusterNav v21.0 Activator.start called");
         try {
             Bridge.startThread();
             Log.log("bridge thread started");

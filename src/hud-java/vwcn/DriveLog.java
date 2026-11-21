@@ -20,7 +20,8 @@ final class DriveLog {
     static final int MAX_PENDING = 60;
     static final String COLUMNS = "t_ms,spd_kmh,real_spd_kmh,rpm,power_kw,torque_nm,pedal_pct,brake_bar,steer_deg,yaw_dps,"
         + "ax_ms2,ay_g,lever,gear,gearbox_c,oil_c,coolant_c,cons,cons_unit,tank_pct,outside_c,range_km,"
-        + "wheel1_kmh,wheel2_kmh,wheel3_kmh,wheel4_kmh,acc";
+        + "wheel1_kmh,wheel2_kmh,wheel3_kmh,wheel4_kmh,acc,"
+        + "pitch_deg,roll_deg,alt_m,tp_fl,tp_fr,tp_rl,tp_rr";
 
     private static final StringBuffer buf = new StringBuffer(8192);
     private static String session, chunk;
@@ -78,7 +79,7 @@ final class DriveLog {
         chunk = "/tmp/drv_" + session + "_" + s + ".csv";
         chunkStart = now;
         write(CUR, chunk + "\n", false);   // before the chunk exists: the copier must not take it
-        if (first) append(chunk, "# VWClusterNav v19.2 drive log, session " + session + " (head-unit clock), start t_ms=" + now
+        if (first) append(chunk, "# VWClusterNav v21.0 drive log, session " + session + " (head-unit clock), start t_ms=" + now
             + "; empty = not available; ay in g, ax in m/s2; cons_unit 0=L/100km 1=km/L 2=L/h\n" + COLUMNS + "\n");
     }
 

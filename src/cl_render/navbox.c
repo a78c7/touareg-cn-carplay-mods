@@ -109,7 +109,7 @@ static const char *nav_memchr(const char *s, int c, size_t n) {
 
 /* ---- 配置（从 dash.conf 读取，未指定项自动继承对应侧信息框配置） ---- */
 typedef struct {
-    int enabled;       /* nav_box=1 默认开启，0 关闭 */
+    int enabled;       /* nav_box=0 关闭, 1 仅导航时弹出(默认), 2 常驻显示(不导航时显示待机导航框) */
     int side;          /* nav_side=right(1，默认) 放右框，left(0) 放左框 */
     int x, y, right;   /* -1 表示自动继承对应侧信息框 x / y / right */
     int alpha;         /* -1 表示自动继承 alpha */
@@ -165,10 +165,12 @@ typedef struct {
 
 /* ---- 画布与状态缓存 ---- */
 static uint32_t g_nav_px[NAV_MAX_W * NAV_MAX_H];
-static int      g_nav_w = 295, g_nav_h = 336;
+static int      g_nav_w = 295, g_nav_h = 344;
 static int      g_nav_x = 1620, g_nav_y = 164;
 static int      g_nav_alpha = 200;
 static int      g_nav_active = 0;         /* 当前是否应显示导航框（含消抖） */
+static int      g_nav_mode_cur = 0;       /* 0=未画, 1=待机巡航卡, 2=实时导航卡 */
+static char     g_nav_idle_road[256];     /* 待机卡上次绘制的当前路名（用于脏检查） */
 static int      g_nav_not_live = 0;       /* 连续非导航计数（消抖防闪烁） */
 static char     g_nav_raw_prev[8192];
 static int      g_nav_raw_len = -1;
@@ -1290,18 +1292,20 @@ static void nav_parse_state(const char *buf, nav_state_t *st) {
     st->live = st->session_active && st->route_state >= 1 && st->route_state != 2 && st->src_supports_rg != 0;
 }
 
-/* ---- 渲染整张导航信息卡片 ---- */
+/* ---- 渲染整张导航信息卡片（v21 行车大字版，对称 295px 宽自适应） ---- */
 static void nav_render(const nav_state_t *st) {
     const int W = g_nav_w, H = g_nav_h;
-    const int pad_x = 14;
+    const int pad_x = 13;
     const int inner_w = W - pad_x * 2;
     const int has_lanes = st->lane_active && st->lane_count > 0;
 
-    /* 1. 背景（与左框完全一致的深灰半透明圆角底） */
-    nav_fill_rrect_bg(W, H, 16, 16, 18, 22, g_nav_alpha);
+    /* 1. 背景（与左框完全一致的 R=12 深灰半透明圆角底 + 细高光描边） */
+    nav_fill_rrect_bg(W, H, 12, 16, 18, 22, g_nav_alpha);
+    nav_draw_hline(12, W - 12, 0, 210, 225, 240, 48);
+    nav_draw_hline(12, W - 12, H - 1, 180, 195, 210, 32);
 
-    /* 2. 顶部主转向区（箭头 + 距离 + 动作词） */
-    int hero_y = has_lanes ? 12 : 14;
+    /* 2. 顶部主转向区（大箭头 + 大字距离 + 粗体动作词；stbtt_ScaleForPixelHeight 需乘 ~1.3x 对齐 em 字号） */
+    int hero_y = 10;
     int icon_s = has_lanes ? 62 : 66;
     int mtype  = (st->slot_count > 0 && st->cur_slot >= 0 && st->s0_type >= 0) ? st->s0_type : 5;
     nav_shape_t icon_sh;
@@ -1313,57 +1317,62 @@ static void nav_render(const nav_state_t *st) {
     if (rb_num > 0 && rb_num <= 19) {
         char rbs[8];
         snprintf(rbs, sizeof(rbs), "%d", rb_num);
-        int rw = nav_text_width(rbs, 18, 0, 1);
+        int rw = nav_text_width(rbs, 21, 0, 1);
         int rx = (pad_x - 2) + icon_s / 2 - rw / 2;
-        int ry = hero_y + (int)(icon_s * 28.0f / 64.0f) + 6;
-        nav_draw_text(rbs, rx, ry, 18, 0, 1, 255, 255, 255, 255);
+        int ry = hero_y + (int)(icon_s * 28.0f / 64.0f) + 7;
+        nav_draw_text(rbs, rx, ry, 21, 0, 1, 255, 255, 255, 255);
     }
 
     int tx = pad_x + icon_s + 8;
     int tw = W - pad_x - tx;
-    /* 距离数字 + 单位 */
+    /* 距离数字 + 单位（大字粗体，按宽度自动防裁切） */
     char dnum[16];
     const char *dunit = "";
     nav_fmt_dist(st->dist_to_maneuver, dnum, sizeof(dnum), &dunit);
-    int d_px = has_lanes ? 38 : 40;
-    int u_px = 20;
-    int d_base = hero_y + nav_font_ascent(d_px, 1) + 2;
-    int after_d = nav_draw_text(dnum, tx, d_base, d_px, 0, 1, 255, 255, 255, 255);
+    int d_px = has_lanes ? 48 : 52;
+    int u_px = 24;
+    if (nav_text_width(dnum, d_px, 1, 1) + (dunit[0] ? (4 + nav_text_width(dunit, u_px, 1, 1)) : 0) > tw) {
+        d_px = 42;
+        u_px = 21;
+    }
+    int d_base = hero_y + nav_font_ascent(d_px, 1) - 2;
+    int after_d = nav_draw_text(dnum, tx, d_base, d_px, 1, 1, 255, 255, 255, 255);
     if (dunit[0]) {
-        nav_draw_text(dunit, after_d + 4, d_base - 1, u_px, 0, 1, 168, 178, 190, 255);
+        nav_draw_text(dunit, after_d + 4, d_base - 1, u_px, 1, 1, 195, 205, 218, 255);
     }
 
     /* 动作词（如 前方左转 / 右侧出口 / 环岛第2出口） */
     char act[32];
     nav_action_label(mtype, st->s0_junction, st->s0_driving_side, act, sizeof(act));
-    int act_px = has_lanes ? 19 : 20;
-    int act_base = hero_y + icon_s - 4;
-    nav_draw_text_clip(act, tx, act_base, tw, act_px, 1, 0, 108, 200, 255, 255);
+    int act_px = has_lanes ? 25 : 27;
+    int act_base = hero_y + icon_s;
+    nav_draw_text_clip(act, tx, act_base, tw, act_px, 1, 0, 108, 214, 255, 255);
 
-    /* 3. 完整路名区（最多 2 行，彻底解决 HUD 5 字显示不全） */
+    /* 3. 完整路名区（大字粗体，最多 2 行，彻底解决 HUD 5 字显示不全） */
+    int div_trip_y = H - 138;   /* 底部 3 行行程区预留固定 138px，确保三项大字舒展醒目 */
     char road[256], line1[160], line2[160];
     nav_clean_road(st, road, sizeof(road));
-    int road_px = has_lanes ? 21 : 23;
-    int road_lh = has_lanes ? 24 : 27;
+    int road_px = has_lanes ? 28 : 30;
+    int road_lh = has_lanes ? 31 : 33;
     int nlines = nav_wrap_2lines(road, inner_w, road_px, 1, line1, sizeof(line1), line2, sizeof(line2));
-    if (!has_lanes && nlines == 1 && nav_text_width(line1, 25, 1, 0) <= inner_w) {
-        road_px = 25;
+    if (nlines == 1) {
+        if (!has_lanes && nav_text_width(line1, 36, 1, 0) <= inner_w) road_px = 36;
+        else if (nav_text_width(line1, 32, 1, 0) <= inner_w) road_px = 32;
     }
     int road_top = hero_y + icon_s + (has_lanes ? 6 : 8);
     int road_asc = nav_font_ascent(road_px, 0);
     if (nlines == 1) {
-        int cy = road_top + (has_lanes ? 24 : 27) - road_px / 2 + road_asc;
-        nav_draw_text_clip(line1, pad_x, cy, inner_w, road_px, 1, 0, 245, 248, 252, 255);
+        int cy = road_top + (has_lanes ? 29 : 34) - road_px / 2 + road_asc;
+        nav_draw_text_clip(line1, pad_x, cy, inner_w, road_px, 1, 0, 255, 255, 255, 255);
     } else if (nlines >= 2) {
-        nav_draw_text_clip(line1, pad_x, road_top + road_asc, inner_w, road_px, 1, 0, 245, 248, 252, 255);
-        nav_draw_text_clip(line2, pad_x, road_top + road_lh + road_asc, inner_w, road_px, 1, 0, 232, 238, 245, 255);
+        nav_draw_text_clip(line1, pad_x, road_top + road_asc, inner_w, road_px, 1, 0, 255, 255, 255, 255);
+        nav_draw_text_clip(line2, pad_x, road_top + road_lh + road_asc, inner_w, road_px, 1, 0, 240, 245, 252, 255);
     }
 
-    /* 4. 中间动态区：有车道数据时画车道指引条，无车道数据时画下下路口预告 (slot_1) */
-    int div_trip_y = H - 124;   /* 底部 3 行行程区预留固定 124px，确保三项永远舒展 */
+    /* 4. 中间动态区：有车道数据时画车道指引条，无车道数据且有下下路口时画大号预告，无多余废话 */
     if (has_lanes) {
-        int bar_top = road_top + (has_lanes ? 52 : 58);
-        if (bar_top > div_trip_y - 62) bar_top = div_trip_y - 62;
+        int bar_top = road_top + (nlines >= 2 ? 66 : 56);
+        if (bar_top > div_trip_y - 54) bar_top = div_trip_y - 54;
         nav_draw_hline(pad_x, W - pad_x, bar_top - 4, 255, 255, 255, 36);
 
         int n = st->lane_count;
@@ -1374,18 +1383,17 @@ static void nav_render(const nav_state_t *st) {
             while (j >= 0 && st->lanes[ord[j]].pos > st->lanes[k].pos) { ord[j + 1] = ord[j]; j--; }
             ord[j + 1] = k;
         }
-        int bar_h = div_trip_y - bar_top - 6;
-        if (bar_h > 58) bar_h = 58;
-        if (bar_h < 42) bar_h = 42;
+        int bar_h = div_trip_y - bar_top - 4;
+        if (bar_h > 54) bar_h = 54;
+        if (bar_h < 40) bar_h = 40;
         int slot_w = (inner_w + 4) / n;
-        if (slot_w > 46) slot_w = 46;
+        if (slot_w > 48) slot_w = 48;
         int total_w = slot_w * n;
         int start_x = (W - total_w) / 2;
 
         for (int i = 0; i < n; i++) {
             const nav_lane_t *ln = &st->lanes[ord[i]];
             int lx = start_x + i * slot_w;
-            /* 车道间虚线分隔 */
             if (i > 0) {
                 for (int dy = 6; dy < bar_h - 8; dy += 6) {
                     nav_blend_px(lx, bar_top + dy, 255, 255, 255, 45);
@@ -1398,7 +1406,6 @@ static void nav_render(const nav_state_t *st) {
             int has_hi = (ln->status >= 1);
             int hi_bucket = (ln->dir != 1000) ? nav_snap_lane_bucket(ln->dir) : -1;
             int drawn_mask = 0;
-            /* 先把全部合法方向画进暗层 */
             for (int k = 0; k < ln->nangles; k++) {
                 int b = nav_snap_lane_bucket(ln->angles[k]);
                 if (drawn_mask & (1 << b)) continue;
@@ -1409,11 +1416,9 @@ static void nav_render(const nav_state_t *st) {
                     nav_add_lane_arrow(&lsh, 0, b, (float)slot_w, (float)(bar_h - 4));
                 }
             }
-            /* 若高亮方向不在 angles 里也补画 */
             if (has_hi && hi_bucket >= 0 && !(drawn_mask & (1 << hi_bucket))) {
                 nav_add_lane_arrow(&lsh, 1, hi_bucket, (float)slot_w, (float)(bar_h - 4));
             }
-            /* status==2 推荐车道：亮翡翠绿 + 底部绿色指示条；status==1 可走车道：纯白 */
             if (ln->status == 2) {
                 nav_sh_render(&lsh, lx, bar_top, slot_w, bar_h - 4,
                               105, 114, 126, 180,
@@ -1430,82 +1435,65 @@ static void nav_render(const nav_state_t *st) {
                               96, 104, 114, 170);
             }
         }
-    } else {
-        /* 无车道数据时显示下下路口预告 (slot_1) 或当前道路 / 导航源 */
-        int pill_h = 36;
-        int pill_y = div_trip_y - pill_h - 10;
-        if (st->slot_count >= 2 && st->s1_type >= 0 && st->s1_type != 255) {
-            nav_overlay_rrect(pad_x, pill_y, inner_w, pill_h, 9, 255, 255, 255, 20);
-            nav_shape_t msh;
-            int dummy_rb = 0;
-            nav_build_turn_icon(&msh, 24, st->s1_type, st->s1_junction, st->s1_exit_angle, st->s1_driving_side, &dummy_rb);
-            nav_sh_render(&msh, pad_x + 8, pill_y + 6, 24, 24,
-                          120, 128, 140, 180,
-                          235, 242, 250, 240);
-            char next_txt[128];
-            const char *sa = nav_short_action(st->s1_type, st->s1_driving_side);
-            if (st->s1_dist > 0 && st->s1_dist < 200000) {
-                char dn[16]; const char *du = "";
-                nav_fmt_dist(st->s1_dist, dn, sizeof(dn), &du);
-                snprintf(next_txt, sizeof(next_txt), "随后 %s%s %s", dn, du, sa);
-            } else {
-                snprintf(next_txt, sizeof(next_txt), "随后 %s", sa);
-            }
-            int np_px = 18;
-            int np_base = pill_y + (pill_h - np_px) / 2 + nav_font_ascent(np_px, 0) - 1;
-            nav_draw_text_clip(next_txt, pad_x + 38, np_base, inner_w - 46, np_px, 1, 0, 215, 224, 235, 255);
-        } else if (st->cur_road[0]) {
-            nav_overlay_rrect(pad_x, pill_y, inner_w, pill_h, 9, 255, 255, 255, 18);
-            char cur_txt[160];
-            snprintf(cur_txt, sizeof(cur_txt), "当前 %s", st->cur_road);
-            int np_px = 18;
-            int np_base = pill_y + (pill_h - np_px) / 2 + nav_font_ascent(np_px, 0) - 1;
-            nav_draw_text_clip(cur_txt, pad_x + 10, np_base, inner_w - 20, np_px, 0, 0, 195, 205, 218, 255);
-        } else if (st->source_name[0]) {
-            nav_overlay_rrect(pad_x, pill_y, inner_w, pill_h, 9, 255, 255, 255, 16);
-            char src_txt[96];
-            snprintf(src_txt, sizeof(src_txt), "%s · 导航中", st->source_name);
-            int np_px = 17;
-            int np_base = pill_y + (pill_h - np_px) / 2 + nav_font_ascent(np_px, 0) - 1;
-            nav_draw_text_clip(src_txt, pad_x + 10, np_base, inner_w - 20, np_px, 0, 0, 175, 185, 198, 255);
+    } else if (st->slot_count >= 2 && st->s1_type >= 0 && st->s1_type != 255) {
+        int pill_h = 40;
+        int pill_y = div_trip_y - pill_h - 7;
+        nav_overlay_rrect(pad_x, pill_y, inner_w, pill_h, 9, 255, 255, 255, 22);
+        nav_shape_t msh;
+        int dummy_rb = 0;
+        nav_build_turn_icon(&msh, 28, st->s1_type, st->s1_junction, st->s1_exit_angle, st->s1_driving_side, &dummy_rb);
+        nav_sh_render(&msh, pad_x + 8, pill_y + 6, 28, 28,
+                      120, 128, 140, 180,
+                      240, 246, 255, 250);
+        char next_txt[128];
+        const char *sa = nav_short_action(st->s1_type, st->s1_driving_side);
+        if (st->s1_dist > 0 && st->s1_dist < 200000) {
+            char dn[16]; const char *du = "";
+            nav_fmt_dist(st->s1_dist, dn, sizeof(dn), &du);
+            snprintf(next_txt, sizeof(next_txt), "随后 %s%s %s", dn, du, sa);
+        } else {
+            snprintf(next_txt, sizeof(next_txt), "随后 %s", sa);
         }
+        int np_px = 27;
+        int np_base = pill_y + (pill_h - np_px) / 2 + nav_font_ascent(np_px, 0) - 1;
+        nav_draw_text_clip(next_txt, pad_x + 42, np_base, inner_w - 50, np_px, 1, 0, 232, 240, 250, 255);
     }
 
-    /* 5. 底部行程 3 行（剩余路程 / 剩余时间 / 预计到达），样式与左侧数据框统一 */
-    nav_draw_hline(pad_x, W - pad_x, div_trip_y, 255, 255, 255, 38);
-    int trip_top = div_trip_y + 8;
-    int row_h = (H - 10 - trip_top) / 3;
-    if (row_h < 32) row_h = 32;
-    int lab_px = 21;
-    int val_px = 28;
-    int unit_px = 18;
+    /* 5. 底部行程 3 行大字（剩余路程 / 剩余时间 / 预计到达） */
+    nav_draw_hline(pad_x, W - pad_x, div_trip_y, 255, 255, 255, 42);
+    int trip_top = div_trip_y + 5;
+    int row_h = (H - 6 - trip_top) / 3;
+    if (row_h < 36) row_h = 36;
+    int lab_px = 29;
+    int val_px = 39;
+    int unit_px = 22;
     int val_asc = nav_font_ascent(val_px, 1);
 
     /* 行 0：剩余路程 */
     {
         int ry = trip_top + 0 * row_h;
         int base = ry + (row_h - val_px) / 2 + val_asc;
-        nav_draw_text("剩余路程", pad_x, base - 1, lab_px, 0, 0, 165, 172, 180, 255);
+        nav_draw_text("剩余路程", pad_x, base - 2, lab_px, 1, 0, 205, 212, 222, 255);
 
         char dn[16]; const char *du = "";
         nav_fmt_dist(st->dist_remaining, dn, sizeof(dn), &du);
-        int uw = du[0] ? nav_text_width(du, unit_px, 0, 1) : 0;
-        int vw = nav_text_width(dn, val_px, 0, 1);
+        int uw = du[0] ? nav_text_width(du, unit_px, 1, 1) : 0;
+        int vw = nav_text_width(dn, val_px, 1, 1);
         int ux = W - pad_x - uw;
         int vx = (du[0] ? (ux - 5) : (W - pad_x)) - vw;
-        nav_draw_text(dn, vx, base, val_px, 0, 1, 255, 255, 255, 255);
-        if (du[0]) nav_draw_text(du, ux, base - 1, unit_px, 0, 1, 155, 163, 172, 255);
+        nav_draw_text(dn, vx, base, val_px, 1, 1, 255, 255, 255, 255);
+        if (du[0]) nav_draw_text(du, ux, base - 1, unit_px, 1, 1, 180, 188, 198, 255);
     }
 
     /* 行 1：剩余时间 */
     {
         int ry = trip_top + 1 * row_h;
         int base = ry + (row_h - val_px) / 2 + val_asc;
-        nav_draw_text("剩余时间", pad_x, base - 1, lab_px, 0, 0, 165, 172, 180, 255);
+        nav_draw_text("剩余时间", pad_x, base - 2, lab_px, 1, 0, 205, 212, 222, 255);
 
         if (st->time_remaining < 0 || st->time_remaining >= 360000) {
-            int vw = nav_text_width("-", val_px, 0, 1);
-            nav_draw_text("-", W - pad_x - vw, base, val_px, 0, 1, 255, 255, 255, 255);
+            int vw = nav_text_width("-", val_px, 1, 1);
+            nav_draw_text("-", W - pad_x - vw, base, val_px, 1, 1, 255, 255, 255, 255);
         } else {
             int mins = (st->time_remaining + 59) / 60;
             if (mins < 1 && st->time_remaining > 0) mins = 1;
@@ -1513,29 +1501,29 @@ static void nav_render(const nav_state_t *st) {
                 char mn[16];
                 snprintf(mn, sizeof(mn), "%d", mins);
                 const char *mu = "分钟";
-                int uw = nav_text_width(mu, unit_px, 0, 0);
-                int vw = nav_text_width(mn, val_px, 0, 1);
+                int uw = nav_text_width(mu, unit_px, 1, 0);
+                int vw = nav_text_width(mn, val_px, 1, 1);
                 int ux = W - pad_x - uw;
                 int vx = ux - 4 - vw;
-                nav_draw_text(mn, vx, base, val_px, 0, 1, 255, 255, 255, 255);
-                nav_draw_text(mu, ux, base - 1, unit_px, 0, 0, 155, 163, 172, 255);
+                nav_draw_text(mn, vx, base, val_px, 1, 1, 255, 255, 255, 255);
+                nav_draw_text(mu, ux, base - 1, unit_px, 1, 0, 180, 188, 198, 255);
             } else {
                 int hh = mins / 60, mm = mins % 60;
                 char hs[12], ms[12];
                 snprintf(hs, sizeof(hs), "%d", hh);
                 snprintf(ms, sizeof(ms), "%d", mm);
-                int w_h = nav_text_width(hs, val_px, 0, 1);
-                int w_hu = nav_text_width("时", unit_px, 0, 0);
-                int w_m = mm > 0 ? nav_text_width(ms, val_px, 0, 1) : 0;
-                int w_mu = mm > 0 ? nav_text_width("分", unit_px, 0, 0) : 0;
+                int w_h = nav_text_width(hs, val_px, 1, 1);
+                int w_hu = nav_text_width("时", unit_px, 1, 0);
+                int w_m = mm > 0 ? nav_text_width(ms, val_px, 1, 1) : 0;
+                int w_mu = mm > 0 ? nav_text_width("分", unit_px, 1, 0) : 0;
                 int tot = w_h + 2 + w_hu + (mm > 0 ? (4 + w_m + 2 + w_mu) : 0);
                 int cx = W - pad_x - tot;
-                cx = nav_draw_text(hs, cx, base, val_px, 0, 1, 255, 255, 255, 255) + 2;
-                cx = nav_draw_text("时", cx, base - 1, unit_px, 0, 0, 155, 163, 172, 255);
+                cx = nav_draw_text(hs, cx, base, val_px, 1, 1, 255, 255, 255, 255) + 2;
+                cx = nav_draw_text("时", cx, base - 1, unit_px, 1, 0, 180, 188, 198, 255);
                 if (mm > 0) {
                     cx += 4;
-                    cx = nav_draw_text(ms, cx, base, val_px, 0, 1, 255, 255, 255, 255) + 2;
-                    nav_draw_text("分", cx, base - 1, unit_px, 0, 0, 155, 163, 172, 255);
+                    cx = nav_draw_text(ms, cx, base, val_px, 1, 1, 255, 255, 255, 255) + 2;
+                    nav_draw_text("分", cx, base - 1, unit_px, 1, 0, 180, 188, 198, 255);
                 }
             }
         }
@@ -1545,12 +1533,82 @@ static void nav_render(const nav_state_t *st) {
     {
         int ry = trip_top + 2 * row_h;
         int base = ry + (row_h - val_px) / 2 + val_asc;
-        nav_draw_text("预计到达", pad_x, base - 1, lab_px, 0, 0, 165, 172, 180, 255);
+        nav_draw_text("预计到达", pad_x, base - 2, lab_px, 1, 0, 205, 212, 222, 255);
 
         char eta_s[16];
         nav_fmt_eta(st, eta_s, sizeof(eta_s));
-        int vw = nav_text_width(eta_s, val_px, 0, 1);
-        nav_draw_text(eta_s, W - pad_x - vw, base, val_px, 0, 1, 255, 255, 255, 255);
+        int vw = nav_text_width(eta_s, val_px, 1, 1);
+        nav_draw_text(eta_s, W - pad_x - vw, base, val_px, 1, 1, 255, 255, 255, 255);
+    }
+}
+
+/* ---- 常驻待机导航卡（nav_box=2 且当前未在导航时显示：与实时导航卡完全同尺寸同排版） ---- */
+static void nav_render_idle(const char *cur_road) {
+    const int W = g_nav_w, H = g_nav_h;
+    const int pad_x = 13;
+    const int inner_w = W - pad_x * 2;
+
+    nav_fill_rrect_bg(W, H, 12, 16, 18, 22, g_nav_alpha);
+    nav_draw_hline(12, W - 12, 0, 210, 225, 240, 48);
+    nav_draw_hline(12, W - 12, H - 1, 180, 195, 210, 32);
+
+    /* 1. 顶部待机图标（简洁直行巡航箭标）+ 状态标题 */
+    int hero_y = 12;
+    int icon_s = 60;
+    nav_overlay_rrect(pad_x, hero_y, icon_s, icon_s, 14, 120, 170, 220, 26);
+    nav_shape_t icon_sh;
+    int rb_num = 0;
+    nav_build_turn_icon(&icon_sh, icon_s - 10, 5 /* straight */, 0, 0, 0, &rb_num);
+    nav_sh_render(&icon_sh, pad_x + 5, hero_y + 5, icon_s - 10, icon_s - 10,
+                  95, 110, 128, 160,
+                  168, 214, 248, 235);
+
+    int tx = pad_x + icon_s + 12;
+    int tw = W - pad_x - tx;
+    int title_px = 34;
+    nav_draw_text_clip("未在导航", tx, hero_y + nav_font_ascent(title_px, 0) + 1, tw, title_px, 1, 0, 236, 242, 248, 255);
+    int sub_px = 23;
+    nav_draw_text_clip("巡航待机", tx, hero_y + icon_s - 3, tw, sub_px, 1, 0, 116, 196, 235, 235);
+
+    /* 2. 中间当前道路区（有当前道路名时大字显示，否则柔和提示） */
+    int div_trip_y = H - 138;
+    int mid_top = hero_y + icon_s + 14;
+    int mid_h = div_trip_y - mid_top - 10;
+    if (cur_road && cur_road[0]) {
+        char line1[160], line2[160];
+        int road_px = 30, road_lh = 34;
+        int nlines = nav_wrap_2lines(cur_road, inner_w, road_px, 1, line1, sizeof(line1), line2, sizeof(line2));
+        if (nlines == 1 && nav_text_width(line1, 34, 1, 0) <= inner_w) road_px = 34;
+        int road_asc = nav_font_ascent(road_px, 0);
+        if (nlines == 1) {
+            int cy = mid_top + (mid_h - road_px) / 2 + road_asc;
+            nav_draw_text_clip(line1, pad_x, cy, inner_w, road_px, 1, 0, 248, 250, 254, 255);
+        } else if (nlines >= 2) {
+            int sy = mid_top + (mid_h - road_lh * 2) / 2 + road_asc;
+            nav_draw_text_clip(line1, pad_x, sy, inner_w, road_px, 1, 0, 248, 250, 254, 255);
+            nav_draw_text_clip(line2, pad_x, sy + road_lh, inner_w, road_px, 1, 0, 224, 232, 242, 255);
+        }
+    } else {
+        int hint_px = 26;
+        int cy = mid_top + (mid_h - hint_px) / 2 + nav_font_ascent(hint_px, 0);
+        nav_draw_text_clip("当前道路 · 巡航中", pad_x, cy, inner_w, hint_px, 1, 0, 168, 178, 192, 235);
+    }
+
+    /* 3. 底部 3 行占位（与实时导航卡完全对齐，进退导航零跳动） */
+    nav_draw_hline(pad_x, W - pad_x, div_trip_y, 255, 255, 255, 42);
+    int trip_top = div_trip_y + 5;
+    int row_h = (H - 6 - trip_top) / 3;
+    if (row_h < 36) row_h = 36;
+    int lab_px = 29;
+    int val_px = 39;
+    int val_asc = nav_font_ascent(val_px, 1);
+    int dash_w = nav_text_width("-", val_px, 1, 1);
+    static const char *labels[3] = { "剩余路程", "剩余时间", "预计到达" };
+    for (int i = 0; i < 3; i++) {
+        int ry = trip_top + i * row_h;
+        int base = ry + (row_h - val_px) / 2 + val_asc;
+        nav_draw_text(labels[i], pad_x, base - 2, lab_px, 1, 0, 185, 192, 204, 235);
+        nav_draw_text("-", W - pad_x - dash_w, base, val_px, 1, 1, 150, 160, 174, 220);
     }
 }
 
@@ -1560,7 +1618,7 @@ static int nav_read_conf_line(const char *l) {
     char s[32];
     while (*l == ' ' || *l == '\t') l++;
     if (*l == '#') return 0;
-    if      (sscanf(l, "nav_box = %d", &v) == 1)   { g_nav_conf.enabled = v; return 1; }
+    if      (sscanf(l, "nav_box = %d", &v) == 1)   { g_nav_conf.enabled = v < 0 ? 0 : (v > 2 ? 2 : v); return 1; }
     else if (sscanf(l, "nav_side = %31s", s) == 1) {
         if (s[0] == 'l' || s[0] == 'L' || s[0] == '0') g_nav_conf.side = 0;
         else if (s[0] == 'r' || s[0] == 'R' || s[0] == '1') g_nav_conf.side = 1;
@@ -1574,29 +1632,48 @@ static int nav_read_conf_line(const char *l) {
     return 0;
 }
 
+static int nav_enter_idle(const char *cur_road) {
+    const char *rd = cur_road ? cur_road : "";
+    if (g_nav_conf.enabled >= 2) {
+        if (g_nav_active && g_nav_mode_cur == 1 && strcmp(g_nav_idle_road, rd) == 0) return 0;
+        strncpy(g_nav_idle_road, rd, sizeof(g_nav_idle_road) - 1);
+        g_nav_idle_road[sizeof(g_nav_idle_road) - 1] = '\0';
+        nav_render_idle(g_nav_idle_road);
+        g_nav_active = 1;
+        g_nav_mode_cur = 1;
+        g_nav_dirty = 1;
+        return 1;
+    }
+    if (g_nav_active) {
+        g_nav_active = 0;
+        g_nav_mode_cur = 0;
+        return 1;
+    }
+    return 0;
+}
+
 /* 轮询 /tmp/cluster_cp.state；返回 1 表示导航框显示状态或内容发生变化 */
 static int nav_poll(void) {
     g_nav_dirty = 0;
     if (!g_nav_conf.enabled) {
-        if (g_nav_active) { g_nav_active = 0; return 1; }
+        if (g_nav_active) { g_nav_active = 0; g_nav_mode_cur = 0; return 1; }
         return 0;
     }
     /* 运行时临时关闭开关 /tmp/navbox_off */
     FILE *off = fopen(NAV_OFF_FLAG, "r");
     if (off) {
         fclose(off);
-        if (g_nav_active) { g_nav_active = 0; return 1; }
+        if (g_nav_active) { g_nav_active = 0; g_nav_mode_cur = 0; return 1; }
         return 0;
     }
 
     FILE *f = fopen(NAV_STATE_PATH, "r");
     if (!f) {
-        if (g_nav_active && ++g_nav_not_live >= 5) {
-            g_nav_active = 0;
+        if (g_nav_mode_cur == 2) {
+            if (++g_nav_not_live < 5) return 0;
             g_nav_raw_len = -1;
-            return 1;
         }
-        return 0;
+        return nav_enter_idle("");
     }
     char buf[8192];
     size_t n = fread(buf, 1, sizeof(buf) - 1, f);
@@ -1605,29 +1682,26 @@ static int nav_poll(void) {
 
     /* 必须读到完整快照（含 current_slot 且以换行结束），防撕裂读 */
     if (n == 0 || buf[n - 1] != '\n' || strstr(buf, "current_slot:") == NULL) {
-        if (g_nav_active && ++g_nav_not_live >= 5) {
-            g_nav_active = 0;
+        if (g_nav_mode_cur == 2) {
+            if (++g_nav_not_live < 5) return 0;
             g_nav_raw_len = -1;
-            return 1;
         }
-        return 0;
+        return nav_enter_idle("");
     }
 
     if ((int)n == g_nav_raw_len && memcmp(buf, g_nav_raw_prev, n) == 0) {
-        if (g_nav_active) g_nav_not_live = 0;
+        if (g_nav_mode_cur == 2) g_nav_not_live = 0;
+        if (g_nav_conf.enabled >= 2 && !g_nav_active) return nav_enter_idle(g_nav_idle_road);
         return 0;
     }
 
     nav_state_t st;
     nav_parse_state(buf, &st);
     if (!st.live) {
-        if (g_nav_active && ++g_nav_not_live >= 5) {
-            g_nav_active = 0;
-            g_nav_raw_len = (int)n;
-            memcpy(g_nav_raw_prev, buf, n + 1);
-            return 1;
-        }
-        return 0;
+        if (g_nav_mode_cur == 2 && ++g_nav_not_live < 5) return 0;
+        g_nav_raw_len = (int)n;
+        memcpy(g_nav_raw_prev, buf, n + 1);
+        return nav_enter_idle(st.cur_road);
     }
 
     g_nav_not_live = 0;
@@ -1635,6 +1709,7 @@ static int nav_poll(void) {
     memcpy(g_nav_raw_prev, buf, n + 1);
     nav_render(&st);
     g_nav_active = 1;
+    g_nav_mode_cur = 2;
     g_nav_dirty = 1;
     return 1;
 }

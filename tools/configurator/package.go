@@ -28,17 +28,18 @@ var features = []feature{
 	{"carplay", "无线 CarPlay", "开启原厂未激活的无线 CarPlay（LawPaul 作品）", []string{"AppleCarPlay"}},
 	{"aa", "Android Auto", "开启原厂未激活的 Android Auto，安卓手机投屏（LawPaul 作品）", []string{"AndroidAuto"}},
 	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在抬头显示 HUD 上", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
-	{"cluster", "仪表地图 + 信息框", "手机导航地图显示在仪表中间，左右两个小框显示行车数据；需要和「导航上 HUD」一起装", []string{"VW_HUD_3_CarPlayCluster"}},
+	{"cluster", "仪表地图 + 大字运动信息框", "手机导航地图投屏到液晶仪表中央，左右两侧自由定制 43 项真实行车数据（大号粗体 + 运动刻度条）与大字导航卡；需配合「导航上 HUD」", []string{"VW_HUD_3_CarPlayCluster"}},
+	{"mapswitch", "方向盘 OK 双击切换 CarPlay / 原车地图", "方向盘右侧 OK 键 2 秒内连按 2 下，在 CarPlay 导航地图与原车自带地图之间来回切换；需配合「导航上 HUD」与「仪表地图 + 大字运动信息框」", []string{"VW_HUD_4_OkMapSwitch"}},
 	{"wifi5gfix", "老固件升 P2878 无线 CarPlay 5GHz 区域修复", "仅从旧版本（如 P9832）升级 P2878 后、有线正常但无线 CarPlay 连不上时勾选：解除 5GHz 国家码校验拦截（原厂 P2878 无线正常无需勾选）", []string{"VW_Wireless5GHzFix"}},
-	{"nobtauth", "去除「输入用户名」弹窗（屏蔽蓝牙 OBEX 认证）", "屏蔽蓝牙连接时反复弹出的「输入用户名」弹窗（Busrlo / BLUETOOTH_CONNECT_AUTH_REQUIRED），不影响正常蓝牙配对、通话、音乐与 CarPlay（大众 MH2p 通用，待实车验证）", []string{"VW_NoBtAuthPopup"}},
-	{"nosimpopup", "屏蔽「SIM 卡仅用于数据连接。」弹窗", "仅屏蔽连接 CarPlay / Android Auto 时反复弹出的 SIM 卡数据模式提示框（PHONE_SIM_DATAONLY），不影响 SIM 卡联网、蓝牙、CarPlay 与 SOS（大众 MH2p 通用，待实车验证）", []string{"VW_NoSimPopup"}},
+	{"nobtauth", "去除「输入用户名」弹窗（屏蔽蓝牙 OBEX 认证）", "屏蔽蓝牙连接时反复弹出的「输入用户名」弹窗（Busrlo / BLUETOOTH_CONNECT_AUTH_REQUIRED），不影响正常蓝牙配对、通话、音乐与 CarPlay（大众 MH2p 通用）", []string{"VW_NoBtAuthPopup"}},
+	{"nosimpopup", "屏蔽「SIM 卡仅用于数据连接。」弹窗", "仅屏蔽连接 CarPlay / Android Auto 时反复弹出的 SIM 卡数据模式提示框（PHONE_SIM_DATAONLY），不影响 SIM 卡联网、蓝牙、CarPlay 与 SOS（大众 MH2p 通用）", []string{"VW_NoSimPopup"}},
 	{"wifi", "手机无线控制台（可选 SSH 开发）", "连手机热点打开网页即可改信息框、调车标、无线下载行车记录（可选开启 SSH 2012 开发；同平台 MH2p 通用）", []string{"VW_WiFi_Dev"}},
 }
 
 // info-box catalogue; keys and labels must match g_items[] in src/cl_render/dash.c (build.sh checks the keys)
 type item struct {
 	Key    string `json:"key"`
-	Label  string `json:"label"` // "A|B" = two lines on the cluster (A small on top)
+	Label  string `json:"label"`
 	Unit   string `json:"unit"`
 	Sample string `json:"sample"`
 	Group  string `json:"group"`
@@ -48,24 +49,24 @@ type item struct {
 var catalogue = []item{
 	{"power", "功率", "kW", "187", "动力", "发动机当前输出功率"},
 	{"torque", "扭矩", "Nm", "402", "动力", "发动机当前扭矩"},
-	{"rpm", "转速", "rpm", "2350", "动力", ""},
+	{"rpm", "转速", "rpm", "2350", "动力", "附带冰青→琥珀→红线斜切运动刻度条"},
 	{"pedal", "油门", "%", "42", "动力", "油门踏板开度"},
 	{"brake", "制动压力", "bar", "0.0", "动力", ""},
 	{"g", "G 值", "g", "+0.22", "加速度", "合成加速度，加速带 +、刹车带 -"},
 	{"glong", "纵向 G", "g", "+0.21", "加速度", "+ 加速 / - 刹车"},
-	{"glat", "横向 G", "g", "+0.08", "加速度", "转弯"},
-	{"t100", "0–100", "s", "6.8", "性能", "百公里加速：起步后显示计时，过 100 km/h 显示成绩"},
+	{"glat", "横向 G", "g", "+0.08", "加速度", "转弯横向加速度"},
+	{"t100", "0–100", "s", "6.8", "性能", "百公里加速：从静止起步自动计时，过 100 km/h 锁定成绩"},
 	{"pmax", "最大功率", "kW", "212", "性能", "车机开机以来的最大值"},
 	{"tqmax", "最大扭矩", "Nm", "448", "性能", "车机开机以来的最大值"},
 	{"gmax", "最大 G 值", "g", "0.62", "性能", "车机开机以来的最大合成加速度"},
 	{"speed", "车速", "km/h", "86", "行驶", ""},
-	{"steer", "转向角", "°", "-12", "行驶", "方向盘转角"},
-	{"gear", "挡位", "", "D6", "行驶", "仪表左下角本来就有"},
-	{"oil", "机油温度", "°C", "96", "温度", ""},
+	{"steer", "转向角", "°", "-12", "行驶", "方向盘转角（居中双向刻度条）"},
+	{"gear", "挡位", "", "D6", "行驶", "P/R/N/D1-8/S1-8/M1-8（ZF 8HP65A 实车齿比标定）"},
+	{"oil", "机油温度", "°C", "96", "温度", "低温冰蓝 / 适温青绿 / 高温红刻度条"},
 	{"gearbox", "变速箱油温", "°C", "78", "温度", ""},
 	{"coolant", "冷却液温度", "°C", "90", "温度", ""},
 	{"outside", "车外温度", "°C", "21", "温度", ""},
-	{"cons", "当前消耗", "L/100km", "11.4", "油耗", "停车时变成 L/h"},
+	{"cons", "当前消耗", "L/100km", "11.4", "油耗", "停车时自动切换为 L/h"},
 	{"fuel", "燃油存量", "L", "41", "油耗", "油箱剩余升数"},
 	{"range", "续驶里程", "km", "412", "油耗", ""},
 	{"trip", "本次油耗", "L/100km", "9.8", "自启动起", "熄火超过 2 小时后重新开始"},
@@ -81,12 +82,21 @@ var catalogue = []item{
 	{"totalspeed", "累计均速", "km/h", "51", "累计", ""},
 	{"totaltime", "累计时长", "h", "37:51", "累计", ""},
 	{"tripkm", "Trip", "km", "546.3", "行驶", "仪表 Trip 里程（用总里程推算，需在 dash.conf 设 trip_base＝Trip 清零时的总里程）"},
+	{"tires", "四轮胎压", "bar", "2.3·2.2", "胎压与越野", "单行浓缩显示前桥均值·后桥均值胎压（报警附 !）"},
+	{"tpfl", "左前胎压", "bar", "2.3", "胎压与越野", "原车 RDK 直接胎压监测传感器数据"},
+	{"tpfr", "右前胎压", "bar", "2.3", "胎压与越野", ""},
+	{"tprl", "左后胎压", "bar", "2.2", "胎压与越野", ""},
+	{"tprr", "右后胎压", "bar", "2.2", "胎压与越野", ""},
+	{"pitch", "俯仰角", "°", "+1.2", "胎压与越野", "车身前后俯仰坡度角（上坡 + / 下坡 -）"},
+	{"roll", "侧倾角", "°", "-0.5", "胎压与越野", "车身左右侧倾坡度角"},
+	{"alt", "海拔", "m", "68", "胎压与越野", "原车 GNSS 海拔高度"},
 }
 
 const maxRows = 10
 
 type dashConf struct {
 	Show    bool     `json:"show"`
+	Bars    bool     `json:"bars"`
 	Items   []string `json:"items"`
 	X       int      `json:"x"`
 	Y       int      `json:"y"`
@@ -100,16 +110,32 @@ type dashConf struct {
 	// v19.2: car icon on the CarPlay cluster map (read by cl_render / clusterd from dash.conf)
 	CarUp    int `json:"car_up"`    // rows the map is always moved up (0-90)
 	AccUp    int `json:"acc_up"`    // extra rows while adaptive cruise control is on (0-90)
-	AmapTurn int `json:"amap_turn"` // AMap turn compensation: 0 off (default since v19.4), 1 on, 2 auto (off once lane data is seen), 3 from the picture (v19.4, trial)
-	// v20: navigation card (nav_box / nav_side / nav_tz in dash.conf) and steering-wheel OK double-tap map switch (switch_off flag)
-	NavBox   bool   `json:"nav_box"`
+	AmapTurn int `json:"amap_turn"` // AMap turn compensation: 0 off, 1 on, 2 auto, 3 from the picture (recommended)
+	// v20+: large-font navigation card (nav_box: 0 off, 1 auto on nav, 2 always-on standby card; nav_side / nav_tz) and steering-wheel OK double-tap map switch (switch_off flag)
+	NavBox   int    `json:"nav_box"`
 	NavSide  string `json:"nav_side"` // "right" (default) or "left"
 	NavTz    int    `json:"nav_tz"`
 	OkSwitch bool   `json:"ok_switch"`
 }
 
 func defaultDash() dashConf {
-	return dashConf{Show: true, Items: []string{"power", "torque", "g", "rpm", "oil", "gearbox"}, X: 5, Y: 164, Alpha: 200, TankL: 90, RItems: []string{}, CarUp: 35, AccUp: 80, AmapTurn: 3, NavBox: true, NavSide: "right", NavTz: 8, OkSwitch: true}
+	return dashConf{
+		Show:     true,
+		Bars:     true,
+		Items:    []string{"power", "torque", "g", "rpm", "oil", "gearbox"},
+		X:        5,
+		Y:        164,
+		Alpha:    200,
+		TankL:    90,
+		RItems:   []string{},
+		CarUp:    35,
+		AccUp:    80,
+		AmapTurn: 3,
+		NavBox:   1,
+		NavSide:  "right",
+		NavTz:    8,
+		OkSwitch: false,
+	}
 }
 
 type pkg struct{ Root string }
@@ -256,6 +282,10 @@ func (p pkg) readDash() (dashConf, bool) {
 			if nerr == nil {
 				d.Show = n != 0
 			}
+		case "bars":
+			if nerr == nil {
+				d.Bars = n != 0
+			}
 		case "x", "info_x":
 			if nerr == nil {
 				d.X = n
@@ -290,7 +320,7 @@ func (p pkg) readDash() (dashConf, bool) {
 			}
 		case "nav_box":
 			if nerr == nil {
-				d.NavBox = n != 0
+				d.NavBox = clamp(n, 0, 2)
 			}
 		case "nav_side":
 			lv := strings.ToLower(strings.TrimSpace(v))
@@ -305,7 +335,11 @@ func (p pkg) readDash() (dashConf, bool) {
 			}
 		}
 	}
-	d.OkSwitch = !isFile(p.switchOffPath())
+	if loc, _ := p.location("VW_HUD_4_OkMapSwitch"); loc != "" {
+		d.OkSwitch = loc == "mods" && !isFile(p.path("Mods", "VW_HUD_4_OkMapSwitch", "uninstall.txt"))
+	} else {
+		d.OkSwitch = !isFile(p.switchOffPath())
+	}
 	return d, true
 }
 
@@ -319,16 +353,17 @@ func (p pkg) writeDash(d dashConf) error {
 		}
 		b = []byte("# 仪表信息框设置（由「改装设置」程序生成）\n")
 	}
-	show, rshow, navbox := 0, 0, 0
+	show, bars, rshow := 0, 0, 0
 	if d.Show {
 		show = 1
+	}
+	if d.Bars {
+		bars = 1
 	}
 	if d.RShow {
 		rshow = 1
 	}
-	if d.NavBox {
-		navbox = 1
-	}
+	navbox := clamp(d.NavBox, 0, 2)
 	navside := "right"
 	if strings.EqualFold(strings.TrimSpace(d.NavSide), "left") {
 		navside = "left"
@@ -336,6 +371,7 @@ func (p pkg) writeDash(d dashConf) error {
 	vals := []struct{ k, v string }{
 		{"items", strings.Join(d.Items, ",")},
 		{"show", strconv.Itoa(show)},
+		{"bars", strconv.Itoa(bars)},
 		{"x", strconv.Itoa(d.X)},
 		{"y", strconv.Itoa(d.Y)},
 		{"alpha", strconv.Itoa(clamp(d.Alpha, 0, 255))},
@@ -350,6 +386,7 @@ func (p pkg) writeDash(d dashConf) error {
 		{"nav_side", navside},
 		{"nav_tz", strconv.Itoa(clamp(d.NavTz, -12, 14))},
 	}
+	obsolete := map[string]bool{"media_box": true, "ultra_theme": true, "rpm_bar": true, "toast": true}
 	aliases := map[string]string{"info": "show", "info_x": "x", "info_y": "y", "info_alpha": "alpha"}
 	done := map[string]bool{}
 	var out []string
@@ -358,6 +395,9 @@ func (p pkg) writeDash(d dashConf) error {
 	for _, line := range lines {
 		k, _, ok := confKV(line)
 		if ok {
+			if obsolete[k] {
+				continue
+			}
 			if a, isA := aliases[k]; isA {
 				k = a
 			}
@@ -456,22 +496,30 @@ func validate(r applyReq) error {
 		}
 	}
 	if r.Features["cluster"] == "install" && r.Features["hud"] != "install" {
-		return errors.New("装「仪表地图 + 信息框」时「导航上 HUD」也要选安装")
+		return errors.New("装「仪表地图 + 大字运动信息框」时「导航上 HUD」也要选安装")
 	}
-	if r.Features["hud"] == "uninstall" && r.Features["cluster"] != "uninstall" {
-		return errors.New("卸载「导航上 HUD」时「仪表地图 + 信息框」也要一起卸载")
+	if r.Features["mapswitch"] == "install" && (r.Features["cluster"] != "install" || r.Features["hud"] != "install") {
+		return errors.New("装「方向盘 OK 双击切换地图」时，「导航上 HUD」与「仪表地图 + 大字运动信息框」也要选安装")
+	}
+	if r.Features["hud"] == "uninstall" && (r.Features["cluster"] != "uninstall" || r.Features["mapswitch"] != "uninstall") {
+		return errors.New("卸载「导航上 HUD」时，「仪表地图 + 大字运动信息框」与「方向盘 OK 双击切换地图」也要一起卸载")
+	}
+	if r.Features["cluster"] == "uninstall" && r.Features["mapswitch"] != "uninstall" {
+		return errors.New("卸载「仪表地图 + 大字运动信息框」时，「方向盘 OK 双击切换地图」也要一起卸载")
 	}
 	if len(r.Dash.Items) > maxRows {
 		return fmt.Errorf("信息框最多 %d 项", maxRows)
 	}
-	if r.Dash.Show && len(r.Dash.Items) == 0 {
-		return errors.New("左边信息框至少选一项，或者关掉左边框")
-	}
 	if len(r.Dash.RItems) > maxRows {
 		return fmt.Errorf("右边信息框最多 %d 项", maxRows)
 	}
-	if r.Dash.RShow && len(r.Dash.RItems) == 0 {
-		return errors.New("右边信息框至少选一项，或者关掉右边框")
+	if r.Features["cluster"] == "install" {
+		if r.Dash.Show && len(r.Dash.Items) == 0 {
+			return errors.New("左边信息框至少选一项，或者关掉左边框")
+		}
+		if r.Dash.RShow && len(r.Dash.RItems) == 0 {
+			return errors.New("右边信息框至少选一项，或者关掉右边框")
+		}
 	}
 	for _, list := range [][]string{r.Dash.Items, r.Dash.RItems} {
 		seen := map[string]bool{}
@@ -519,6 +567,9 @@ func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
 				}
 				log = append(log, fmt.Sprintf("%s：移到「%s」（这次不刷）", d, parkDir))
 			} else if want != "skip" && loc == "park" {
+				if err := os.MkdirAll(p.path("Mods"), 0o755); err != nil {
+					return log, wout, err
+				}
 				if err := os.Rename(p.path(parkDir, d), p.path("Mods", d)); err != nil {
 					return log, wout, fmt.Errorf("移动 %s 失败：%v", d, err)
 				}
@@ -556,45 +607,52 @@ func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
 			wout = wo
 		}
 	}
-	if loc, _ := p.location("VW_HUD_3_CarPlayCluster"); loc != "" {
-		if err := p.writeDash(r.Dash); err != nil {
-			return log, wout, fmt.Errorf("写 dash.conf 失败：%v", err)
-		}
-		names := func(keys []string) string {
-			out := make([]string, 0, len(keys))
-			for _, k := range keys {
-				for _, it := range catalogue {
-					if it.Key == k {
-						out = append(out, strings.ReplaceAll(it.Label, "|", ""))
+	if r.Features["cluster"] == "install" {
+		if loc, _ := p.location("VW_HUD_3_CarPlayCluster"); loc != "" {
+			baseDash := r.Dash
+			baseDash.OkSwitch = r.Features["mapswitch"] == "install"
+			if err := p.writeDash(baseDash); err != nil {
+				return log, wout, fmt.Errorf("写 dash.conf 失败：%v", err)
+			}
+			names := func(keys []string) string {
+				out := make([]string, 0, len(keys))
+				for _, k := range keys {
+					for _, it := range catalogue {
+						if it.Key == k {
+							out = append(out, strings.ReplaceAll(it.Label, "|", ""))
+						}
 					}
 				}
+				return strings.Join(out, "、")
 			}
-			return strings.Join(out, "、")
-		}
-		if r.Dash.Show {
-			log = append(log, "左边信息框："+names(r.Dash.Items))
-		} else {
-			log = append(log, "左边信息框：不显示")
-		}
-		if r.Dash.RShow {
-			log = append(log, "右边信息框："+names(r.Dash.RItems))
-		} else {
-			log = append(log, "右边信息框：不显示")
-		}
-		if r.Dash.NavBox {
-			sideTxt := "右框"
-			if strings.EqualFold(strings.TrimSpace(r.Dash.NavSide), "left") {
-				sideTxt = "左框"
+			if r.Dash.Show {
+				log = append(log, "左边信息框："+names(r.Dash.Items))
+			} else {
+				log = append(log, "左边信息框：不显示")
 			}
-			log = append(log, fmt.Sprintf("导航信息卡：放%s（UTC%+d）", sideTxt, clamp(r.Dash.NavTz, -12, 14)))
-		} else {
-			log = append(log, "导航信息卡：关闭")
+			if r.Dash.RShow {
+				log = append(log, "右边信息框："+names(r.Dash.RItems))
+			} else {
+				log = append(log, "右边信息框：不显示")
+			}
+			log = append(log, fmt.Sprintf("运动刻度进度条：%s", map[bool]string{true: "开启", false: "关闭"}[r.Dash.Bars]))
+			if r.Dash.NavBox > 0 {
+				sideTxt := "右框"
+				if strings.EqualFold(strings.TrimSpace(r.Dash.NavSide), "left") {
+					sideTxt = "左框"
+				}
+				modeTxt := "仅导航时弹出"
+				if r.Dash.NavBox >= 2 {
+					modeTxt = "常驻（未导航显示待机框）"
+				}
+				log = append(log, fmt.Sprintf("大字导航信息卡：放%s · %s（UTC%+d）", sideTxt, modeTxt, clamp(r.Dash.NavTz, -12, 14)))
+			} else {
+				log = append(log, "大字导航信息卡：关闭")
+			}
 		}
-		if r.Dash.OkSwitch {
-			log = append(log, "方向盘 OK 双击切地图：开启")
-		} else {
-			log = append(log, "方向盘 OK 双击切地图：关闭")
-		}
+	}
+	if len(log) == 0 {
+		log = append(log, "所有模块均保持「不处理」（已全部存放在「未选模块」，默认不开启任何改装）")
 	}
 	n := 0
 	for _, j := range p.macJunk() {
@@ -608,15 +666,13 @@ func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
 	return log, wout, nil
 }
 
-// ---- USB mode (v18 drive log) ----
+// ---- USB mode (v18+ drive log) ----
 // "flash": Data/Meta present, inserting the drive in the car starts the ModKit update.
 // "record": Data/Meta renamed to _Data/_Meta (ModKit ignores the drive) and a drive_logs folder exists: the drive can
-// stay plugged in and the car appends a CSV per trip to drive_logs (needs VW_HUD_2 v18 on the car).
+// stay plugged in and the car appends a CSV per trip to drive_logs (needs VW_HUD_2 on the car).
 
 const logDir = "drive_logs"
 
-// v19.4: a guide for chat AIs (豆包, 通义千问, DeepSeek ...) written next to the CSV files when the drive is
-// switched to record mode: what each column means and a prompt to paste, so the owner can upload a trip and ask.
 const aiGuideName = "给AI分析行车记录.txt"
 const aiGuide = `【怎么用】
 把 drive_logs 里想分析的那个 CSV 文件（一次开车一个文件，文件名里的日期多是 1970，看文件大小和修改时间找）
@@ -629,12 +685,12 @@ const aiGuide = `【怎么用】
 2. 驾驶习惯：急加速、急刹车（纵向加速度超过 ±3 m/s² 算一次）各多少次，大致在第几分钟；
 3. 动力：出现过的最大功率、最大扭矩，以及当时的转速、车速、油门；
 4. 油耗：按"当前消耗"估算这趟的平均油耗，并说明这个估算的局限；
-5. 温度：机油、变速箱油、冷却液温度多久到正常工作温度，有没有异常偏高；
+5. 温度与胎压：机油、变速箱油、冷却液温度多久到正常工作温度，四轮胎压随里程的变化情况；
 6. 有没有看起来不正常的数据（数值跳变、长时间为空等），可能是什么原因。
 用中文回答，先给结论，再给依据；不确定的地方直接说不确定。
 
 【文件格式】
-第 1 行以 # 开头是说明（车机时钟从 1970 年开始，日期不可信），第 2 行是列名，之后每行一个时刻。
+第 1 行以 # 开头是说明（车机时钟从 1970 年开始，日期不可信），第 2 行是列名（共 34 列，均为车机真实物理传感器数据），之后每行一个时刻。
 空格子 = 车机当时没给这个值。
 
 【各列含义】
@@ -650,8 +706,8 @@ steer_deg    方向盘转角 度（正负表示左右）
 yaw_dps      横摆角速度 度/秒
 ax_ms2       纵向加速度 m/s²（正 = 加速，负 = 减速）
 ay_g         横向加速度 g
-lever        换挡杆位置：1 = P，2 = R，3 = N，4 = D
-gear         挡位（这台车上多数时候为 0，不可信，看挡位请用 lever 和车速）
+lever        换挡杆位置：1 = P，2 = R，3 = N，4 = D，5 = S，6 = M
+gear         挡位：根据 ZF 8HP65A 实车齿比标定输出 1～8 挡（P/R/N 或刚起步未锁止时可能为 0）
 gearbox_c    变速箱油温 °C
 oil_c        机油温度 °C（冷车时可能为空）
 coolant_c    冷却液温度 °C
@@ -662,6 +718,10 @@ outside_c    车外温度 °C
 range_km     续驶里程 km
 wheel1_kmh … wheel4_kmh  四个车轮的轮速 km/h
 acc          1 = 自适应巡航（ACC）正在控车，0 = 没有（只是待命时也是 0）
+pitch_deg    车身俯仰坡度角 度（正 = 抬头上坡，负 = 低头下坡）
+roll_deg     车身侧倾坡度角 度
+alt_m        GNSS 海拔高度 米
+tp_fl, tp_fr, tp_rl, tp_rr  左前、右前、左后、右后轮胎真实胎压 bar
 
 【已知的无效值（分析前请先去掉）】
 real_spd_kmh = 655.3 是"无数据"（多出现在停车很久后的第一行），不是真实车速
@@ -670,7 +730,7 @@ coolant_c 正常行驶时一直是 90：这是仪表显示用的平滑值，不�
 行与行之间相隔几秒到几十分钟、而前后车速和转速都是 0：是熄火停车，不是丢数据
 
 【不包含】
-增压压力、点火角、爆震、空燃比、进气温度等发动机内部数据（要用 OBD 诊断工具读）。
+增压压力、点火角、爆震、空燃比、进气温度等发动机内部数据（要用 OBD 诊断工具读）；原厂 65 号胎压模块固件默认屏蔽了轮内温度上报，因此不含胎温列。
 `
 
 func (p pkg) usbMode() string {

@@ -9,7 +9,11 @@ AEABI_HIDDEN void __aeabi_memcpy(void *d, const void *s, size_t n) { aeabi_mc_(d
 AEABI_HIDDEN void __aeabi_memcpy4(void *d, const void *s, size_t n) { aeabi_mc_(d, s, n); }
 AEABI_HIDDEN void __aeabi_memcpy8(void *d, const void *s, size_t n) { aeabi_mc_(d, s, n); }
 AEABI_HIDDEN void __aeabi_memmove(void *d, const void *s, size_t n) { aeabi_mm_(d, s, n); }
+AEABI_HIDDEN void __aeabi_memmove4(void *d, const void *s, size_t n) { aeabi_mm_(d, s, n); }
+AEABI_HIDDEN void __aeabi_memmove8(void *d, const void *s, size_t n) { aeabi_mm_(d, s, n); }
 AEABI_HIDDEN void __aeabi_memset(void *d, size_t n, int c) { aeabi_ms_(d, c, n); }
+AEABI_HIDDEN void __aeabi_memset4(void *d, size_t n, int c) { aeabi_ms_(d, c, n); }
+AEABI_HIDDEN void __aeabi_memset8(void *d, size_t n, int c) { aeabi_ms_(d, c, n); }
 AEABI_HIDDEN void __aeabi_memclr(void *d, size_t n) { aeabi_ms_(d, 0, n); }
 AEABI_HIDDEN void __aeabi_memclr4(void *d, size_t n) { aeabi_ms_(d, 0, n); }
 AEABI_HIDDEN void __aeabi_memclr8(void *d, size_t n) { aeabi_ms_(d, 0, n); }

@@ -356,7 +356,10 @@ static void header_get(const char *req, const char *hdr_end, const char *hname, 
     }
 }
 
-/* 校验管理口令 web.pin（若未设置 web.pin 则直接放行） */
+static int g_pin_fails = 0;
+static time_t g_pin_lock_until = 0;
+
+/* 校验管理口令 web.pin（带防爆破限速：连续输错 5 次锁定 30 秒；返回 1=通过, 0=需口令/错误, -1=锁定中） */
 static int check_pin_auth(const char *req, const char *hdr_end, const char *query) {
     const char *pin_path = getenv("NETD_PIN_FILE");
     if (!pin_path || !pin_path[0]) pin_path = WEB_PIN_PATH;
@@ -370,14 +373,27 @@ static int check_pin_auth(const char *req, const char *hdr_end, const char *quer
     size_t elen = strlen(expected);
     if (elen == 0) return 1;
 
+    time_t now = time(NULL);
+    if (g_pin_lock_until > now && now - g_pin_lock_until <= 60) return -1;
+
     char got[64];
     header_get(req, hdr_end, "X-Pin", got, sizeof(got));
     if (!got[0]) form_get(query, "pin", got, sizeof(got));
+    if (!got[0]) return 0;
     size_t glen = strlen(got);
-    if (glen != elen) return 0;
-    unsigned char diff = 0;
-    for (size_t i = 0; i < elen; i++) diff |= (unsigned char)(got[i] ^ expected[i]);
-    return diff == 0 ? 1 : 0;
+    unsigned char diff = (glen != elen) ? 1 : 0;
+    for (size_t i = 0; i < elen && i < glen; i++) diff |= (unsigned char)(got[i] ^ expected[i]);
+    if (diff == 0) {
+        g_pin_fails = 0;
+        g_pin_lock_until = 0;
+        return 1;
+    }
+    if (++g_pin_fails >= 5) {
+        g_pin_lock_until = now + 30;
+        g_pin_fails = 0;
+        return -1;
+    }
+    return 0;
 }
 
 static int valid_items_str(const char *s) {
@@ -413,7 +429,7 @@ typedef struct {
     char items[256];
     char r_items[256];
     char nav_side[16];
-    int show, r_show, car_up, acc_up, amap_turn, alpha, tank_l, lat_flip, nav_box, nav_tz;
+    int show, r_show, bars, car_up, acc_up, amap_turn, alpha, tank_l, lat_flip, nav_box, nav_tz;
     double trip_base;
 } dash_cfg_t;
 
@@ -421,7 +437,7 @@ static void parse_dash_conf(dash_cfg_t *c) {
     memset(c, 0, sizeof(*c));
     strcpy(c->items, "power,torque,g,rpm,oil,gearbox");
     strcpy(c->nav_side, "right");
-    c->show = 1; c->r_show = 0; c->car_up = 35; c->acc_up = 80;
+    c->show = 1; c->r_show = 0; c->bars = 1; c->car_up = 35; c->acc_up = 80;
     c->amap_turn = 3; c->alpha = 200; c->tank_l = 90; c->lat_flip = 0;
     c->nav_box = 1; c->nav_tz = 8;
     c->trip_base = 0.0;
@@ -445,6 +461,7 @@ static void parse_dash_conf(dash_cfg_t *c) {
         else if (strcmp(k, "r_items") == 0) snprintf(c->r_items, sizeof(c->r_items), "%s", v);
         else if (strcmp(k, "show") == 0) c->show = atoi(v);
         else if (strcmp(k, "r_show") == 0) c->r_show = atoi(v);
+        else if (strcmp(k, "bars") == 0) c->bars = atoi(v);
         else if (strcmp(k, "car_up") == 0) c->car_up = atoi(v);
         else if (strcmp(k, "acc_up") == 0) c->acc_up = atoi(v);
         else if (strcmp(k, "amap_turn") == 0) c->amap_turn = atoi(v);
@@ -494,13 +511,14 @@ static int save_dash_conf(const char *body) {
 
     int show = clamp_int(form_get(body, "show", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
     int r_show = clamp_int(form_get(body, "r_show", bufv, sizeof(bufv)) ? bufv : "0", 0, 1, 0);
+    int bars = clamp_int(form_get(body, "bars", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
     int car_up = clamp_int(form_get(body, "car_up", bufv, sizeof(bufv)) ? bufv : "35", 0, 90, 35);
     int acc_up = clamp_int(form_get(body, "acc_up", bufv, sizeof(bufv)) ? bufv : "80", 0, 90, 80);
     int amap_turn = clamp_int(form_get(body, "amap_turn", bufv, sizeof(bufv)) ? bufv : "3", 0, 3, 3);
     int alpha = clamp_int(form_get(body, "alpha", bufv, sizeof(bufv)) ? bufv : "200", 0, 255, 200);
     int tank_l = clamp_int(form_get(body, "tank_l", bufv, sizeof(bufv)) ? bufv : "90", 0, 200, 90);
     int lat_flip = clamp_int(form_get(body, "lat_flip", bufv, sizeof(bufv)) ? bufv : "0", 0, 1, 0);
-    int nav_box = clamp_int(form_get(body, "nav_box", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
+    int nav_box = clamp_int(form_get(body, "nav_box", bufv, sizeof(bufv)) ? bufv : "1", 0, 2, 1);
     const char *nav_side = "right";
     if (form_get(body, "nav_side", bufv, sizeof(bufv)) && (bufv[0] == 'l' || bufv[0] == 'L' || bufv[0] == '0')) {
         nav_side = "left";
@@ -512,26 +530,27 @@ static int save_dash_conf(const char *body) {
         if (trip_base < 0.0 || trip_base > 9999999.0) trip_base = 0.0;
     }
 
-    const char *keys[14] = {
-        "items", "show", "r_items", "r_show", "car_up", "acc_up",
+    const char *keys[15] = {
+        "items", "show", "r_items", "r_show", "bars", "car_up", "acc_up",
         "amap_turn", "alpha", "tank_l", "lat_flip", "trip_base", "nav_box", "nav_side", "nav_tz"
     };
-    char vals[14][280];
+    char vals[15][280];
     snprintf(vals[0], sizeof(vals[0]), "%s", items);
     snprintf(vals[1], sizeof(vals[1]), "%d", show);
     snprintf(vals[2], sizeof(vals[2]), "%s", r_items);
     snprintf(vals[3], sizeof(vals[3]), "%d", r_show);
-    snprintf(vals[4], sizeof(vals[4]), "%d", car_up);
-    snprintf(vals[5], sizeof(vals[5]), "%d", acc_up);
-    snprintf(vals[6], sizeof(vals[6]), "%d", amap_turn);
-    snprintf(vals[7], sizeof(vals[7]), "%d", alpha);
-    snprintf(vals[8], sizeof(vals[8]), "%d", tank_l);
-    snprintf(vals[9], sizeof(vals[9]), "%d", lat_flip);
-    snprintf(vals[10], sizeof(vals[10]), "%.1f", trip_base);
-    snprintf(vals[11], sizeof(vals[11]), "%d", nav_box);
-    snprintf(vals[12], sizeof(vals[12]), "%s", nav_side);
-    snprintf(vals[13], sizeof(vals[13]), "%d", nav_tz);
-    int seen[14];
+    snprintf(vals[4], sizeof(vals[4]), "%d", bars);
+    snprintf(vals[5], sizeof(vals[5]), "%d", car_up);
+    snprintf(vals[6], sizeof(vals[6]), "%d", acc_up);
+    snprintf(vals[7], sizeof(vals[7]), "%d", amap_turn);
+    snprintf(vals[8], sizeof(vals[8]), "%d", alpha);
+    snprintf(vals[9], sizeof(vals[9]), "%d", tank_l);
+    snprintf(vals[10], sizeof(vals[10]), "%d", lat_flip);
+    snprintf(vals[11], sizeof(vals[11]), "%.1f", trip_base);
+    snprintf(vals[12], sizeof(vals[12]), "%d", nav_box);
+    snprintf(vals[13], sizeof(vals[13]), "%s", nav_side);
+    snprintf(vals[14], sizeof(vals[14]), "%d", nav_tz);
+    int seen[15];
     memset(seen, 0, sizeof(seen));
 
     char *out = malloc(65536);
@@ -550,7 +569,7 @@ static int save_dash_conf(const char *body) {
                 if (eq) {
                     size_t kl = (size_t)(eq - p);
                     while (kl > 0 && (p[kl - 1] == ' ' || p[kl - 1] == '\t')) kl--;
-                    for (int i = 0; i < 14; i++) {
+                    for (int i = 0; i < 15; i++) {
                         if (strlen(keys[i]) == kl && memcmp(p, keys[i], kl) == 0) {
                             matched = i;
                             break;
@@ -571,7 +590,7 @@ static int save_dash_conf(const char *body) {
         }
         fclose(fp);
     }
-    for (int i = 0; i < 14 && ol + 320 < 65536; i++) {
+    for (int i = 0; i < 15 && ol + 320 < 65536; i++) {
         if (!seen[i]) ol += (size_t)snprintf(out + ol, 65536 - ol, "%s=%s\n", keys[i], vals[i]);
     }
 
@@ -579,7 +598,9 @@ static int save_dash_conf(const char *body) {
     int rc = atomic_write_file(DASH_CONF_PATH, out, ol, 0644);
     mount_app_ro();
     free(out);
-    if (rc == 0 && !g_dry_test) (void)system("slay -f cl_render >/dev/null 2>&1");
+    if (rc == 0 && !g_dry_test) {
+        (void)system("slay -f cl_render >/dev/null 2>&1");
+    }
     return rc;
 }
 
@@ -734,7 +755,8 @@ static const char *USB_MOUNTS[] = {
 
 static const char *SYS_LOG_ALLOW[] = {
     "cl_probe.log", "clusterd.log", "vwcn.log", "vwcn_persist.log", "dio_cluster.log",
-    "cl_render_dbg", "cl_car_dbg", "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log", "touareg_netd.log", "wifi_dev_persist.log", NULL
+    "dash.state", "cluster_cp.state", "cl_render_dbg", "cl_car_dbg", "vw_popup_filter.log",
+    "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log", "touareg_netd.log", "wifi_dev_persist.log", NULL
 };
 
 static void handle_status(int fd, uint32_t bcm2_ip) {
@@ -759,8 +781,9 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         "{\"ok\":true,\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
-        "\"dash\":{\"items\":\"%s\",\"show\":%d,\"r_items\":\"%s\",\"r_show\":%d,"
-        "\"car_up\":%d,\"acc_up\":%d,\"amap_turn\":%d,\"alpha\":%d,\"tank_l\":%d,\"lat_flip\":%d,\"trip_base\":%.1f,\"nav_box\":%d,\"nav_side\":\"%s\",\"nav_tz\":%d},"
+        "\"dash\":{\"items\":\"%s\",\"show\":%d,\"r_items\":\"%s\",\"r_show\":%d,\"bars\":%d,"
+        "\"car_up\":%d,\"acc_up\":%d,\"amap_turn\":%d,\"alpha\":%d,\"tank_l\":%d,\"lat_flip\":%d,\"trip_base\":%.1f,"
+        "\"nav_box\":%d,\"nav_side\":\"%s\",\"nav_tz\":%d},"
         "\"cl\":{\"wide_on\":%d,\"wide\":%d,\"view\":%d},"
         "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d},\"drive_logs\":[",
         ipstr, spd, odo, has_cl, ssh_on,
@@ -768,8 +791,9 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         proc_alive("pidin -p cl_render 2>/dev/null | grep -q cl_render"),
         proc_alive("pidin -p dio_manager 2>/dev/null | grep -q dio_manager"),
         count_wifi_networks(),
-        esc1, dc.show, esc2, dc.r_show,
-        dc.car_up, dc.acc_up, dc.amap_turn, dc.alpha, dc.tank_l, dc.lat_flip, dc.trip_base, dc.nav_box, dc.nav_side, dc.nav_tz,
+        esc1, dc.show, esc2, dc.r_show, dc.bars,
+        dc.car_up, dc.acc_up, dc.amap_turn, dc.alpha, dc.tank_l, dc.lat_flip, dc.trip_base,
+        dc.nav_box, dc.nav_side, dc.nav_tz,
         wide_on, wide, view,
         file_exists(CLUSTER_DIR "/disable"),
         file_exists(CLUSTER_DIR "/ka_off"),
@@ -940,7 +964,12 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
         return;
     }
 
-    if (!check_pin_auth(req, hdr_end, query)) {
+    int auth = check_pin_auth(req, hdr_end, query);
+    if (auth == -1) {
+        send_json(cfd, 429, 0, "口令连续输错次数过多，请等待 30 秒后再试");
+        return;
+    }
+    if (auth != 1) {
         send_need_pin(cfd);
         return;
     }
@@ -953,6 +982,12 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
     }
 
     if (strcmp(method, "POST") == 0) {
+        char xrw[64];
+        header_get(req, hdr_end, "X-Requested-With", xrw, sizeof(xrw));
+        if (strcmp(xrw, "touareg-webui") != 0) {
+            send_json(cfd, 403, 0, "非法跨站请求（缺少安全头）");
+            return;
+        }
         if (is_driving_now()) {
             send_json(cfd, 403, 0, "车辆行驶中，请停车后再修改车机设置");
             return;
@@ -1056,7 +1091,7 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v20.0 started (iface=%s port=%d)", g_iface, g_http_port);
+    nlog("touareg_netd v21.0 started (iface=%s port=%d)", g_iface, g_http_port);
 
     uint32_t cur_ip = 0;
     int http_fd = -1, mdns_fd = -1;

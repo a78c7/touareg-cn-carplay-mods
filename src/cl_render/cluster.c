@@ -60,8 +60,8 @@ static const char *cl_disp_id(void) { const char *e = getenv("CL_DISPID"); retur
 #include <time.h>
 
 #ifdef USE_DASH
-#include "dash.c"                 /* v16/v17: cluster info box, items chosen in dash.conf */
-#include "navbox.c"               /* v20.1: right-box CarPlay navigation card (AMap/Baidu/Apple) */
+#include "dash.c"                 /* v16/v21: cluster info box, items chosen in dash.conf */
+#include "navbox.c"               /* v20/v21: large-font CarPlay navigation card (AMap/Baidu/Apple) */
 #endif
 #ifdef USE_DASH
 static void dash_setup(int win_w, int win_h);
@@ -2139,11 +2139,13 @@ static int cb_begin_sequence(void* user, int* si) {
      * targets. These DO get the TVMR +8 flag set after decode (proven in
      * Option B basic config). Mixer will read these and render YV12 → RGBA
      * into post_win's siblings. */
-    g_dec.num_surfaces = MAX_SURFACES;
-    for (int i = 0; i < MAX_SURFACES; i++) {
-        g_dec.surfaces[i] = g_dec.decode_siblings[i];
-        g_dec.surf_refcount[i] = 0;
-        LOG("  surface[%d]=%p (YV12 decode sibling)\n", i, g_dec.surfaces[i]);
+    if (g_dec.num_surfaces == 0) {
+        g_dec.num_surfaces = MAX_SURFACES;
+        for (int i = 0; i < MAX_SURFACES; i++) {
+            g_dec.surfaces[i] = g_dec.decode_siblings[i];
+            g_dec.surf_refcount[i] = 0;
+            LOG("  surface[%d]=%p (YV12 decode sibling)\n", i, g_dec.surfaces[i]);
+        }
     }
 
     return nbuf;
@@ -2285,6 +2287,8 @@ static screen_pixmap_t g_nav_pix;
 static screen_buffer_t g_nav_buf;
 static unsigned char  *g_nav_ptr;
 static int             g_nav_stride, g_nav_logged;
+static int             g_last_clean_didx = -1, g_have_clean_didx = 0;
+static int             g_last_blit_attribs[19];
 static int             g_dash_noblend, g_dash_logged;
 static uint64_t        g_dash_poll_ms;
 
@@ -2304,19 +2308,24 @@ static int dash_read_conf_file(const char *const *paths) {
 static void nav_setup(int win_w, int win_h) {
     if (!g_nav_conf.enabled) { LOG("navbox: off\n"); return; }
     int side = g_nav_conf.side ? 1 : 0;
+    int sym_w = g_dash_bw[0] >= 260 ? g_dash_bw[0] : (g_box[0].conf.right > g_box[0].conf.x ? (g_box[0].conf.right - g_box[0].conf.x) : 295);
     int bx = g_dash_bw[side] > 0 ? g_dash_x[side] : g_box[side].conf.x;
     int by = g_dash_bh[side] > 0 ? g_dash_y[side] : g_box[side].conf.y;
     int br = g_dash_bw[side] > 0 ? (g_dash_x[side] + g_dash_bw[side]) : g_box[side].conf.right;
     int x = g_nav_conf.x >= 0 ? g_nav_conf.x : bx;
     int y = g_nav_conf.y >= 0 ? g_nav_conf.y : by;
     int right = g_nav_conf.right > 0 ? g_nav_conf.right : br;
-    int w = right > x ? (right - x) : 295;
-    if (w < 240) w = 240;
+    /* Keep right navigation card mirror-symmetrical in width with the left card (default 295px, x=1620..1915) */
+    if (side == 1 && g_nav_conf.x < 0 && right >= 1880) {
+        x = right - sym_w;
+    }
+    int w = right > x ? (right - x) : sym_w;
+    if (w < 260) w = 260;
     if (w > NAV_MAX_W) w = NAV_MAX_W;
-    int h = 336;
-    if (g_dash_bh[side] >= 320 && g_dash_bh[side] <= 360) h = g_dash_bh[side];
-    else if (g_dash_bh[0] >= 320 && g_dash_bh[0] <= 360) h = g_dash_bh[0];
-    else if (g_dash_bh[1] >= 320 && g_dash_bh[1] <= 360) h = g_dash_bh[1];
+    int h = 344;
+    if (g_dash_bh[0] >= 320 && g_dash_bh[0] <= 360) h = g_dash_bh[0];
+    else if (g_dash_bh[side] >= 320 && g_dash_bh[side] <= 360) h = g_dash_bh[side];
+    if (h < 320) h = 320;
     if (h > NAV_MAX_H) h = NAV_MAX_H;
     if (x < 0) x = 0;
     if (x + w > win_w) x = win_w - w;
@@ -2398,13 +2407,13 @@ static void dash_setup(int win_w, int win_h) {
     nav_setup(win_w, win_h);
 }
 
-/* poll /tmp/dash.state + /tmp/cluster_cp.state at most every 200 ms; copy changed boxes into their pixmaps. */
+/* poll /tmp/dash.state + /tmp/cluster_cp.state at most every 200 ms; copy changed boxes into pixmaps. */
 static int dash_tick(void) {
     if (!g_dash_pix[0] && !g_dash_pix[1] && !g_nav_pix) return 0;
     uint64_t now = now_us() / 1000ULL;
     if (now - g_dash_poll_ms < 200) return 0;
     g_dash_poll_ms = now;
-    int ch = (g_dash_pix[0] || g_dash_pix[1]) ? dash_poll(now) : 0;
+    int ch = dash_poll(now);
     if (ch && g_dash_have) {
         for (int b = 0; b < 2; b++) {
             if (!g_dash_pix[b]) continue;
@@ -2446,9 +2455,8 @@ static void dash_blit_one(int pidx, screen_buffer_t src, int x, int y, int w, in
 static void dash_overlay(int pidx) {
     if (pidx < 0) return;
     int nav_side = g_nav_conf.side ? 1 : 0;
-    /* 导航中自动在指定侧（nav_side=left/right）切为导航信息卡，另一侧照常显示车辆数据；非导航恢复原框 */
     for (int b = 0; b < 2; b++) {
-        if (g_nav_active && g_nav_pix && b == nav_side) {
+        if (b == nav_side && g_nav_active && g_nav_pix) {
             dash_blit_one(pidx, g_nav_buf, g_nav_x, g_nav_y, g_nav_w, g_nav_h);
         } else if (g_dash_have && g_dash_pix[b]) {
             dash_blit_one(pidx, g_dash_buf[b], g_dash_x[b], g_dash_y[b], g_dash_bw[b], g_dash_bh[b]);
@@ -2457,15 +2465,58 @@ static void dash_overlay(int pidx) {
 }
 #endif /* USE_DASH */
 
+static void cl_flush_blits_idle(void) {
+    static int (*flush_blits)(screen_context_t, int) = NULL;
+    static int looked = 0;
+    if (!looked) {
+        looked = 1;
+        flush_blits = (int (*)(screen_context_t, int))dlsym(RTLD_DEFAULT, "screen_flush_blits");
+    }
+    if (flush_blits) flush_blits(g_dec.scr_ctx, SCREEN_WAIT_IDLE);
+    else screen_flush_context(g_dec.scr_ctx, SCREEN_WAIT_IDLE);
+}
+
+static int cl_pick_next_pidx(void) {
+    int pidx = g_dec.post_buf_idx;
+    if (pidx == g_last_posted_pidx) pidx = (pidx + 1) % MAX_SURFACES;
+    g_dec.post_buf_idx = (pidx + 1) % MAX_SURFACES;
+    return pidx;
+}
+
+static int      g_batch_deferred = 0;
+static uint64_t g_last_real_post_ms = 0;
+
 static void apply_stage_signals(void) {
 #ifdef USE_DASH
-    /* idle refresh: no decoded frame for 300 ms -> draw the changed box over the last posted frame */
-    if (dash_tick() && g_dec.scr_ready && g_render_stage == STAGE_RENDERING && g_last_posted_pidx >= 0 &&
-        (now_us() / 1000ULL) - g_last_post_ms > 300 && (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
-        dash_overlay(g_last_posted_pidx);
+    /* 突发多帧连解节流收尾：距上次真实帧送显满 20ms 后立即补齐最新解码帧的同步 Blit + Post，杜绝追尾 Front Buffer */
+    if (g_batch_deferred && g_have_clean_didx && g_last_clean_didx >= 0 &&
+        g_dec.scr_ready && g_render_stage == STAGE_RENDERING &&
+        (now_us() / 1000ULL) >= g_boot_splash_until_ms &&
+        (now_us() / 1000ULL) - g_last_real_post_ms >= 20) {
+        g_batch_deferred = 0;
+        int pidx = cl_pick_next_pidx();
+        screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dec.decode_bufs[g_last_clean_didx], g_last_blit_attribs);
+        dash_tick();
+        dash_overlay(pidx);
+        cl_flush_blits_idle();
         int dd[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
-        screen_post_window(g_dec.post_win, g_dec.post_bufs[g_last_posted_pidx], 1, dd, 0);
+        screen_post_window(g_dec.post_win, g_dec.post_bufs[pidx], 1, dd, 0);
         screen_flush_context(g_dec.scr_ctx, 0);
+        g_last_posted_pidx  = pidx;
+        g_last_real_post_ms = g_last_post_ms = now_us() / 1000ULL;
+    }
+    /* idle refresh: no decoded frame for 300 ms -> re-blit clean base frame (avoids double-darkening & toast ghosting) */
+    if (dash_tick() && g_dec.scr_ready && g_render_stage == STAGE_RENDERING && g_last_posted_pidx >= 0 &&
+        g_have_clean_didx && g_last_clean_didx >= 0 &&
+        (now_us() / 1000ULL) - g_last_post_ms > 300 && (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
+        int pidx = cl_pick_next_pidx();
+        screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx], g_dec.decode_bufs[g_last_clean_didx], g_last_blit_attribs);
+        dash_overlay(pidx);
+        cl_flush_blits_idle();
+        int dd[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
+        screen_post_window(g_dec.post_win, g_dec.post_bufs[pidx], 1, dd, 0);
+        screen_flush_context(g_dec.scr_ctx, 0);
+        g_last_posted_pidx = pidx;
         g_last_post_ms = now_us() / 1000ULL;
     }
 #endif
@@ -2542,13 +2593,13 @@ static void apply_stage_signals(void) {
         LOG("h264: boot splash 2s elapsed, posted last decoded pidx=%d\n", idx);
     }
 
-    /* Heartbeat: re-post the last buffer every ~50ms when the decoder is
+    /* Heartbeat: re-post the last buffer every ~250ms when the decoder is
      * idle (cb_display_picture not firing) so the compositor doesn't
-     * release the buffer and go BLACK. */
+     * release the buffer and go BLACK (250ms avoids colliding with 15-19fps streams). */
     if (g_dec.scr_ready && g_render_stage == STAGE_RENDERING &&
         g_last_posted_pidx >= 0) {
         uint64_t now_ms = now_us() / 1000ULL;
-        if (now_ms - g_last_post_ms > 50) {
+        if (now_ms - g_last_post_ms > 250) {
             int dirty[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
             screen_post_window(g_dec.post_win,
                                g_dec.post_bufs[g_last_posted_pidx],
@@ -2578,6 +2629,7 @@ static int             g_cp_stride, g_cp_state;        /* 0 = not set up, 1 = re
 static uint64_t        g_cp_ms;
 static unsigned char   g_cp_copy[CARPOS_W * CARPOS_H * 4];
 static volatile int    g_cp_busy;
+static volatile int    g_cp_tail_mode;
 static int             g_cp_hits, g_cp_last;
 static int             g_cp_crop;
 static pthread_mutex_t g_cp_mx = PTHREAD_MUTEX_INITIALIZER;
@@ -2609,17 +2661,23 @@ static void *carpos_worker(void *arg) {
         /* v19.5: accepted only if the spot stands out (offline: 117 of 117 AMap screenshots right, none wrong) */
         int ok = best >= 0.58 && best - second >= 0.12;
         x += CARPOS_X0; y += CARPOS_Y0;                    /* in the 1920 layout, as before */
+        static int tail_miss = 0;
         if (g_pan_mode) {
             /* pan to where the icon is (AMap: 0 or about +-213); two agreeing results in a row before moving */
             int off = x - 959;
-            if (ok && (off - g_pan_tgt > 20 || off - g_pan_tgt < -20)) {
-                if (++g_cp_hits >= 2 && (off - g_cp_last > -30 && off - g_cp_last < 30)) {
-                    g_pan_tgt = off; g_cp_hits = 0;
-                    FILE *lf = fopen("/tmp/clusterd.log", "a");
-                    if (lf) { fprintf(lf, "[%ld] car icon at x=%d (score %d, next %d): map follows, pan %d\n", (long)time(NULL), x, (int)(best * 1000), (int)(second * 1000), off); fclose(lf); }
-                }
-                g_cp_last = off;
-            } else if (ok) g_cp_hits = 0;
+            if (ok) {
+                tail_miss = 0;
+                if (off - g_pan_tgt > 20 || off - g_pan_tgt < -20) {
+                    if (++g_cp_hits >= 2 && (off - g_cp_last > -30 && off - g_cp_last < 30)) {
+                        g_pan_tgt = off; g_cp_hits = 0;
+                        FILE *lf = fopen("/tmp/clusterd.log", "a");
+                        if (lf) { fprintf(lf, "[%ld] car icon at x=%d (score %d, next %d): map follows, pan %d\n", (long)time(NULL), x, (int)(best * 1000), (int)(second * 1000), off); fclose(lf); }
+                    }
+                    g_cp_last = off;
+                } else g_cp_hits = 0;
+            } else if (g_cp_tail_mode && ++tail_miss >= 2) {
+                g_pan_tgt = 0; g_cp_hits = 0; tail_miss = 0;
+            }
         }
         char b[96];
         int n = snprintf(b, sizeof b, "%u %d %d %d %d\n", ++seq, x, y, ok ? (int)(best * 1000) : (best > 0.5 ? 500 : (int)(best * 1000)), g_cp_crop);
@@ -2661,7 +2719,14 @@ static void carpos_tick(int didx) {
     uint64_t now = now_us() / 1000ULL;
     if (now - g_cp_ms < 1000) return;
     g_cp_ms = now;
-    if (access("/tmp/cl_det_on", F_OK) != 0) { g_pan_tgt = 0; g_cp_hits = 0; return; }   /* not AMap navigating */
+    {
+        char det_ch = 0;
+        int dfd = open("/tmp/cl_det_on", O_RDONLY);
+        if (dfd < 0) { g_pan_tgt = 0; g_cp_hits = 0; g_cp_tail_mode = 0; return; }
+        if (read(dfd, &det_ch, 1) <= 0) det_ch = '1';
+        close(dfd);
+        g_cp_tail_mode = (det_ch == '0');
+    }
     if (g_cp_busy) return;
     /* the band is in canvas pixels around the canvas point under the clock: only for the tall Touareg stream */
     if (g_dec.width < 1920 || !g_post_h || g_dec.height <= g_post_h + 16) { carpos_dbg("not-tall", g_dec.width, g_dec.height); return; }
@@ -2702,14 +2767,7 @@ static int cb_display_picture(void* user, void* disp_info) {
     void* yuv_surface = (void*)di[2];
     if (!yuv_surface) return 1;
 
-    /* OPTION B-PRIME: NvMedia mixer YV12 (yuv_surface) → RGBA (post sibling).
-     * yuv_surface is a separate NvMediaVideoSurface (decoder target).
-     * post sibling is the RGBA destination, paired with post_buf for screen_post. */
-    int pidx = g_dec.post_buf_idx;
-    g_dec.post_buf_idx = (pidx + 1) % MAX_SURFACES;
-    void* dst_sibling = g_dec.scr_siblings[pidx];
-
-    if (!dst_sibling || !g_dec.mixer || !nv.MixerRender) {
+    if (!g_dec.scr_siblings[0] || !g_dec.mixer || !nv.MixerRender) {
         if (nv.SurfaceWait) nv.SurfaceWait(yuv_surface, 0);
         if (g_dec.frames_displayed <= 3)
             LOG("DisplayPicture: frame=%d missing dst_sibling/mixer/MixerRender\n",
@@ -2724,6 +2782,9 @@ static int cb_display_picture(void* user, void* disp_info) {
     if (nv.SurfaceWait) nv.SurfaceWait(yuv_surface, 0);
     clock_gettime(CLOCK_MONOTONIC, &ts1);
 
+    int pidx = -1;
+    void* dst_sibling = NULL;
+
 #ifdef USE_SCREEN_BLIT
     /* v3: compositor screen_blit YV12 (decode_buf) → RGBA (post_buf).
      * Explicit src/dst rects so blit operates on the visible 1280×720 Y area
@@ -2733,7 +2794,7 @@ static int cb_display_picture(void* user, void* disp_info) {
     for (int i = 0; i < MAX_SURFACES; i++) {
         if (g_dec.decode_siblings[i] == yuv_surface) { didx = i; break; }
     }
-    if (didx < 0) didx = pidx;
+    if (didx < 0) didx = 0;
     /* Compute src/dst rects from g_h264_args (mode / zoom / pan / xres / yres).
      * Source = visible Y-plane area (g_dec.width × g_dec.height) inside the
      * larger YV12 buffer. Destination = post_win render buffer (xres × yres,
@@ -2819,14 +2880,36 @@ static int cb_display_picture(void* user, void* disp_info) {
         SCREEN_BLIT_DESTINATION_HEIGHT, dh,
         SCREEN_BLIT_END
     };
+    carpos_tick(didx);
+#ifdef USE_DASH
+    g_last_clean_didx = didx;
+    memcpy(g_last_blit_attribs, blit_attribs, sizeof(blit_attribs));
+    g_have_clean_didx = 1;
+#endif
+    /* 若 Wi-Fi 抖动积压导致距上次送显不足 20ms，合并跳过中间帧 Blit/Post，仅保留最新解码帧在满 20ms 时送显，
+     * 防止毫秒级连刷 8 个窗口缓冲追尾正在被 displaymanager 扫描输出的 Front Buffer（引发 <1s 偶发闪花屏） */
+    if (g_render_stage == STAGE_RENDERING &&
+        (now_us() / 1000ULL) >= g_boot_splash_until_ms &&
+        g_last_posted_pidx >= 0 &&
+        g_last_real_post_ms > 0 &&
+        (now_us() / 1000ULL) - g_last_real_post_ms < 20) {
+        g_batch_deferred = 1;
+        return 1;
+    }
+    g_batch_deferred = 0;
+    pidx = cl_pick_next_pidx();
+    dst_sibling = g_dec.scr_siblings[pidx];
     int mr = screen_blit(g_dec.scr_ctx, g_dec.post_bufs[pidx],
                          g_dec.decode_bufs[didx], blit_attribs);
-    carpos_tick(didx);
 #ifdef USE_DASH
     dash_tick();
     dash_overlay(pidx);
 #endif
+    /* 同步等待 GPU 2D Blit 完成（~1ms）：确保送显缓冲 100% 绘制完毕，且返回后解码表面释放不会被下一圈硬件解码提前覆写 */
+    cl_flush_blits_idle();
 #elif defined(USE_NVMEDIA2D)
+    pidx = cl_pick_next_pidx();
+    dst_sibling = g_dec.scr_siblings[pidx];
     /* NvMedia2DBlit: YV12 src → RGBA dst. NULL rects = full surface, NULL params = defaults. */
     int mr = -1;
     if (nv.TwoDBlit && g_dec.nvm2d) {
@@ -2836,6 +2919,8 @@ static int cb_display_picture(void* user, void* disp_info) {
     }
     if (nv.SurfaceWait) nv.SurfaceWait(dst_sibling, 0);
 #else
+    pidx = cl_pick_next_pidx();
+    dst_sibling = g_dec.scr_siblings[pidx];
     /* Mixer: YV12 (yuv_surface) → RGBA (dst_sibling) */
     uint32_t video_desc[7] = {0};
     video_desc[0] = 0x20000;
@@ -2857,8 +2942,8 @@ static int cb_display_picture(void* user, void* disp_info) {
         (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
         screen_post_window(g_dec.post_win, g_dec.post_bufs[pidx], 1, dirty, 0);
         screen_flush_context(g_dec.scr_ctx, 0);
-        g_last_posted_pidx = pidx;
-        g_last_post_ms     = now_us() / 1000ULL;
+        g_last_posted_pidx  = pidx;
+        g_last_real_post_ms = g_last_post_ms = now_us() / 1000ULL;
     }
     clock_gettime(CLOCK_MONOTONIC, &ts3);
 
@@ -3159,8 +3244,14 @@ int run_h264_mode(int argc, char** argv) {
 
     /* Main decode loop: read from SHM, feed to parser. Start from CURRENT
      * write position so we get fresh data with valid NAL boundaries. */
-    uint32_t read_pos = shm->write_pos;
-    uint32_t last_total = shm->total_bytes;
+    uint32_t read_pos = 0, last_total = 0;
+    for (;;) {
+        uint32_t t1 = shm->total_bytes;
+        __sync_synchronize();
+        uint32_t w1 = shm->write_pos;
+        __sync_synchronize();
+        if (shm->total_bytes == t1) { read_pos = w1; last_total = t1; break; }
+    }
     int feed_count = 0;
     uint64_t t0 = now_us();
     (void)t0;
@@ -3189,28 +3280,27 @@ int run_h264_mode(int argc, char** argv) {
             usleep(1000);
             continue;
         }
+        __sync_synchronize();
 
-        uint32_t wp = shm->write_pos;
+        uint32_t delta = total - last_total;
         /* v19.5: the writer does not wait for us. If more than the ring holds was written since the last read, the
          * unread part was overwritten and what is left is a mix of old and new data: decoding it garbles the map
          * until the next key frame. Skip to the newest data and wait for a key frame instead (picture stays). */
-        if ((uint32_t)(total - last_total) > CLUSTER_RING_SIZE - 65536) {
+        if (delta > CLUSTER_RING_SIZE - 65536) {
+            uint32_t wp = shm->write_pos;
+            __sync_synchronize();
+            total = shm->total_bytes;
             rdbg_printf("ring overrun: %u bytes behind, skipping to the newest data and waiting for a key frame\n",
-                        (unsigned)(total - last_total));
+                        (unsigned)delta);
             read_pos = wp; last_total = total; g_wait_idr = 1; request_key_frame("overrun");
             continue;
         }
-        uint32_t avail;
-        if (wp >= read_pos)
-            avail = wp - read_pos;
-        else
-            avail = CLUSTER_RING_SIZE - read_pos + wp;
-
-        if (avail == 0) { last_total = total; continue; }
+        uint32_t avail = delta;
+        if (avail == 0) continue;
 
         /* Read into contiguous buffer */
         uint8_t* chunk = (uint8_t*)malloc(avail);
-        if (!chunk) { last_total = total; continue; }
+        if (!chunk) continue;
 
         if (read_pos + avail <= CLUSTER_RING_SIZE) {
             memcpy(chunk, shm->ring + read_pos, avail);
@@ -3219,8 +3309,19 @@ int run_h264_mode(int argc, char** argv) {
             memcpy(chunk, shm->ring + read_pos, first);
             memcpy(chunk + first, shm->ring, avail - first);
         }
+        __sync_synchronize();
+        if ((uint32_t)(shm->total_bytes - last_total) > CLUSTER_RING_SIZE - 16384) {
+            free(chunk);
+            uint32_t wp = shm->write_pos;
+            __sync_synchronize();
+            last_total = shm->total_bytes;
+            read_pos = wp;
+            g_wait_idr = 1;
+            request_key_frame("overrun-midread");
+            continue;
+        }
         read_pos = (read_pos + avail) % CLUSTER_RING_SIZE;
-        last_total = total;
+        last_total += avail;
 
         /* Feed directly to parser — it handles NAL discovery internally.
          * Log first chunks and any NAL start codes we see for diagnostics. */

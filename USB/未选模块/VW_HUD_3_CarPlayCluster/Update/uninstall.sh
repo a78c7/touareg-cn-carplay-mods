@@ -18,9 +18,11 @@ else
     echo "json: cl_probe.so not present"
 fi
 mount -uw /mnt/app
-rm -fv $D/cl_probe.so $D/cl_render $D/clusterd $D/disable $D/cl.conf $D/cl.conf.default $D/cl.sh $D/dash.conf
-rm -rf $D/bak_v14 $D/bak_v15 $D/v15 $D/dm
+rm -fv $D/cl_probe.so $D/cl_render $D/clusterd $D/disable $D/switch_off $D/triple_off $D/ka_off $D/zoom_flip $D/tire_ref.state $D/cl.conf $D/cl.conf.default $D/cl.sh $D/dash.conf /tmp/ultra_theme /tmp/media_cp.state /tmp/rdk_probe.log
+rm -rf $D/bak_v14 $D/bak_v15 $D/bak_pre_v21 $D/v15 $D/dm
 rmdir $D 2>/dev/null
+[[ ! -e "/mnt/ota" ]] && mount -t qnx6 /dev/mnanda0t177.16 /mnt/ota 2>/dev/null
+mount -uw /mnt/ota 2>/dev/null || true
 rm -rf /mnt/ota/modkit/Mods/VW_CarPlayCluster 2>/dev/null
 sync
 echo "done"
