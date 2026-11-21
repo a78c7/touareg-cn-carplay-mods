@@ -63,7 +63,7 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
 - 只换成别的编号单独显示：仪表报"加载 CarPlay 失败"。用 `dmdt ts 4` 截图证明车机输出给仪表的画面是正常的，是原车/仪表判断"33 不在显示列表里"。
 - **最终方案**：我们用编号 **58**（`DISPLAYABLE_GOOGLE_EARTH_KOMBI_MAP_VIEW`，国内用不到），仪表显示列表设为 `[58, 33]`——**列表第一个在最上层**，原车 33 一直垫在下面"在场"，仪表就不报错；断开时设回 `[33]`，原车地图直接露出来。**【编号途锐验证】**
 - 原车按 VIEW 时的流程（反编译 lvdskombi `SwitchToPermanentMapSequenceLVDS` + `ChangeDataRateSequence`）：`showDisplayables(4, [33])` → 地图设可见 → `setUpdateRate(4, 10)`（不可见时为 1）。断开时我们照做一遍。
-- 实现：`clusterd`（[`src/clusterd`](https://github.com/a78c7/touareg-cn-carplay-mods/tree/main/src/clusterd)）看共享内存里有没有流：有流就启动 cl_render，并通过 Java 插件把仪表设为 `[58,33]`，每 3 秒重申一次（防止原车切换把它盖掉）；断流 3 秒后停掉并恢复 `[33]`。Java 插件里调用的是 `de.vw.mib.widgets.internal.ServiceManager.displayManager`。
+- 实现：`clusterd`（[`src/clusterd`](../src/clusterd)）看共享内存里有没有流：有流就启动 cl_render，并通过 Java 插件把仪表设为 `[58,33]`，每 3 秒重申一次（防止原车切换把它盖掉）；断流 3 秒后停掉并恢复 `[33]`。Java 插件通过 OSGi 服务 **`de.vw.mib.display.DisplayManagementService`** 执行 `showDisplayables`/`setUpdateRate` 切屏（`ServiceManager.displayManager` 仅用于只读查询当前活动列表）。
 
 ## 7. 冷启动后要断开重连几次才投上仪表
 

@@ -177,7 +177,7 @@ static void init_once(void) {
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v21.0 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
+    plog("cl_alt v21.0.1 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -346,8 +346,8 @@ static int derive_keys(void *session, int64_t connID) {
         char salt[64]; int sl = snprintf(salt, sizeof salt, "DataStream-Salt%llu", (unsigned long long)connID);
         static const char info[] = "DataStream-Output-Encryption-Key";
         int r = pd(pairing, salt, sl, info, sizeof info - 1, 32, g_ckey);
-        char a[33], b[33]; hex16(a, g_ckey); hex16(b, g_ckey + 16);
-        plog("crypto: chacha key r=%d key=%s%s", r, a, b);
+        char a[33]; hex16(a, g_ckey);
+        plog("crypto: chacha key r=%d prefix=%.8s...", r, a);
         if (r == 0) g_have_ckey = 1;
     }
     return g_have_ckey ? 0 : -1;
@@ -812,7 +812,7 @@ EXPORT int AirPlayReceiverSessionTearDown(void *session, void *req, void *c, voi
             }
         }
         if (full || has111) rx_stop(full ? "full teardown" : "111 teardown");
-        if (full) clear_rg_state("teardown");
+        if (full) { g_session = NULL; clear_rg_state("teardown"); }
     }
     return real ? (int)(long)real(session, req, c, d) : 0;
 }

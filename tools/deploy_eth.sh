@@ -30,11 +30,13 @@ NETD_SRC="$(find_mod "VW_WiFi_Dev/Update/touareg_netd")"
 
 NO_REBOOT=0
 PROBE_ONLY=0
+RESET_CONF=0
 POSITIONAL=()
 for arg in "$@"; do
     case "$arg" in
         --no-reboot)  NO_REBOOT=1 ;;
         --probe-only) PROBE_ONLY=1 ;;
+        --reset-conf) RESET_CONF=1 ;;
         *) POSITIONAL+=("$arg") ;;
     esac
 done
@@ -44,10 +46,10 @@ KEY="${POSITIONAL[1]:-}"
 
 if [ -z "$KEY" ]; then
     for cand in \
-        "$HOME/touareg/ssh/mh2p.key" \
-        "$HOME/.gemini/antigravity/scratch/touareg-wifi-dev/keys/touareg_ed25519" \
         "$HOME/Desktop/途锐无线SSH密钥/touareg_ed25519" \
-        "$HOME/.ssh/touareg_ed25519"; do
+        "$HOME/.ssh/touareg_ed25519" \
+        "$HOME/.ssh/mh2p.key" \
+        "$HOME/touareg/ssh/mh2p.key"; do
         if [ -f "$cand" ]; then
             KEY="$cand"
             break
@@ -56,7 +58,7 @@ if [ -z "$KEY" ]; then
 fi
 
 if [ -z "$KEY" ] || [ ! -f "$KEY" ]; then
-    echo "❌ 未找到车机 SSH 私钥（已查找 ~/touareg/ssh/mh2p.key 与 ~/Desktop/途锐无线SSH密钥/touareg_ed25519）。"
+    echo "❌ 未找到车机 SSH 私钥（请传入私钥路径，或放在 ~/Desktop/途锐无线SSH密钥/touareg_ed25519 / ~/.ssh/touareg_ed25519）。"
     exit 1
 fi
 
@@ -167,7 +169,7 @@ if [ "$PROBE_ONLY" = "1" ]; then
     exit 0
 fi
 
-for f in "$JAR_SRC" "$PER_SRC" "$PRB_SRC" "$CLD_SRC" "$CLR_SRC" "$CONF_SRC"; do
+for f in "$JAR_SRC" "$PER_SRC" "$PRB_SRC" "$CLD_SRC" "$CLR_SRC" "$CONF_SRC" "$NETD_SRC"; do
     if [ ! -f "$f" ]; then
         echo "❌ 本地缺少编译产物：$f"
         exit 1
@@ -227,7 +229,7 @@ if [ "$HAS_NETD" = "1" ]; then
 fi
 
 echo ">>> [3/4] 严格校验字节长度并执行原子替换..."
-run_hu "NO_REBOOT=$NO_REBOOT HAS_NETD=$HAS_NETD JAR_SZ=$JAR_SZ PRB_SZ=$PRB_SZ CLD_SZ=$CLD_SZ CLR_SZ=$CLR_SZ PER_SZ=$PER_SZ CONF_SZ=$CONF_SZ NETD_SZ=$NETD_SZ PER_DST='$PER_DST' /bin/ksh -s" <<'EOF'
+run_hu "NO_REBOOT=$NO_REBOOT RESET_CONF=$RESET_CONF HAS_NETD=$HAS_NETD JAR_SZ=$JAR_SZ PRB_SZ=$PRB_SZ CLD_SZ=$CLD_SZ CLR_SZ=$CLR_SZ PER_SZ=$PER_SZ CONF_SZ=$CONF_SZ NETD_SZ=$NETD_SZ PER_DST='$PER_DST' /bin/ksh -s" <<'EOF'
 set -e
 chk_sz() {
     f="$1"
@@ -247,8 +249,8 @@ chk_sz "$D/clusterd.new" "$CLD_SZ"
 chk_sz "$D/cl_render.new" "$CLR_SZ"
 chk_sz "$D/dash.conf.new" "$CONF_SZ"
 
-# 若车机已有 dash.conf 则保留用户自定义设置（仅首次安装时写入默认模板）
-if [ -f "$D/dash.conf" ]; then
+# 默认保留车上已有 dash.conf；指定 --reset-conf 或首次安装时写入模板配置
+if [ -f "$D/dash.conf" ] && [ "$RESET_CONF" != "1" ]; then
     rm -f "$D/dash.conf.new"
 else
     chmod 644 "$D/dash.conf.new" && mv -f "$D/dash.conf.new" "$D/dash.conf"
@@ -283,8 +285,8 @@ ls -l "$J" "$D/cl_probe.so" "$D/clusterd" "$D/cl_render" "$D/dash.conf"
 EOF
 
 if [ "$NO_REBOOT" = "1" ]; then
-    echo ">>> [4/4] 秒级刷新 cl_render 渲染进程（免重启模式）..."
-    run_hu 'slay -f cl_render >/dev/null 2>&1 || true; [ -f /mnt/app/eso/bin/apps/wifi_dev/touareg_netd ] && slay -f touareg_netd >/dev/null 2>&1 || true'
+    echo ">>> [4/4] 秒级刷新 clusterd / cl_render / touareg_netd 进程（免重启模式）..."
+    run_hu 'slay -f clusterd cl_render >/dev/null 2>&1 || true; [ -f /mnt/app/eso/bin/apps/wifi_dev/touareg_netd ] && slay -f touareg_netd >/dev/null 2>&1 || true'
     echo "✅ 仪表渲染进程已热刷新！"
     show_live_probe
     exit 0

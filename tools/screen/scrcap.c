@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dlfcn.h>
-#include "aeabi_shim.h"
+#include "../../src/common/aeabi_shim.h"
 typedef int (*f_cc)(void **, int); typedef int (*f_gp)(void *, int, void *); typedef int (*f_sp)(void *, int, const void *);
 typedef int (*f_cp)(void **, void *); typedef int (*f_cpb)(void *); typedef int (*f_rd)(void *, void *, int, const int *, int);
 int main(int argc, char **argv) {

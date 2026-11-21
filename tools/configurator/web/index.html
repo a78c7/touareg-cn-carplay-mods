@@ -92,6 +92,16 @@ ol.order li.drag{opacity:.4} ol.order li.over{border-color:var(--acc);box-shadow
 .pv-bar.bi::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;background:#fff}
 .pv-bar.bi::after{content:"";position:absolute;left:50%;width:18%;top:1px;bottom:1px;background:#22dcda}
 .pv-bar.rng::after{content:"";position:absolute;left:0;width:62%;top:0;bottom:0;background:#20deb8}
+.pv-nav{display:flex;flex-direction:column;justify-content:space-between;min-height:290px;gap:10px}
+.pv-nav-hd{display:flex;align-items:center;gap:12px}
+.pv-nav-ico{width:46px;height:46px;border-radius:10px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:24px;color:#fff;flex-shrink:0}
+.pv-nav-dist{font-size:30px;font-weight:800;line-height:1.05}
+.pv-nav-act{font-size:15px;font-weight:700;color:#6cd6ff;margin-top:2px}
+.pv-nav-road{font-size:20px;font-weight:700;color:#fff;padding:4px 0 6px}
+.pv-nav-ft{border-top:1px solid rgba(255,255,255,.16);padding-top:8px;display:flex;flex-direction:column;gap:5px;font-size:14px}
+.pv-nav-ft div{display:flex;justify-content:space-between;align-items:baseline}
+.pv-nav-ft span{color:#cbd5e1;font-weight:600}
+.pv-nav-ft b{color:#fff;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
 details{margin-top:12px}
 summary{cursor:pointer;color:var(--sub);font-size:14px}
 .adv{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:10px}
@@ -437,13 +447,25 @@ const SZ = [ // matches v21 dash.c / gen_dash_font.py independent per-box sizing
 
 function pvBox(pv, show, list, sd){
   const n = list.length, sc = SZ[sizeClass(n || 1)];
-  pv.style.outline = sd === side ? '2px solid rgba(158,193,251,.85)' : 'none';
+  const nb = Number(dash.nav_box == null ? 1 : dash.nav_box);
+  const navHere = nb > 0 && ((sd === 'l' && dash.nav_side === 'left') || (sd === 'r' && dash.nav_side !== 'left'));
+  const outline = sd === side ? '2px solid rgba(158,193,251,.85)' : 'none';
   if (!show || !n) {
-    pv.style.cssText = `padding:12px 16px;background:rgba(16,18,22,.5);outline:${sd === side ? '2px solid rgba(158,193,251,.85)' : 'none'}`;
-    pv.innerHTML = `<div style="color:#ccc;font-size:13px">${sd === 'l' ? '左边框' : '右边框'}${show ? '（还没有选项目）' : '：常驻不显示' + (sd === 'r' && Number(dash.nav_box) > 0 && dash.nav_side !== 'left' ? (Number(dash.nav_box) >= 2 ? '（常驻大字导航卡，未导航时显示待机框）' : '（导航时自动弹出大字导航卡）') : '')}</div>`;
+    if (navHere) {
+      pv.style.cssText = `padding:12px 14px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});outline:${outline}`;
+      pv.innerHTML = `<div class="pv-nav">
+        <div class="pv-nav-hd"><div class="pv-nav-ico">↱</div><div><div class="pv-nav-dist">260 <span style="font-size:15px;color:#cbd5e1;font-weight:600">m</span></div><div class="pv-nav-act">前方右转</div></div></div>
+        <div class="pv-nav-road">滨江大道</div>
+        <div class="pv-nav-ft"><div><span>剩余路程</span><b>9.5 <small style="font-size:12px;color:#cbd5e1">km</small></b></div><div><span>剩余时间</span><b>16 <small style="font-size:12px;color:#cbd5e1">分钟</small></b></div><div><span>预计到达</span><b>13:54</b></div></div>
+        <div style="font-size:11.5px;color:#93c5fd;opacity:.9">${nb >= 2 ? '大字导航卡 · 常驻（未导航显示待机框）' : '大字导航卡 · 导航时自动弹出'}</div>
+      </div>`;
+      return;
+    }
+    pv.style.cssText = `padding:12px 16px;background:rgba(16,18,22,.5);outline:${outline}`;
+    pv.innerHTML = `<div style="color:#ccc;font-size:13px">${sd === 'l' ? '左边框' : '右边框'}${show ? '（还没有选项目）' : '：不显示'}</div>`;
     return;
   }
-  pv.style.cssText = `padding:${sc.pad}px 14px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});outline:${sd === side ? '2px solid rgba(158,193,251,.85)' : 'none'}`;
+  pv.style.cssText = `padding:${sc.pad}px 14px;background:rgba(16,18,22,${(dash.alpha / 255).toFixed(3)});outline:${outline}`;
   pv.innerHTML = list.map(k => {
     const i = item(k);
     let val = i.sample;
@@ -451,7 +473,7 @@ function pvBox(pv, show, list, sd){
     const unit = k === 'fuel' && !dash.tank_l ? '%' : i.unit;
     const bk = dash.bars !== false && n <= 6 ? barKind(k) : '';
     return `<div class="pv-r" style="min-height:${sc.row}px"><div class="pv-top"><div class="l" style="font-size:${sc.lab}px">${esc(plain(i.label))}</div><div class="vu"><div class="v" style="font-size:${sc.val}px">${esc(val)}</div>${unit ? `<div class="u" style="font-size:${sc.unit}px">${esc(unit)}</div>` : ''}</div></div>${bk ? `<div class="pv-bar ${bk}"></div>` : ''}</div>`;
-  }).join('');
+  }).join('') + (navHere ? `<div style="margin-top:6px;font-size:11.5px;color:#93c5fd">↑ ${nb >= 2 ? '常驻大字导航卡将覆盖此侧' : '开启导航时此侧自动切为大字导航卡'}</div>` : '');
 }
 
 function renderDash(){
@@ -572,7 +594,7 @@ document.addEventListener('click', e => {
 $('show').addEventListener('change', e => { if (side === 'l') dash.show = e.target.checked; else dash.r_show = e.target.checked; renderDash(); renderSummary(); });
 $('bars').addEventListener('change', e => { dash.bars = e.target.checked; renderDash(); renderSummary(); });
 const num = (id, key, lo, hi) => $(id).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dash[key] = Math.max(lo, Math.min(hi, v)); if (id === 'alpha') { $('alphav').textContent = dash.alpha; } renderDashPreviewOnly(); } });
-function renderDashPreviewOnly(){ const a = document.activeElement && document.activeElement.id; renderDash(); if (a && $(a)) $(a).focus(); }
+function renderDashPreviewOnly(){ pvBox($('pv'), dash.show, dash.items, 'l'); pvBox($('pv2'), dash.r_show, dash.r_items, 'r'); }
 num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); num('tank', 'tank_l', 0, 200); num('navtz', 'nav_tz', -12, 14);
 $('latflip').addEventListener('change', e => { dash.lat_flip = e.target.checked ? 1 : 0; });
 $('navmode').addEventListener('change', e => {
@@ -633,7 +655,6 @@ document.addEventListener('click', async e => {
     S = await api('/api/state');
   } catch (err) { document.body.innerHTML = `<div class="wrap"><h1>途锐改装设置</h1><div class="msg bad">${esc(err.message)}</div></div>`; return; }
   $('ver').textContent = S.version;
-  $('maxrows').textContent = S.maxRows;
   S.features.forEach(f => { const s = S.states[f.id]; sel[f.id] = s === 'missing' ? 'skip' : (s === 'mixed' ? 'install' : s); });
   if (sel.mapswitch === 'install') { sel.cluster = 'install'; sel.hud = 'install'; }
   if (sel.cluster === 'install' && sel.hud !== 'install') sel.hud = 'install';

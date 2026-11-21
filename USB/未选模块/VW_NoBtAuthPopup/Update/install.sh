@@ -16,7 +16,7 @@ BACT=vwpopup.Activator
 BCMT="# VWPopupFilter: HMI popup filter (USB mods VW_NoSimPopup / VW_NoBtAuthPopup)"
 
 echo "=== VW_NoBtAuthPopup install ($RELEASE_VERSION) ==="
-if [ -n "$OEM" ] && [ "$OEM" != "VW" ]; then
+if [ "$OEM" != "VW" ]; then
     echo "abort: built for VW MH2p units, this unit is $RELEASE_VERSION"
     exit 0
 fi
@@ -156,5 +156,4 @@ grep -n 'Startup.Lateload' "$B"
 grep -n "Name\.$BID" "$B"
 grep -n "Activator\.$BID" "$B"
 ls -la "$FDIR" "$JD/$JAR"
-mount -ur /mnt/app 2>/dev/null || true
 echo "=== VW_NoBtAuthPopup install done ==="

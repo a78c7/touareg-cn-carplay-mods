@@ -48,11 +48,11 @@ ensure_sshd() {
             kill "$p" 2>/dev/null
         done
         sleep 1
-        /usr/sbin/sshd -p 2012 -h "$ED_KEY" </dev/null >> "$LOG" 2>&1
-        echo "sshd started (ed25519+rsa, port 2012)" >> "$LOG"
+        /usr/sbin/sshd -p 2012 -h "$ED_KEY" -o PasswordAuthentication=no -o ChallengeResponseAuthentication=no -o PermitRootLogin=without-password </dev/null >> "$LOG" 2>&1
+        echo "sshd started (ed25519 key-only, port 2012)" >> "$LOG"
     else
         if ! pidin arg 2>/dev/null | grep -q "[/]usr/sbin/sshd"; then
-            /usr/sbin/sshd -p 2012 </dev/null >> "$LOG" 2>&1
+            /usr/sbin/sshd -p 2012 -o PasswordAuthentication=no -o ChallengeResponseAuthentication=no -o PermitRootLogin=without-password </dev/null >> "$LOG" 2>&1
         fi
     fi
 }

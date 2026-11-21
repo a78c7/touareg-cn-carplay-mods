@@ -16,11 +16,10 @@ echo "=== VW_NoBtAuthPopup uninstall ($RELEASE_VERSION) ==="
 mount -uw /mnt/app
 rm -fv "$FDIR/$FLAG_NAME"
 
-if [ -f "$FDIR/no_sim_dataonly" ] || [ -f "$FDIR/no_bt_auth" ]; then
-    echo "other popup filter flag(s) still active; keeping VWPopupFilter bundle $BID:"
-    ls -la "$FDIR"
+if [ -f "$FDIR/no_sim_dataonly" ] || [ -f "$FDIR/no_bt_auth" ] || [ -f "$JD/VWNoSimPopup.jar" ]; then
+    echo "other popup filter flag(s) or legacy VWNoSimPopup still active; keeping bundle $BID:"
+    ls -la "$FDIR" "$JD"/VW*Popup*.jar 2>/dev/null || true
     sync
-    mount -ur /mnt/app 2>/dev/null || true
     echo "=== VW_NoBtAuthPopup uninstall done ==="
     exit 0
 fi
@@ -115,5 +114,4 @@ rm -f /tmp/bp_pf_un
 rm -fv "$JD/VWPopupFilter.jar" "$JD/VWNoSimPopup.jar" "$JD/VWNoSimPopup_"*.jar
 sync
 grep -n 'Startup.Lateload' "$B"
-mount -ur /mnt/app 2>/dev/null || true
 echo "=== VW_NoBtAuthPopup uninstall done ==="

@@ -4,13 +4,13 @@
 # usage: JDK8=/path/to/jdk8 ./build.sh
 set -e
 cd "$(dirname "$0")"
-: ${JDK8:?set JDK8 to a JDK 8 directory (e.g. /home/admin/qnx-build/jdk8)}
+: "${JDK8:?set JDK8 to a JDK 8 directory (e.g. /path/to/jdk8)}"
 
 rm -rf out && mkdir -p out/stubs out/classes
-"$JDK8/bin/javac" -nowarn -source 1.4 -target 1.4 -d out/stubs \
+"$JDK8/bin/javac" -encoding UTF-8 -nowarn -source 1.4 -target 1.4 -d out/stubs \
     stubs/org/osgi/framework/BundleContext.java \
     stubs/org/osgi/framework/BundleActivator.java
-"$JDK8/bin/javac" -nowarn -source 1.4 -target 1.4 -cp out/stubs -d out/classes \
+"$JDK8/bin/javac" -encoding UTF-8 -nowarn -source 1.4 -target 1.4 -cp out/stubs -d out/classes \
     vwpopup/Activator.java
 
 printf 'Manifest-Version: 1.0\r\nImplementation-Title: VWPopupFilter\r\nImplementation-Version: 1.0\r\n\r\n' > out/MANIFEST.MF

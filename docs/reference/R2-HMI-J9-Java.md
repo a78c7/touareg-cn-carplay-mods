@@ -77,7 +77,7 @@
 
 ## 8. 显示管理接口
 
-- 入口：`de.vw.mib.widgets.internal.ServiceManager.displayManager`。【途锐实测】
+- 切屏服务入口：OSGi 服务 **`de.vw.mib.display.DisplayManagementService`**（通过 `bctx.getServiceReference("de.vw.mib.display.DisplayManagementService")` 获取；而 `de.vw.mib.widgets.internal.ServiceManager.displayManager` 仅用于只读查询 `getActiveDisplayables()`）。【途锐实测】
 - `showDisplayables(屏编号, int[] 编号列表)`：设置某块屏显示哪些窗口，**列表第一个在最上层**。
 - `setUpdateRate(屏编号, 刷新率, 回调)`：原车地图可见时设 10，不可见时设 1。
 - `disableDisplayable` / `enableDisplayable` / `updateDisplay`：单独开关某个窗口。

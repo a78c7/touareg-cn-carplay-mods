@@ -240,7 +240,9 @@ static void read_dash_state(double *out_spd, double *out_odo) {
     struct stat st;
     if (stat(DASH_STATE_PATH, &st) != 0) return;
     time_t now = time(NULL);
-    if (now - st.st_mtime > 5 || st.st_mtime - now > 5) return;
+    /* QNX 6.6 ARMv7 下 time_t 为 32 位无符号整型，须先比较大小避免无符号下溢导致行车锁失效 */
+    time_t diff = (now >= st.st_mtime) ? (now - st.st_mtime) : (st.st_mtime - now);
+    if (diff > 5) return;
     FILE *fp = fopen(DASH_STATE_PATH, "r");
     if (!fp) return;
     char buf[2048];
@@ -357,7 +359,13 @@ static void header_get(const char *req, const char *hdr_end, const char *hname, 
 }
 
 static int g_pin_fails = 0;
-static time_t g_pin_lock_until = 0;
+static uint64_t g_pin_lock_until = 0;
+
+static uint64_t monotonic_sec(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) return (uint64_t)ts.tv_sec;
+    return (uint64_t)time(NULL);
+}
 
 /* 校验管理口令 web.pin（带防爆破限速：连续输错 5 次锁定 30 秒；返回 1=通过, 0=需口令/错误, -1=锁定中） */
 static int check_pin_auth(const char *req, const char *hdr_end, const char *query) {
@@ -373,8 +381,8 @@ static int check_pin_auth(const char *req, const char *hdr_end, const char *quer
     size_t elen = strlen(expected);
     if (elen == 0) return 1;
 
-    time_t now = time(NULL);
-    if (g_pin_lock_until > now && now - g_pin_lock_until <= 60) return -1;
+    uint64_t now = monotonic_sec();
+    if (g_pin_lock_until > 0 && now < g_pin_lock_until) return -1;
 
     char got[64];
     header_get(req, hdr_end, "X-Pin", got, sizeof(got));
@@ -527,7 +535,7 @@ static int save_dash_conf(const char *body) {
     double trip_base = 0.0;
     if (form_get(body, "trip_base", bufv, sizeof(bufv)) && bufv[0]) {
         trip_base = strtod(bufv, NULL);
-        if (trip_base < 0.0 || trip_base > 9999999.0) trip_base = 0.0;
+        if (trip_base != trip_base || trip_base < 0.0 || trip_base > 9999999.0) trip_base = 0.0;
     }
 
     const char *keys[15] = {
@@ -860,6 +868,9 @@ static void handle_download(int fd, const char *query) {
     char full[512];
     full[0] = '\0';
     if (strcmp(type, "drive") == 0) {
+        size_t nlen = strlen(name);
+        int ok_ext = (nlen > 4 && (strcasecmp(name + nlen - 4, ".csv") == 0 || strcasecmp(name + nlen - 4, ".txt") == 0));
+        if (!ok_ext) { send_json(fd, 400, 0, "仅允许下载行车记录 CSV/TXT"); return; }
         for (int m = 0; USB_MOUNTS[m]; m++) {
             char cand[512];
             snprintf(cand, sizeof(cand), "%s/%s", USB_MOUNTS[m], name);
@@ -876,13 +887,18 @@ static void handle_download(int fd, const char *query) {
     if (!full[0]) { send_json(fd, 404, 0, "文件不存在"); return; }
 
     struct stat st;
-    int ffd = open(full, O_RDONLY);
-    if (ffd < 0 || fstat(ffd, &st) != 0) {
+    int oflags = O_RDONLY;
+#ifdef O_NOFOLLOW
+    oflags |= O_NOFOLLOW;
+#endif
+    int ffd = open(full, oflags);
+    if (ffd < 0 || fstat(ffd, &st) != 0 || !S_ISREG(st.st_mode)) {
         if (ffd >= 0) close(ffd);
         send_json(fd, 404, 0, "无法读取文件");
         return;
     }
 
+    size_t remain = (size_t)st.st_size;
     char hdr[512];
     int hl = snprintf(hdr, sizeof(hdr),
         "HTTP/1.1 200 OK\r\n"
@@ -890,12 +906,15 @@ static void handle_download(int fd, const char *query) {
         "Content-Disposition: attachment; filename=\"%s\"\r\n"
         "Content-Length: %lu\r\n"
         "Connection: close\r\n\r\n",
-        name, (unsigned long)st.st_size);
+        name, (unsigned long)remain);
     if (send_all(fd, hdr, (size_t)hl) == 0) {
         char buf[16384];
-        ssize_t r;
-        while ((r = read(ffd, buf, sizeof(buf))) > 0) {
+        while (remain > 0) {
+            size_t chunk = remain < sizeof(buf) ? remain : sizeof(buf);
+            ssize_t r = read(ffd, buf, chunk);
+            if (r <= 0) break;
             if (send_all(fd, buf, (size_t)r) != 0) break;
+            remain -= (size_t)r;
         }
     }
     close(ffd);
@@ -933,9 +952,12 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
         if (!nl) break;
         p = nl + 2;
     }
-    if (clen > 4096) { send_json(cfd, 413, 0, "请求过大"); return; }
+    if (clen > 4096 || hdr_len + clen >= sizeof(req)) { send_json(cfd, 413, 0, "请求过大"); return; }
     while (got < hdr_len + clen && got + 1 < sizeof(req)) {
-        ssize_t r = recv(cfd, req + got, hdr_len + clen - got, 0);
+        size_t rem_body = hdr_len + clen - got;
+        size_t rem_buf = sizeof(req) - 1 - got;
+        size_t want = rem_body < rem_buf ? rem_body : rem_buf;
+        ssize_t r = recv(cfd, req + got, want, 0);
         if (r <= 0) break;
         got += (size_t)r;
     }
@@ -1091,7 +1113,7 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v21.0 started (iface=%s port=%d)", g_iface, g_http_port);
+    nlog("touareg_netd v21.0.1 started (iface=%s port=%d)", g_iface, g_http_port);
 
     uint32_t cur_ip = 0;
     int http_fd = -1, mdns_fd = -1;

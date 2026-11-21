@@ -1,0 +1,104 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Go configurator unit tests
+        working-directory: tools/configurator
+        run: go test -v ./...
+
+      - name: Catalogue alignment, HTML DOM & USB script safety checks
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess, sys
+
+          def read(p):
+              with open(p, encoding='utf-8') as f:
+                  return f.read()
+
+          errors = []
+
+          # 1) 43 项遥测表三端对齐检查 (dash.c / package.go / web_ui.html)
+          c_blk = re.search(r'g_items\[IT_N\] = \{(.*?)\n\};', read('src/cl_render/dash.c'), re.S).group(1)
+          c_items = dict(re.findall(r'\{\s*"([a-z0-9]+)"\s*,\s*"([^"]+)"', c_blk))
+          go_blk = re.search(r'var catalogue = \[\]item\{(.*?)\n\}', read('tools/configurator/package.go'), re.S).group(1)
+          go_items = dict(re.findall(r'\{"([a-z0-9]+)"\s*,\s*"([^"]+)"', go_blk))
+          w_blk = re.search(r'const ITEMS=\[(.*?)\];', read('src/touareg_netd/web_ui.html'), re.S).group(1)
+          w_keys = set(re.findall(r'\["([a-z0-9]+)"', w_blk))
+          if c_items != go_items:
+              errors.append(f'dash.c vs package.go mismatch: {set(c_items.items()) ^ set(go_items.items())}')
+          if set(c_items.keys()) != w_keys:
+              errors.append(f'dash.c vs web_ui.html mismatch: {set(c_items.keys()) ^ w_keys}')
+
+          # 2) 前端裸 DOM ID 检查（防止 $('maxrows').textContent 类白板事故）
+          for path in ['tools/configurator/web/index.html', 'src/touareg_netd/web_ui.html']:
+              html = read(path)
+              ids_def = set(re.findall(r'\bid="([^"]+)"', html))
+              bare_dollar = set(re.findall(r"(?<!if \()\$\('([^']+)'\)\.", html))
+              bare_gebi = set(re.findall(r"document\.getElementById\('([^']+)'\)\.", html))
+              miss = (bare_dollar | bare_gebi) - ids_def
+              if miss:
+                  errors.append(f'{path}: references missing DOM IDs {sorted(miss)}')
+
+          # 3) 禁止 ModKit Update/*.sh 把 /mnt/app 锁回只读（会导致上游 modkit_install.sh 持久化失败）
+          for root, _, fs in os.walk('USB'):
+              for f in fs:
+                  if not f.endswith('.sh'):
+                      continue
+                  p = os.path.join(root, f)
+                  raw = open(p, 'rb').read()
+                  if b'\r\n' in raw:
+                      errors.append(f'{p}: contains CRLF line endings (breaks QNX ksh)')
+                  txt = raw.decode('utf-8', errors='replace')
+                  if '/Update/' in p.replace('\\', '/'):
+                      for ln, line in enumerate(txt.splitlines(), 1):
+                          s = line.strip()
+                          if s.startswith('#'):
+                              continue
+                          if re.search(r'\bmount\s+-ur\s+/mnt/app\b', s):
+                              errors.append(f'{p}:{ln}: Update script must NOT remount /mnt/app read-only')
+
+          # 4) 禁止本机私有绝对路径残留
+          for folder in ['src', 'tools', 'docs']:
+              for root, _, fs in os.walk(folder):
+                  for f in fs:
+                      if not f.endswith(('.sh', '.py', '.go', '.c', '.h', '.java', '.md', '.html')):
+                          continue
+                      p = os.path.join(root, f)
+                      txt = read(p)
+                      if '/Users/' in txt or '.gemini/antigravity' in txt or '/home/admin/qnx-build' in txt:
+                          errors.append(f'{p}: contains hardcoded personal machine path')
+
+          # 5) web_ui.html 与 web_ui_data.h 同步检查
+          h_txt = read('src/touareg_netd/web_ui_data.h')
+          m = re.search(r'WEB_UI_HTML_LEN\s*=\s*(\d+)', h_txt)
+          actual_len = os.path.getsize('src/touareg_netd/web_ui.html')
+          if not m or int(m.group(1)) != actual_len:
+              errors.append(f'web_ui_data.h out of sync (header={m.group(1) if m else None}, html={actual_len})')
+
+          if errors:
+              print('CI CHECK FAILED:')
+              for e in errors:
+                  print('  -', e)
+              sys.exit(1)
+          print(f'ALL CHECKS PASSED ({len(c_items)} telemetry items, DOM IDs, USB Update scripts, web_ui sync)')
+          PY
+
+      - name: POSIX shell syntax check on tools and build scripts
+        run: |
+          sh -n src/build.sh
+          sh -n src/hud-java/build.sh
+          sh -n src/popup-filter-java/build.sh
+          sh -n tools/configurator/build.sh
+          sh -n tools/make_release.sh
+          bash -n tools/deploy_eth.sh

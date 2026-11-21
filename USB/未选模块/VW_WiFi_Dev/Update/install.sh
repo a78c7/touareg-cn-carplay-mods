@@ -9,7 +9,8 @@ AK=$SSH_DIR/authorized_keys
 
 echo "=== VW_WiFi_Dev install ($RELEASE_VERSION) ==="
 
-# 1) 基础环境检查（不锁死单一小版本，只校验关键组件存在）
+# 1) 先确保 /mnt/app 已挂载，再校验车机基础组件（不锁死单一小版本）
+[[ ! -e "/mnt/app/eso" ]] && mount -t qnx6 /dev/mnanda0t177.1 /mnt/app
 if [ ! -x /mnt/app/armle/usr/sbin/wpa_supplicant-2.5-wapi ]; then
     echo "abort: wpa_supplicant-2.5-wapi not found"
     exit 0
@@ -34,7 +35,6 @@ if [ "$SSH_MODE" -eq 1 ]; then
     fi
 fi
 
-[[ ! -e "/mnt/app/eso" ]] && mount -t qnx6 /dev/mnanda0t177.1 /mnt/app
 if [ ! -f "$MOD_PATH/wpa.conf" ] && [ ! -f "$D/wpa.conf" ]; then
     echo "abort: wpa.conf missing - run configurator first"
     exit 0
@@ -82,11 +82,11 @@ if [ "$SSH_MODE" -eq 1 ]; then
     else
         : > "$AK.new"
     fi
-    while IFS= read -r line; do
+    tr -d '\r' < "$MOD_PATH/authorized_keys" | while IFS= read -r line || [ -n "$line" ]; do
         [ -z "$line" ] && continue
         case "$line" in \#*) continue ;; esac
         echo "$line VW_WiFi_Dev_Managed" >> "$AK.new"
-    done < "$MOD_PATH/authorized_keys"
+    done
     chmod 600 "$AK.new"
     mv -f "$AK.new" "$AK"
 else
@@ -102,5 +102,5 @@ fi
 ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/iopkt_base_cores"
 rm -f "$D/disable"
 sync
-mount -ur /mnt/app 2>/dev/null
+# 注意：绝不能在此执行 mount -ur /mnt/app，上游 modkit_install.sh 后续仍需写入 /mnt/app/eso/bin/servicemgrmibhigh
 echo "=== VW_WiFi_Dev install done ==="

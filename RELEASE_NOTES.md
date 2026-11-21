@@ -1,5 +1,14 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v21.0.1
+- **紧急稳定性、安全与体验热修复（强烈建议所有 `v21.0` 用户直接替换本版）**：
+  - **修复桌面「改装设置」启动白板崩溃（Mac / Windows 均受影响）**：移除 `tools/configurator/web/index.html` 中遗留的 `$('maxrows')` 空节点引用，新增预览区「大字导航信息卡」实时可视化预览、修复 Windows OneDrive 桌面路径探测与 Wi-Fi SSID 32 字节标准校验，并去掉行车记录 AI 模板里的 3.0T 写死字样
+  - **修复洁净车机首次冷刷持久化失败**：移除 `VW_WiFi_Dev`、`VW_NoSimPopup`、`VW_NoBtAuthPopup` 6 个 `Update/*.sh` 末尾多余的 `mount -ur /mnt/app`（防止把 `/mnt/app` 提前锁回只读导致上游 `modkit_install.sh` 写入 `servicemgrmibhigh` 失败）；同时修复 `VW_HUD_1` 卸载时误覆写 `VW_Wireless5GHzFix`、`VW_NoBtAuthPopup` 卸载误删 `v20.2` 旧版 SIM 屏蔽以及 `authorized_keys` 尾行缺失换行问题，并对 `sshd` 显式启用纯密钥认证加固
+  - **修复手机无线控制台 3 处车机安全与体验缺陷（`touareg_netd` + `web_ui.html`）**：修复 QNX 32 位无符号 `time_t` 下溢导致的行车安全锁（>3 km/h）与 PIN 30 秒防爆破锁定双双失效问题、修补认证前 HTTP 请求体栈溢出漏洞、限制下载接口为普通 CSV/TXT 文件、消除前端日志文件名 XSS、修复 HTTP 下“复制 SSH 命令”失败与 429 错页问题，并将手机端 43 项指标升级为分类标签 + 推荐大字预设 + 8 秒定时状态轮询
+  - **修复有线 CarPlay 导航/车道解析双重跳过 6 字节头（`cl_probe.so`）**：修正 `rg_core.inc` 重复跳过 iAP2 报文头导致的首 TLV 错位，移除日志中的明文 ChaCha20 密钥并在会话 TearDown 时清空悬空指针
+  - **仓库轻瘦身、合规与整页视觉翻新**：合并 6 份重复 `aeabi_shim.h` 至 `src/common/`、清理过时旧产物与死文件、补齐发布包内附 `LICENSE`/`LICENSES/` 与免费开源说明、新增 `.github/workflows/ci.yml` 自动体检与发版现编配置器，并全面焕新 `v21` 仪表示意图、电脑端与三屏手机端界面图及 `README.md` 视觉排版
+- 包含 v21.0 的全部内容
+
 ## v21.0
 - **仪表大字粗体视觉重构 + 内嵌运动刻度进度条 + 左右等宽对称大字导航卡 + 43 项真实物理传感器遥测**：
   - **行车大字粗体与内嵌运动刻度条（`dash.c` + `gen_dash_font.py`）**：特别致谢社区车友 [@luanqibazao0123-bot](https://github.com/luanqibazao0123-bot)（[#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)）分享的实车视觉效果图与信息框仪表化创意！本次围绕行车余光一瞥即读重构排版 —— 1～5 项锁定 **`46px` Bold 粗体数字 + `24px` Bold 项目名**（6 项 `41px` Bold），左右两侧信息框字号**完全独立计算**，互不拖累缩小；左右卡片统一为**严格镜像等宽（`295px`：`x=5..300` 与 `r_x=1620..1915`）**，严丝合缝对齐左下挡位与右下车速斜边，并在动态数据行内嵌三类高精度运动刻度条（`bars=1`，可开关）：

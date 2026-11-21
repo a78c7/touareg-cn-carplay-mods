@@ -1,9 +1,13 @@
-# MH2p SD ModKit
-Free ModKit that allows for modifying the MH2p unit used in some Volkswagen AG vehicles using only an SD card.
-## License
- - This file is part of MH2p_SD_ModKit, licensed under CC BY-NC-SA 4.0.
- - https://creativecommons.org/licenses/by-nc-sa/4.0/
- - See the LICENSE file in the project root for full license text.
- - NOT FOR COMMERCIAL USE
-## Notes
-Extract mod folders into this folder.
+# 刷机模块目录说明（重要）
+
+**为什么这个 `Mods/` 文件夹默认是空的？**
+
+自 `v21.0` 起，全部可选改装模块默认存放在上一级的 **`未选模块/`** 目录中（默认不开启任何改装，按需选装）。
+
+- **请不要直接空盘上车刷机**（否则不会安装任何功能）。
+- **必做步骤**：请先双击 U 盘根目录的 **`改装设置（Windows）.exe`** 或 **`改装设置（Mac）.command`**，勾选你需要安装或卸载的功能并点击 **「保存到 U 盘」**，程序会自动把所选模块移动到本 `Mods/` 目录中。
+
+---
+
+*Original ModKit Notice (CC BY-NC-SA 4.0, LawPaul):*  
+`Extract mod folders into this folder.`

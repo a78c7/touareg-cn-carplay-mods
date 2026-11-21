@@ -20,7 +20,6 @@ if [ -f "$FDIR/no_sim_dataonly" ] || [ -f "$FDIR/no_bt_auth" ]; then
     echo "other popup filter flag(s) still active; keeping VWPopupFilter bundle $BID:"
     ls -la "$FDIR"
     sync
-    mount -ur /mnt/app 2>/dev/null || true
     echo "=== VW_NoSimPopup uninstall done ==="
     exit 0
 fi
@@ -115,5 +114,4 @@ rm -f /tmp/bp_pf_un
 rm -fv "$JD/VWPopupFilter.jar" "$JD/VWNoSimPopup.jar" "$JD/VWNoSimPopup_"*.jar
 sync
 grep -n 'Startup.Lateload' "$B"
-mount -ur /mnt/app 2>/dev/null || true
 echo "=== VW_NoSimPopup uninstall done ==="

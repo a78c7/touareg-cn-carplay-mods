@@ -171,8 +171,8 @@ func validateWifi(w wifiReq) error {
 		if n.SSID == "" {
 			return fmt.Errorf("第 %d 个热点的名称不能为空", i+1)
 		}
-		if len(n.SSID) > 64 {
-			return fmt.Errorf("热点「%s」名称过长（最多 64 字节）", n.SSID)
+		if len(n.SSID) > 32 {
+			return fmt.Errorf("热点「%s」名称过长（Wi-Fi 标准上限 32 字节，约 10 个汉字）", n.SSID)
 		}
 		if len(n.PSK) < 8 || len(n.PSK) > 63 {
 			return fmt.Errorf("热点「%s」密码长度需为 8～63 位", n.SSID)
@@ -306,8 +306,15 @@ func saveKeyToDesktop(privPEM, pubLine, pin string) string {
 		return ""
 	}
 	base := home
-	if isDir(filepath.Join(home, "Desktop")) {
-		base = filepath.Join(home, "Desktop")
+	for _, cand := range []string{
+		filepath.Join(home, "Desktop"),
+		filepath.Join(home, "OneDrive", "Desktop"),
+		filepath.Join(home, "OneDrive", "桌面"),
+	} {
+		if isDir(cand) {
+			base = cand
+			break
+		}
 	}
 	outDir := filepath.Join(base, "途锐无线SSH密钥")
 	if err := os.MkdirAll(outDir, 0o700); err != nil {

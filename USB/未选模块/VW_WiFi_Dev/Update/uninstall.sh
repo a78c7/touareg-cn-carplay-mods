@@ -25,5 +25,5 @@ if [ -f "$AK" ]; then
 fi
 
 sync
-mount -ur /mnt/app 2>/dev/null
+# 注意：绝不能在此执行 mount -ur /mnt/app，上游 modkit_install.sh 后续仍需写入 /mnt/app/eso/bin/servicemgrmibhigh
 echo "=== VW_WiFi_Dev uninstall done ==="

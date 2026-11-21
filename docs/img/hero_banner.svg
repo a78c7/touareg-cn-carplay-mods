@@ -35,37 +35,37 @@
 
   <!-- Top Left Pill -->
   <g transform="translate(56, 46)">
-    <rect width="346" height="28" rx="14" fill="#0d252c" stroke="#00e5c3" stroke-opacity="0.55" stroke-width="1"/>
+    <rect width="298" height="28" rx="14" fill="#0d252c" stroke="#00e5c3" stroke-opacity="0.55" stroke-width="1"/>
     <circle cx="16" cy="14" r="4" fill="#00f2d3"/>
-    <text x="28" y="18.5" fill="#7efce6" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" font-weight="600" letter-spacing="0.8">单 U 盘免拆解锁 · 无线控制台 · AI 自由开发</text>
+    <text x="28" y="18.5" fill="#7efce6" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">单 U 盘免拆解锁 · 无线控制台 · AI 自由开发</text>
   </g>
 
   <!-- Left Hero Typography -->
   <g transform="translate(56, 126)" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans SC','Microsoft YaHei',sans-serif">
     <text x="0" y="0" fill="#ffffff" font-size="44" font-weight="800" letter-spacing="0.5">途锐 CarPlay 改装全家桶</text>
     <text x="0" y="56" fill="url(#cyanText)" font-size="38" font-weight="800" letter-spacing="0.5">与无线自由定制底座</text>
-    <text x="0" y="98" fill="#9fb0c7" font-size="15.5" font-weight="400">全屏 CarPlay · 导航上 HUD · 仪表全屏地图 · 35 项实时数据 · 行车记录 CSV</text>
+    <text x="0" y="98" fill="#9fb0c7" font-size="15.5" font-weight="400">全屏 CarPlay · 导航上 HUD · 仪表地图 · 43 项运动信息框与大字导航卡</text>
     <text x="0" y="124" fill="#9fb0c7" font-size="15.5" font-weight="400">手机热点直连 <tspan fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">touareg.local:8080</tspan> 秒改配置，开放无线 SSH 给 AI 自由重绘</text>
 
     <!-- Feature Chips -->
     <g transform="translate(0, 154)" font-size="12.5" font-weight="600">
-      <rect x="0" y="0" width="108" height="30" rx="6" fill="#162235" stroke="#2d4263"/>
-      <text x="54" y="19.5" fill="#dbeafe" text-anchor="middle">全屏 + 无线投屏</text>
+      <rect x="0" y="0" width="114" height="30" rx="6" fill="#162235" stroke="#2d4263"/>
+      <text x="57" y="19.5" fill="#dbeafe" text-anchor="middle">全屏 + 无线投屏</text>
 
-      <rect x="118" y="0" width="124" height="30" rx="6" fill="#162235" stroke="#2d4263"/>
-      <text x="180" y="19.5" fill="#dbeafe" text-anchor="middle">HUD + 仪表地图</text>
+      <rect x="124" y="0" width="126" height="30" rx="6" fill="#162235" stroke="#2d4263"/>
+      <text x="187" y="19.5" fill="#dbeafe" text-anchor="middle">HUD + 仪表地图</text>
 
-      <rect x="252" y="0" width="124" height="30" rx="6" fill="#162235" stroke="#2d4263"/>
-      <text x="314" y="19.5" fill="#dbeafe" text-anchor="middle">左右双信息框</text>
+      <rect x="260" y="0" width="128" height="30" rx="6" fill="#162235" stroke="#2d4263"/>
+      <text x="324" y="19.5" fill="#dbeafe" text-anchor="middle">运动条 + 导航卡</text>
 
-      <rect x="386" y="0" width="142" height="30" rx="6" fill="#0f2930" stroke="#00d2b8" stroke-opacity="0.6"/>
-      <text x="457" y="19.5" fill="#7efce6" text-anchor="middle">无线网页 + SSH</text>
+      <rect x="398" y="0" width="132" height="30" rx="6" fill="#0f2930" stroke="#00d2b8" stroke-opacity="0.6"/>
+      <text x="464" y="19.5" fill="#7efce6" text-anchor="middle">无线网页 + SSH</text>
     </g>
 
-    <text x="0" y="222" fill="#64748b" font-size="12.5" letter-spacing="1.2" font-weight="600">OPEN COCKPIT SUITE FOR VW TOUAREG (MH2p) · v20.0</text>
+    <text x="0" y="222" fill="#64748b" font-size="12.5" letter-spacing="1.2" font-weight="600">OPEN COCKPIT SUITE FOR VW TOUAREG (MH2p) · v21.0</text>
   </g>
 
-  <!-- Right Upper Card: 1920x639 Instrument Cluster Preview -->
+  <!-- Right Upper Card: 1920x639 Instrument Cluster Preview (v21 Sport Bars + Symmetrical Nav Card) -->
   <g transform="translate(626, 52)" filter="url(#drop)">
     <rect width="598" height="214" rx="16" fill="url(#cardBg)" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1.4"/>
     <!-- Subtle Map Grid -->
@@ -77,36 +77,49 @@
       <line x1="390" y1="16" x2="405" y2="198"/>
     </g>
     <!-- Navigation Route Line -->
-    <path d="M 292 198 L 306 96 L 332 34" fill="none" stroke="url(#routeGlow)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-    <polygon points="299,136 291,152 299,148 307,152" fill="#ffffff"/>
+    <path d="M 299 196 L 299 98 L 348 80" fill="none" stroke="url(#routeGlow)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="299,134 291,150 299,146 307,150" fill="#ffffff"/>
 
     <!-- Top Nav Pill -->
-    <rect x="196" y="12" width="206" height="24" rx="6" fill="#1f2937" fill-opacity="0.92"/>
-    <text x="299" y="28" fill="#f8fafc" font-family="-apple-system,'PingFang SC',sans-serif" font-size="11.5" font-weight="600" text-anchor="middle">2.4 km  ·  滨江大道  ·  14:25</text>
+    <rect x="196" y="12" width="206" height="22" rx="6" fill="#1f2937" fill-opacity="0.92"/>
+    <text x="299" y="27" fill="#f8fafc" font-family="-apple-system,'PingFang SC',sans-serif" font-size="11" font-weight="600" text-anchor="middle">9.5 km  ·  滨江大道  ·  13:54</text>
 
-    <!-- Left Info Box -->
-    <rect x="18" y="42" width="154" height="124" rx="10" fill="#090d14" fill-opacity="0.84" stroke="#334155" stroke-width="1"/>
-    <g font-family="-apple-system,'PingFang SC',sans-serif" font-size="11.5">
-      <text x="30" y="63" fill="#94a3b8">功率</text><text x="136" y="63" fill="#fff" font-weight="700" text-anchor="end">187</text><text x="141" y="63" fill="#64748b" font-size="10">kW</text>
-      <text x="30" y="85" fill="#94a3b8">扭矩</text><text x="136" y="85" fill="#fff" font-weight="700" text-anchor="end">402</text><text x="141" y="85" fill="#64748b" font-size="10">Nm</text>
-      <text x="30" y="107" fill="#94a3b8">G 值</text><text x="136" y="107" fill="#00f2d3" font-weight="700" text-anchor="end">+0.31</text><text x="141" y="107" fill="#64748b" font-size="10">g</text>
-      <text x="30" y="129" fill="#94a3b8">0–100</text><text x="136" y="129" fill="#38bdf8" font-weight="700" text-anchor="end">6.8</text><text x="141" y="129" fill="#64748b" font-size="10">s</text>
-      <text x="30" y="151" fill="#94a3b8">机油温度</text><text x="136" y="151" fill="#fff" font-weight="700" text-anchor="end">96</text><text x="141" y="151" fill="#64748b" font-size="10">°C</text>
+    <!-- Left Sport Telemetry Box (Symmetrical 154px) -->
+    <rect x="18" y="42" width="154" height="126" rx="10" fill="#0a0f18" fill-opacity="0.88" stroke="#334155" stroke-width="1"/>
+    <g font-family="-apple-system,'PingFang SC',sans-serif" font-size="11">
+      <text x="28" y="60" fill="#cbd5e1" font-weight="600">扭矩</text><text x="142" y="60" fill="#fff" font-size="13" font-weight="800" text-anchor="end">368</text><text x="146" y="60" fill="#94a3b8" font-size="9">Nm</text>
+      <rect x="28" y="64" width="96" height="3.5" rx="1.5" fill="#19d6d2"/><rect x="126" y="64" width="34" height="3.5" rx="1.5" fill="#7f1d1d"/>
+
+      <text x="28" y="84" fill="#cbd5e1" font-weight="600">转速</text><text x="142" y="84" fill="#fff" font-size="13" font-weight="800" text-anchor="end">2450</text><text x="146" y="84" fill="#94a3b8" font-size="9">rpm</text>
+      <rect x="28" y="88" width="76" height="3.5" rx="1.5" fill="#22d3ee"/><rect x="106" y="88" width="22" height="3.5" rx="1.5" fill="#1e293b"/><rect x="130" y="88" width="30" height="3.5" rx="1.5" fill="#7f1d1d"/>
+
+      <text x="28" y="108" fill="#cbd5e1" font-weight="600">G 值</text><text x="142" y="108" fill="#00f2d3" font-size="13" font-weight="800" text-anchor="end">+0.24</text><text x="146" y="108" fill="#94a3b8" font-size="9">g</text>
+      <rect x="28" y="112" width="132" height="3.5" rx="1.5" fill="#1e293b"/><rect x="94" y="112" width="26" height="3.5" rx="1" fill="#38bdf8"/><rect x="93" y="110.5" width="2" height="6.5" fill="#ffffff"/>
+
+      <text x="28" y="132" fill="#cbd5e1" font-weight="600">机油温度</text><text x="142" y="132" fill="#fff" font-size="13" font-weight="800" text-anchor="end">96</text><text x="146" y="132" fill="#94a3b8" font-size="9">°C</text>
+      <rect x="28" y="136" width="132" height="3.5" rx="1.5" fill="#1e293b"/><rect x="28" y="136" width="84" height="3.5" rx="1.5" fill="#34d399"/>
+
+      <text x="28" y="157" fill="#cbd5e1" font-weight="600">四轮胎压</text><text x="142" y="157" fill="#fff" font-size="12.5" font-weight="800" text-anchor="end">2.4·2.3</text><text x="146" y="157" fill="#94a3b8" font-size="8.5">bar</text>
     </g>
 
-    <!-- Right Info Box -->
-    <rect x="426" y="42" width="154" height="124" rx="10" fill="#090d14" fill-opacity="0.84" stroke="#334155" stroke-width="1"/>
-    <g font-family="-apple-system,'PingFang SC',sans-serif" font-size="11.5">
-      <text x="438" y="63" fill="#94a3b8">变速箱油温</text><text x="546" y="63" fill="#fff" font-weight="700" text-anchor="end">82</text><text x="551" y="63" fill="#64748b" font-size="10">°C</text>
-      <text x="438" y="85" fill="#94a3b8">当前消耗</text><text x="546" y="85" fill="#fff" font-weight="700" text-anchor="end">10.6</text><text x="551" y="85" fill="#64748b" font-size="10">L</text>
-      <text x="438" y="107" fill="#94a3b8">本次油耗</text><text x="546" y="107" fill="#fff" font-weight="700" text-anchor="end">9.4</text><text x="551" y="107" fill="#64748b" font-size="10">L</text>
-      <text x="438" y="129" fill="#94a3b8">续驶里程</text><text x="546" y="129" fill="#fff" font-weight="700" text-anchor="end">580</text><text x="551" y="129" fill="#64748b" font-size="10">km</text>
-      <text x="438" y="151" fill="#94a3b8">最大功率</text><text x="546" y="151" fill="#f8fafc" font-weight="700" text-anchor="end">218</text><text x="551" y="151" fill="#64748b" font-size="10">kW</text>
+    <!-- Right Symmetrical Large-Font Navigation Card (154px) -->
+    <rect x="426" y="42" width="154" height="126" rx="10" fill="#0a0f18" fill-opacity="0.88" stroke="#334155" stroke-width="1"/>
+    <g font-family="-apple-system,'PingFang SC',sans-serif">
+      <!-- Turn Arrow Icon -->
+      <path d="M 442 74 L 442 61 Q 442 56 447 56 L 456 56" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round"/>
+      <polygon points="455,51 463,56 455,61" fill="#ffffff"/>
+      <text x="472" y="61" fill="#ffffff" font-size="15" font-weight="800">260 <tspan fill="#94a3b8" font-size="10" font-weight="600">m</tspan></text>
+      <text x="472" y="75" fill="#38bdf8" font-size="10.5" font-weight="700">前方右转</text>
+      <text x="436" y="96" fill="#f8fafc" font-size="13" font-weight="700">滨江大道</text>
+      <line x1="436" y1="106" x2="570" y2="106" stroke="#334155" stroke-width="0.9"/>
+      <text x="436" y="122" fill="#94a3b8" font-size="10.5">剩余路程</text><text x="570" y="122" fill="#ffffff" font-size="12" font-weight="700" text-anchor="end">9.5 km</text>
+      <text x="436" y="140" fill="#94a3b8" font-size="10.5">剩余时间</text><text x="570" y="140" fill="#ffffff" font-size="12" font-weight="700" text-anchor="end">16 分钟</text>
+      <text x="436" y="158" fill="#94a3b8" font-size="10.5">预计到达</text><text x="570" y="158" fill="#ffffff" font-size="12" font-weight="700" text-anchor="end">13:54</text>
     </g>
 
     <!-- Bottom Stock Gear & Speed -->
-    <text x="28" y="196" fill="#e2e8f0" font-family="-apple-system,sans-serif" font-size="20" font-weight="800">D5</text>
-    <text x="540" y="196" fill="#ffffff" font-family="-apple-system,sans-serif" font-size="20" font-weight="800" text-anchor="end">86</text>
+    <text x="28" y="196" fill="#e2e8f0" font-family="-apple-system,sans-serif" font-size="20" font-weight="800">D6</text>
+    <text x="540" y="196" fill="#ffffff" font-family="-apple-system,sans-serif" font-size="20" font-weight="800" text-anchor="end">72</text>
     <text x="545" y="196" fill="#94a3b8" font-family="-apple-system,sans-serif" font-size="11">km/h</text>
   </g>
 
@@ -122,13 +135,13 @@
 
     <!-- Mini UI Pills inside Mobile Card -->
     <g transform="translate(20, 58)" font-family="-apple-system,'PingFang SC',sans-serif" font-size="11.5">
-      <text x="0" y="12" fill="#94a3b8">手机端实时点选 / 导出行车记录 CSV：</text>
+      <text x="0" y="12" fill="#94a3b8">手机端实时定制 43 项指标 / 导出 34 列行车记录 CSV：</text>
       <g transform="translate(0, 22)">
-        <rect x="0" y="0" width="58" height="24" rx="12" fill="#172554" stroke="#3b82f6"/><text x="29" y="16" fill="#93c5fd" text-anchor="middle">功率</text>
-        <rect x="66" y="0" width="58" height="24" rx="12" fill="#172554" stroke="#3b82f6"/><text x="95" y="16" fill="#93c5fd" text-anchor="middle">扭矩</text>
-        <rect x="132" y="0" width="64" height="24" rx="12" fill="#172554" stroke="#3b82f6"/><text x="164" y="16" fill="#93c5fd" text-anchor="middle">0–100</text>
-        <rect x="204" y="0" width="70" height="24" rx="12" fill="#172554" stroke="#3b82f6"/><text x="239" y="16" fill="#93c5fd" text-anchor="middle">双油温</text>
-        <rect x="282" y="0" width="118" height="24" rx="12" fill="#1f6feb"/><text x="341" y="16" fill="#ffffff" font-weight="600" text-anchor="middle">✓ 保存秒刷仪表</text>
+        <rect x="0" y="0" width="58" height="24" rx="12" fill="#172554" stroke="#3b82f6"/><text x="29" y="16" fill="#93c5fd" text-anchor="middle">扭矩</text>
+        <rect x="66" y="0" width="58" height="24" rx="12" fill="#172554" stroke="#3b82f6"/><text x="95" y="16" fill="#93c5fd" text-anchor="middle">转速</text>
+        <rect x="132" y="0" width="76" height="24" rx="12" fill="#172554" stroke="#3b82f6"/><text x="170" y="16" fill="#93c5fd" text-anchor="middle">四轮胎压</text>
+        <rect x="216" y="0" width="76" height="24" rx="12" fill="#172554" stroke="#3b82f6"/><text x="254" y="16" fill="#93c5fd" text-anchor="middle">俯仰侧倾</text>
+        <rect x="300" y="0" width="122" height="24" rx="12" fill="#1f6feb"/><text x="361" y="16" fill="#ffffff" font-weight="600" text-anchor="middle">✓ 保存秒刷仪表</text>
       </g>
       <g transform="translate(0, 58)">
         <rect x="0" y="0" width="516" height="28" rx="6" fill="#070b12" stroke="#1e293b"/>
@@ -143,9 +156,9 @@
   <line x1="0" y1="472" x2="1280" y2="472" stroke="#1e293b" stroke-width="1"/>
   <g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="12.5" font-weight="600">
     <text x="56" y="501" fill="#00f2d3">大众途锐实车验证 (P2878)</text>
-    <text x="236" y="501" fill="#475569">|</text>
-    <text x="256" y="501" fill="#94a3b8">同平台 MH2p 参考支持：</text>
-    <text x="404" y="501" fill="#f1f5f9" letter-spacing="1.2">VW TOUAREG  ·  AUDI MIB2+  ·  PORSCHE PCM5  ·  BENTLEY  ·  LAMBORGHINI</text>
+    <text x="224" y="501" fill="#475569">|</text>
+    <text x="242" y="501" fill="#94a3b8">同平台 MH2p 参考：</text>
+    <text x="366" y="501" fill="#f1f5f9" letter-spacing="1.0">VW TOUAREG · AUDI MIB2+ · PORSCHE PCM5 · BENTLEY · LAMBORGHINI</text>
     <text x="1224" y="501" fill="#7efce6" text-anchor="end" letter-spacing="0.8">FREE &amp; OPEN SOURCE</text>
   </g>
 </svg>

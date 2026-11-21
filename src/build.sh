@@ -12,7 +12,7 @@ set -e
 : ${QNX_TARGET:?set QNX_TARGET to .../sdp/target/qnx6}
 : ${SCREEN_INC:=$QNX_TARGET/usr/include}
 L=$QNX_TARGET/armle-v7/lib; UL=$QNX_TARGET/armle-v7/usr/lib
-CF="--target=armv7a-none-eabi -mfloat-abi=softfp -mfpu=neon -mthumb -fPIC -O2 -D__QNX__ -D__QNXNTO__ -D__ARM__ -D__LITTLEENDIAN__ -nostdinc -isystem $(clang -print-resource-dir)/include -isystem $SCREEN_INC -isystem $QNX_TARGET/usr/include -fno-stack-protector -Wno-format"
+CF="--target=armv7a-none-eabi -mfloat-abi=softfp -mfpu=neon -mthumb -fPIC -O2 -D__QNX__ -D__QNXNTO__ -D__ARM__ -D__LITTLEENDIAN__ -nostdinc -Icommon -isystem $(clang -print-resource-dir)/include -isystem $SCREEN_INC -isystem $QNX_TARGET/usr/include -fno-stack-protector -Wno-format"
 EXE_START="--dynamic-linker=/usr/lib/ldqnx.so.2 $L/crt1.o $L/crti.o $L/crtbegin.o"
 EXE_END="$L/crtend.o $L/crtn.o"
 cd "$(dirname "$0")"; mkdir -p out

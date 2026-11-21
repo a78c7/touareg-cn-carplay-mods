@@ -436,13 +436,13 @@ static void pps_publish_state(void) {
 }
 
 /* Called from sendToSession when we see 0x5201 RouteGuidanceUpdate.
- * buf/len is the full payload "40 40 LL LL 52 01 <TLVs>"; rgd_parse_update
- * expects TLV bytes only, so we skip the 6-byte message header. */
+ * buf/len is the full payload "40 40 LL LL 52 01 <TLVs>"; rgd_parse_* internally
+ * skips the 6-byte iAP2 message header, so pass the full message buffer directly. */
 static void rg_on_update(const uint8_t *msg_payload, size_t msg_len) {
     if (msg_len < 8) return;
     rgd_update_t u;
     memset(&u, 0, sizeof(u));
-    rgd_parse_update(msg_payload + 6, msg_len - 6, &u);
+    rgd_parse_update(msg_payload, msg_len, &u);
 
     g_rg_state.have_update = 1;
     if (u.present & RGD_UPD_ROUTE_STATE)        g_rg_state.route_state        = u.route_state;
@@ -507,7 +507,7 @@ static void rg_on_maneuver(const uint8_t *msg_payload, size_t msg_len) {
     slots_init_once();
     rgd_maneuver_t m;
     memset(&m, 0, sizeof(m));
-    rgd_parse_maneuver(msg_payload + 6, msg_len - 6, &m);
+    rgd_parse_maneuver(msg_payload, msg_len, &m);
     if (!(m.present & RGD_MAN_INDEX)) return;
 
     int si = slot_allocate(m.index);
@@ -557,7 +557,7 @@ static void rg_on_lane_guidance(const uint8_t *msg_payload, size_t msg_len) {
     slots_init_once();
     rgd_lane_guidance_t lg;
     memset(&lg, 0, sizeof(lg));
-    rgd_parse_lane_guidance(msg_payload + 6, msg_len - 6, &lg);
+    rgd_parse_lane_guidance(msg_payload, msg_len, &lg);
 
     /* Empty lane set for this index means "this maneuver has no lanes" —
      * still record it so we can report lane_active=false when current. */

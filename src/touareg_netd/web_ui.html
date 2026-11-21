@@ -2,53 +2,61 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MH2p 无线控制台</title>
 <style>
-:root{--bg:#0d1117;--card:#161b22;--bd:#30363d;--tx:#e6edf3;--mut:#8b949e;--acc:#2f81f7;--ok:#3fb950;--warn:#d29922;--err:#f85149}
+:root{--bg:#0b0f17;--card:#141a24;--card2:#0f141d;--bd:#283244;--tx:#eef3fb;--mut:#8b97ab;--acc:#2f81f7;--cyan:#22d3ee;--ok:#34d399;--warn:#f59e0b;--err:#f87171}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;padding-bottom:40px}
-header{position:sticky;top:0;z-index:10;background:rgba(13,17,23,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--bd);padding:12px 14px}
-h1{margin:0;font-size:17px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.badge{font-size:11px;padding:2px 8px;border-radius:99px;background:#21262d;color:var(--mut);font-weight:500}
-.badge.ok{background:rgba(63,185,80,.15);color:var(--ok)}
-.badge.warn{background:rgba(210,153,34,.18);color:var(--warn)}
-.badge.err{background:rgba(248,81,73,.18);color:var(--err)}
-.meta{margin-top:6px;font-size:12px;color:var(--mut);display:flex;flex-wrap:wrap;gap:6px 12px}
-.tabs{display:flex;gap:6px;padding:10px 14px 0;overflow-x:auto}
-.tab{flex:1;min-width:74px;text-align:center;padding:8px 6px;border-radius:8px;background:var(--card);border:1px solid var(--bd);color:var(--mut);font-size:13px;font-weight:600;cursor:pointer}
-.tab.on{background:var(--acc);border-color:var(--acc);color:#fff}
-main{padding:12px 14px;max-width:760px;margin:0 auto}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;padding-bottom:calc(44px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:20;background:rgba(11,15,23,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd);padding:12px 14px}
+h1{margin:0;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px;letter-spacing:.2px}
+.badge{font-size:11px;padding:3px 9px;border-radius:99px;background:#1e2636;color:var(--mut);font-weight:600;white-space:nowrap}
+.badge.ok{background:rgba(52,211,153,.15);color:var(--ok);border:1px solid rgba(52,211,153,.35)}
+.badge.warn{background:rgba(245,158,11,.16);color:var(--warn);border:1px solid rgba(245,158,11,.35)}
+.badge.err{background:rgba(248,113,113,.16);color:var(--err);border:1px solid rgba(248,113,113,.4)}
+.meta{margin-top:6px;font-size:12px;color:var(--mut);display:flex;flex-wrap:wrap;gap:4px 12px}
+.tabs{display:flex;gap:6px;padding:10px 14px 2px;max-width:760px;margin:0 auto}
+.tab{flex:1;min-width:70px;text-align:center;padding:9px 6px;border-radius:10px;background:var(--card);border:1px solid var(--bd);color:var(--mut);font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+.tab.on{background:var(--acc);border-color:var(--acc);color:#fff;box-shadow:0 4px 14px rgba(47,129,247,.3)}
+main{padding:10px 14px;max-width:760px;margin:0 auto}
 .pane{display:none}.pane.on{display:block}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
-.card h2{margin:0 0 10px;font-size:15px;display:flex;align-items:center;justify-content:space-between}
-.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid rgba(48,54,61,.55)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{margin:0 0 10px;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sub-tag{font-size:11.5px;color:var(--cyan);font-weight:600;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.25);padding:2px 8px;border-radius:99px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(40,50,68,.65)}
+.row.stack{flex-direction:column;align-items:stretch;gap:6px}
 .row:first-of-type{border-top:none}
-label{color:var(--tx);font-size:13px}
-.sub{display:block;font-size:11px;color:var(--mut);margin-top:2px}
-input[type=number],input[type=text],input[type=password],select{background:#0d1117;color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:7px 9px;font-size:14px;min-width:96px}
-input[type=text],input[type=password]{width:100%}
-input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:9px;border:1px solid var(--bd);background:#21262d;color:var(--tx);font-size:13px;font-weight:600;cursor:pointer;text-decoration:none}
+label{color:var(--tx);font-size:13.5px}
+.sub{display:block;font-size:11.5px;color:var(--mut);margin-top:2px;line-height:1.45}
+input[type=number],input[type=text],input[type=password],select{background:var(--card2);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:8px 10px;font-size:16px;min-width:96px}
+input[type=text],input[type=password],.row.stack select{width:100%}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:8px 14px;border-radius:10px;border:1px solid var(--bd);background:#1f2735;color:var(--tx);font-size:13.5px;font-weight:600;cursor:pointer;text-decoration:none}
 .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
-.btn.dan{background:rgba(248,81,73,.14);border-color:rgba(248,81,73,.45);color:var(--err)}
-.btn.sm{padding:5px 9px;font-size:12px;border-radius:7px}
-.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.dan{background:rgba(248,113,113,.13);border-color:rgba(248,113,113,.45);color:var(--err)}
+.btn.sm{min-height:32px;padding:5px 10px;font-size:12.5px;border-radius:8px}
+.btn:disabled{opacity:.42;cursor:not-allowed}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.sel-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}
-.sel-item{display:flex;align-items:center;gap:6px;background:#0d1117;border:1px solid var(--bd);border-radius:8px;padding:6px 8px}
-.sel-item .nm{flex:1;font-size:13px}.sel-item .ut{font-size:11px;color:var(--mut)}
-.pool{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.chip{padding:5px 9px;border-radius:99px;border:1px solid var(--bd);background:#0d1117;color:var(--mut);font-size:12px;cursor:pointer}
-.chip.used{border-color:var(--acc);color:#79c0ff;background:rgba(47,129,247,.12)}
-.code{background:#0d1117;border:1px solid var(--bd);border-radius:8px;padding:9px 10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;color:#a5d6ff;white-space:pre-wrap}
-.fitem{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid rgba(48,54,61,.55)}
+.side-bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.side-btn{padding:10px 8px;border-radius:10px;border:1px solid var(--bd);background:var(--card2);color:var(--mut);font-size:13.5px;font-weight:600;cursor:pointer;text-align:center}
+.side-btn.on{background:rgba(47,129,247,.16);border-color:var(--acc);color:#93c5fd}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.sel-list{display:flex;flex-direction:column;gap:6px;margin:8px 0 10px}
+.sel-item{display:flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--bd);border-radius:10px;padding:7px 9px}
+.sel-item .nm{flex:1;font-size:13.5px;font-weight:500}.sel-item .ut{font-size:11.5px;color:var(--mut);margin-right:2px}
+.grp-title{font-size:11.5px;color:var(--mut);margin:10px 0 6px;font-weight:600;letter-spacing:.3px}
+.pool{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:6px 10px;border-radius:99px;border:1px solid var(--bd);background:var(--card2);color:var(--mut);font-size:12.5px;cursor:pointer;user-select:none}
+.chip.used{border-color:var(--acc);color:#93c5fd;background:rgba(47,129,247,.16);font-weight:600}
+.code{background:var(--card2);border:1px solid var(--bd);border-radius:9px;padding:10px 11px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;color:#93c5fd;white-space:pre-wrap}
+.fitem{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid rgba(40,50,68,.65)}
 .fitem:first-of-type{border-top:none}
-.fnm{font-size:13px;word-break:break-all}.fsz{font-size:11px;color:var(--mut)}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:none;align-items:center;justify-content:center;padding:18px}
+.fnm{font-size:13px;word-break:break-all}.fsz{font-size:11.5px;color:var(--mut)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:50;display:none;align-items:center;justify-content:center;padding:18px}
 .modal.on{display:flex}
 .modal-box{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;width:100%;max-width:360px}
-#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#21262d;color:#fff;border:1px solid var(--bd);padding:9px 16px;border-radius:10px;font-size:13px;z-index:99;display:none;max-width:92vw;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.pin-err{color:var(--err);font-size:12.5px;margin:8px 0 0;min-height:18px}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#1f2937;color:#fff;border:1px solid var(--bd);padding:10px 16px;border-radius:10px;font-size:13px;z-index:99;display:none;max-width:92vw;box-shadow:0 10px 28px rgba(0,0,0,.55)}
 </style>
 </head>
 <body>
@@ -58,7 +66,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
     <span id="spdBadge" class="badge">连接中...</span>
   </h1>
   <div class="meta">
-    <span id="ipTxt">IP: --</span>
+    <span id="ipTxt">地址: --</span>
     <span id="procTxt">状态: --</span>
     <span id="odoTxt"></span>
   </div>
@@ -79,33 +87,34 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
     </div>
     <div id="clusterCards">
       <div class="card">
-        <h2>左信息框 <label style="font-weight:400;display:flex;align-items:center;gap:6px"><input type="checkbox" id="show">启用</label></h2>
-        <div id="lSel" class="sel-list"></div>
-        <div class="sub">点下方标签添加或取消（最多 10 项，1～5 项超大字 + 内嵌运动仪表条）：</div>
-        <div id="lPool" class="pool"></div>
-      </div>
-
-      <div class="card">
-        <h2>右信息框 <label style="font-weight:400;display:flex;align-items:center;gap:6px"><input type="checkbox" id="r_show">启用</label></h2>
-        <div id="rSel" class="sel-list"></div>
-        <div class="sub">点下方标签添加或取消（最多 10 项，未导航时显示；开启导航自动切换为大字导航信息框）：</div>
-        <div id="rPool" class="pool"></div>
-      </div>
-
-      <div class="card">
-        <h2>车标位置与通用参数</h2>
-        <div class="row"><label>显示行内运动进度条<span class="sub">转速/功率/扭矩/油门斜切运动格、G值/转向/坡度中心游标、油温/胎压刻度条</span></label><input type="checkbox" id="bars" checked></div>
-        <div class="row"><label>地图常驻上移 (0~90)<span class="sub">车标被底部驾驶辅助图案挡住时调大</span></label><input type="number" id="car_up" min="0" max="90"></div>
-        <div class="row"><label>开 ACC 时再上移 (0~90)<span class="sub">car_up + acc_up 最多 90</span></label><input type="number" id="acc_up" min="0" max="90"></div>
-        <div class="row"><label>高德车标居中<span class="sub">只对高德生效</span></label>
-          <select id="amap_turn">
-            <option value="3">3 · 看画面自动居中（推荐）</option>
-            <option value="0">0 · 关</option>
-            <option value="1">1 · 按下一路口方向补偿</option>
-            <option value="2">2 · 收到车道信息时不补偿</option>
-          </select>
+        <h2>
+          <span>左右信息框配置</span>
+          <span id="sizeBadge" class="sub-tag">5/10 项 · 46px 超大字</span>
+        </h2>
+        <div class="side-bar">
+          <button type="button" class="side-btn on" id="tabSideL">左信息框</button>
+          <button type="button" class="side-btn" id="tabSideR">右信息框</button>
         </div>
-        <div class="row"><label>大字导航信息框<span class="sub">可选仅导航时弹出，或常驻显示（未导航时显示待机导航框）</span></label>
+        <div class="row" style="padding:6px 0 8px">
+          <label id="sideEnableLbl">启用左信息框<span class="sub" id="sideEnableSub">对齐左下挡位斜边，1～5 项享 46px 特大粗体 + 运动刻度条</span></label>
+          <input type="checkbox" id="sideEnable">
+        </div>
+        <div id="selList" class="sel-list"></div>
+        <div class="presets">
+          <button type="button" class="btn sm" data-p="torque,rpm,g,oil,cons">推荐 5 项大字</button>
+          <button type="button" class="btn sm" data-p="power,torque,g,rpm,oil,gearbox">经典动力 6 项</button>
+          <button type="button" class="btn sm" data-p="tires,pitch,roll,alt,oil">胎压越野 5 项</button>
+          <button type="button" class="btn sm" data-p="t100,pmax,tqmax,gmax,power">性能极值</button>
+          <button type="button" class="btn sm dan" data-p="">清空</button>
+        </div>
+        <div id="poolWrap"></div>
+      </div>
+
+      <div class="card">
+        <h2>运动条、导航卡与车标参数</h2>
+        <div class="row"><label>行内运动刻度进度条<span class="sub">转速/扭矩斜切分段条、G 值/坡度中心游标、油温/胎压区间条</span></label><input type="checkbox" id="bars" checked></div>
+        <div class="row stack">
+          <label>大字导航信息卡<span class="sub">与左框严格等宽对称（295px），可选仅导航弹出或常驻待机框</span></label>
           <select id="nav_mode">
             <option value="right">右边框 · 仅导航时弹出（默认）</option>
             <option value="right_always">右边框 · 常驻显示（未导航显示待机框）</option>
@@ -114,7 +123,18 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
             <option value="off">关闭</option>
           </select>
         </div>
-        <div class="row"><label>预计到达时区偏移 (nav_tz)<span class="sub">东八区填 8，用于计算到达时间</span></label><input type="number" id="nav_tz" min="-12" max="14"></div>
+        <div class="row stack">
+          <label>高德车标居中<span class="sub">仅对高德导航生效，自动把偏移车标拉回时钟下方</span></label>
+          <select id="amap_turn">
+            <option value="3">3 · 看画面自动居中（推荐）</option>
+            <option value="0">0 · 关</option>
+            <option value="1">1 · 按下一路口方向补偿</option>
+            <option value="2">2 · 收到车道信息时不补偿</option>
+          </select>
+        </div>
+        <div class="row"><label>地图常驻上移 (0~90)<span class="sub">车标被底部驾驶辅助图案挡住时调大</span></label><input type="number" id="car_up" min="0" max="90"></div>
+        <div class="row"><label>开 ACC 时再上移 (0~90)<span class="sub">car_up + acc_up 最多 90</span></label><input type="number" id="acc_up" min="0" max="90"></div>
+        <div class="row"><label>预计到达时区偏移 (nav_tz)<span class="sub">北京时间填 8</span></label><input type="number" id="nav_tz" min="-12" max="14"></div>
         <div class="row"><label>背景不透明度 (0~255)</label><input type="number" id="alpha" min="0" max="255"></div>
         <div class="row"><label>油箱容积 (升，0=百分比)</label><input type="number" id="tank_l" min="0" max="200"></div>
         <div class="row"><label>横向 G 符号反转</label><input type="checkbox" id="lat_flip"></div>
@@ -126,7 +146,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
           </div>
         </div>
         <div class="actions">
-          <button class="btn pri" type="button" id="btnSaveDash">保存并立即刷新仪表</button>
+          <button class="btn pri write-act" type="button" id="btnSaveDash" style="width:100%">保存并立即刷新仪表</button>
         </div>
       </div>
 
@@ -136,8 +156,8 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
         <div class="row"><label>画布宽度 wide (1920~2880)</label><input type="number" id="cl_wide" min="1920" max="2880" placeholder="2688"></div>
         <div class="row"><label>视野比例 view (60~100)</label><input type="number" id="cl_view" min="60" max="100" placeholder="85"></div>
         <div class="actions">
-          <button class="btn pri" type="button" id="btnSaveCl">保存 cl.conf</button>
-          <button class="btn" type="button" onclick="doAct('restart_carplay')">重连 CarPlay</button>
+          <button class="btn pri write-act" type="button" id="btnSaveCl">保存 cl.conf</button>
+          <button class="btn write-act" type="button" onclick="doAct('restart_carplay',this)">重连 CarPlay</button>
         </div>
       </div>
     </div>
@@ -146,25 +166,25 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
   <section id="p-ctrl" class="pane">
     <div id="ctrlToggles" class="card">
       <h2>仪表功能开关</h2>
-      <div class="row"><label>临时停用仪表地图 (disable)<span class="sub">下次重启后生效，不卸载模块</span></label><input type="checkbox" id="tg_disable" onchange="doToggle('disable',this.checked)"></div>
-      <div class="row"><label>关闭 CarPlay 切原车保活 (ka_off)<span class="sub">默认关闭此项以防 30 秒断联</span></label><input type="checkbox" id="tg_ka_off" onchange="doToggle('ka_off',this.checked)"></div>
-      <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放反向</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
-      <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">默认开启：连按 2 下右侧 OK 键在 CarPlay 地图与原车地图间切换</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
+      <div class="row"><label>停用仪表地图 (disable)<span class="sub">勾上后下次重启生效，不卸载模块</span></label><input type="checkbox" id="tg_disable" onchange="doToggle('disable',this.checked)"></div>
+      <div class="row"><label>关闭切原车界面保活 (ka_off)<span class="sub">建议保持关闭，防止切收音机 30 秒断联</span></label><input type="checkbox" id="tg_ka_off" onchange="doToggle('ka_off',this.checked)"></div>
+      <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放方向反转</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
+      <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">v21 默认由 VW_HUD_4 模块开启；取消勾选即允许连按 2 下 OK 键切换地图</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
     </div>
     <div class="card">
       <h2>快捷运维（仅停车可用）</h2>
       <div class="actions">
-        <button class="btn pri" type="button" onclick="doAct('toggle_map')">切换仪表地图 (CarPlay ↔ 原车)</button>
-        <button class="btn" type="button" onclick="doAct('restart_render')">刷新仪表画面 (slay cl_render)</button>
-        <button class="btn" type="button" onclick="doAct('restart_carplay')">重连 CarPlay (slay dio_manager)</button>
-        <button class="btn dan" type="button" onclick="confirmReboot()">软重启车机 (gem-reset)</button>
+        <button class="btn pri write-act" type="button" onclick="doAct('toggle_map',this)">切换仪表地图 (CarPlay ↔ 原车)</button>
+        <button class="btn write-act" type="button" onclick="doAct('restart_render',this)">刷新仪表画面</button>
+        <button class="btn write-act" type="button" onclick="doAct('restart_carplay',this)">重连 CarPlay</button>
+        <button class="btn dan write-act" type="button" onclick="confirmReboot(this)">软重启车机 (gem-reset)</button>
       </div>
     </div>
   </section>
 
   <section id="p-logs" class="pane">
     <div class="card">
-      <h2>行车记录 CSV（U 盘 drive_logs）<button class="btn sm" onclick="loadStatus()">刷新</button></h2>
+      <h2>行车记录 CSV（U 盘 drive_logs）<button class="btn sm" type="button" onclick="loadStatus()">刷新</button></h2>
       <div id="driveList" class="sub">加载中...</div>
     </div>
     <div class="card">
@@ -176,10 +196,11 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
   <section id="p-dev" class="pane">
     <div class="card">
       <h2>SSH 连接信息</h2>
-      <div id="sshHint" class="sub" style="margin-bottom:6px">使用「改装设置」导出的本车专属 Ed25519 私钥连接（若安卓客户端不解析 .local，请直接使用下方车机 IP）：</div>
+      <div id="sshHint" class="sub" style="margin-bottom:8px">使用「改装设置」导出的本车专属 Ed25519 私钥连接（若安卓端不解析 .local，请直连下方车机 IP）：</div>
       <div id="sshBox" class="code">ssh -p 2012 root@touareg.local</div>
       <div class="actions">
         <button class="btn sm" type="button" onclick="copyText(document.getElementById('sshBox').textContent)">复制 SSH 命令</button>
+        <button class="btn sm" type="button" onclick="resetPin()">重新输入管理口令</button>
       </div>
     </div>
 
@@ -187,10 +208,10 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
       <h2>新增备用 Wi-Fi 热点（自动兼容 iPhone 弯撇号与中文名）</h2>
       <div class="sub" style="margin-bottom:8px">支持追加家里地库 Wi-Fi 或另一台手机 WPA2 热点（保存后自动备份原配置，下次重连或重启生效）：</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <input type="text" id="w_ssid" placeholder="热点名称（区分大小写，如 MyPhone）">
-        <input type="password" id="w_psk" placeholder="WPA2 热点密码（至少 8 位）">
+        <input type="text" id="w_ssid" autocomplete="off" placeholder="热点名称（区分大小写，如 MyPhone）">
+        <input type="password" id="w_psk" autocomplete="off" placeholder="WPA2 热点密码（至少 8 位）">
         <div class="actions">
-          <button class="btn pri" type="button" id="btnAddWifi">追加热点配置</button>
+          <button class="btn pri write-act" type="button" id="btnAddWifi">追加热点配置</button>
         </div>
       </div>
       <div id="wifiSaved" class="sub" style="margin-top:10px"></div>
@@ -201,8 +222,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
 <div id="pinModal" class="modal">
   <div class="modal-box">
     <h2 style="margin:0 0 8px;font-size:16px">输入管理口令</h2>
-    <div class="sub" style="margin-bottom:10px">请输入在「改装设置」里设定的管理口令（验证通过后将保存在本机浏览器）：</div>
-    <input type="password" id="pinInput" placeholder="管理口令">
+    <div class="sub" style="margin-bottom:10px">请输入在「改装设置」里设定的 4～8 位管理口令（验证通过后自动保存在本机浏览器）：</div>
+    <input type="password" id="pinInput" autocomplete="off" placeholder="管理口令">
+    <div id="pinErr" class="pin-err"></div>
     <div class="actions">
       <button class="btn pri" type="button" id="btnPinOk" style="width:100%">确认解锁</button>
     </div>
@@ -213,23 +235,39 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc)}
 
 <script>
 const ITEMS=[
-["power","功率","kW"],["torque","扭矩","Nm"],["g","G值","g"],["glong","纵向G","g"],["glat","横向G","g"],
-["rpm","转速","rpm"],["speed","车速","km/h"],["pedal","油门","%"],["brake","制动压力","bar"],["steer","转向角","°"],
-["gear","挡位",""],["gearbox","变速箱油温","°C"],["oil","机油温度","°C"],["coolant","冷却液温度","°C"],["outside","车外温度","°C"],
-["cons","当前消耗","L/100km"],["fuel","燃油存量","L"],["range","续驶里程","km"],
-["trip","本次油耗","L/100km"],["tripdist","本次里程","km"],["tripspeed","本次均速","km/h"],["triptime","本次时长","h"],
-["refuel","加油后油耗","L/100km"],["refueldist","加油后里程","km"],["refuelspeed","加油后均速","km/h"],["refueltime","加油后时长","h"],
-["total","累计油耗","L/100km"],["totaldist","累计里程","km"],["totalspeed","累计均速","km/h"],["totaltime","累计时长","h"],
-["t100","0-100","s"],["pmax","最大功率","kW"],["tqmax","最大扭矩","Nm"],["gmax","最大G值","g"],["tripkm","Trip","km"],
-["tires","四轮胎压","bar"],["tpfl","左前胎压","bar"],["tpfr","右前胎压","bar"],["tprl","左后胎压","bar"],["tprr","右后胎压","bar"],
-["pitch","俯仰角","°"],["roll","侧倾角","°"],["alt","海拔","m"]
+["power","功率","kW","动力与加速"],["torque","扭矩","Nm","动力与加速"],["rpm","转速","rpm","动力与加速"],["pedal","油门","%","动力与加速"],["brake","制动压力","bar","动力与加速"],
+["g","G值","g","动力与加速"],["glong","纵向G","g","动力与加速"],["glat","横向G","g","动力与加速"],
+["t100","0-100","s","性能与行驶"],["pmax","最大功率","kW","性能与行驶"],["tqmax","最大扭矩","Nm","性能与行驶"],["gmax","最大G值","g","性能与行驶"],
+["speed","车速","km/h","性能与行驶"],["steer","转向角","°","性能与行驶"],["gear","挡位","","性能与行驶"],["tripkm","Trip","km","性能与行驶"],
+["tires","四轮胎压","bar","胎压与越野"],["tpfl","左前胎压","bar","胎压与越野"],["tpfr","右前胎压","bar","胎压与越野"],["tprl","左后胎压","bar","胎压与越野"],["tprr","右后胎压","bar","胎压与越野"],
+["pitch","俯仰角","°","胎压与越野"],["roll","侧倾角","°","胎压与越野"],["alt","海拔","m","胎压与越野"],
+["oil","机油温度","°C","温度与油耗"],["gearbox","变速箱油温","°C","温度与油耗"],["coolant","冷却液温度","°C","温度与油耗"],["outside","车外温度","°C","温度与油耗"],
+["cons","当前消耗","L/100km","温度与油耗"],["fuel","燃油存量","L","温度与油耗"],["range","续驶里程","km","温度与油耗"],
+["trip","本次油耗","L/100km","行车电脑"],["tripdist","本次里程","km","行车电脑"],["tripspeed","本次均速","km/h","行车电脑"],["triptime","本次时长","h","行车电脑"],
+["refuel","加油后油耗","L/100km","行车电脑"],["refueldist","加油后里程","km","行车电脑"],["refuelspeed","加油后均速","km/h","行车电脑"],["refueltime","加油后时长","h","行车电脑"],
+["total","累计油耗","L/100km","行车电脑"],["totaldist","累计里程","km","行车电脑"],["totalspeed","累计均速","km/h","行车电脑"],["totaltime","累计时长","h","行车电脑"]
 ];
 const IMAP={};ITEMS.forEach(x=>IMAP[x[0]]=x);
-let S=null,L=[],R=[],PIN=localStorage.getItem('mh2p_pin')||'';
+let S=null,L=[],R=[],lOn=true,rOn=false,curSide='l',PIN=localStorage.getItem('mh2p_pin')||'',busy=false;
 
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._tm);t._tm=setTimeout(()=>t.style.display='none',2800);}
-function copyText(s){if(navigator.clipboard)navigator.clipboard.writeText(s).then(()=>toast('已复制'));else toast('请手动长按复制');}
+function copyText(s){
+  if(navigator.clipboard&&window.isSecureContext){
+    navigator.clipboard.writeText(s).then(()=>toast('已复制到剪贴板')).catch(()=>fallbackCopy(s));
+  }else{fallbackCopy(s);}
+}
+function fallbackCopy(s){
+  try{
+    const ta=document.createElement('textarea');ta.value=s;ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;left:-9999px;top:0;opacity:0';document.body.appendChild(ta);
+    ta.select();ta.setSelectionRange(0,s.length);
+    const ok=document.execCommand('copy');document.body.removeChild(ta);
+    toast(ok?'已复制到剪贴板':'请长按代码块手动复制');
+  }catch(_){toast('请长按代码块手动复制');}
+}
 function fmtSz(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(2)+' MB';}
+function sizeTag(n){return n<=5?'46px 超大字 + 运动条':(n===6?'41px 大字 + 运动条':(n<=8?'35px 中字':'29px 紧凑'));}
+function resetPin(){PIN='';localStorage.removeItem('mh2p_pin');document.getElementById('pinInput').value='';document.getElementById('pinErr').textContent='';document.getElementById('pinModal').classList.add('on');}
 
 document.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
@@ -238,45 +276,122 @@ document.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{
   document.getElementById('p-'+el.dataset.t).classList.add('on');
 });
 
+document.getElementById('tabSideL').onclick=()=>{curSide='l';renderEditor();};
+document.getElementById('tabSideR').onclick=()=>{curSide='r';renderEditor();};
+document.getElementById('sideEnable').onchange=e=>{
+  if(curSide==='l')lOn=e.target.checked;else rOn=e.target.checked;
+  renderSideTabs();
+};
+document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{
+  const v=b.dataset.p?b.dataset.p.split(','):[];
+  if(curSide==='l'){L=v;if(v.length)lOn=true;}else{R=v;if(v.length)rOn=true;}
+  renderEditor();
+});
+
 document.getElementById('btnPinOk').onclick=()=>{
   PIN=document.getElementById('pinInput').value.trim();
   localStorage.setItem('mh2p_pin',PIN);
+  document.getElementById('pinErr').textContent='';
   document.getElementById('pinModal').classList.remove('on');
   loadStatus();
 };
 document.getElementById('pinInput').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('btnPinOk').click();});
 
-function renderBox(arr,selId,poolId){
-  const sel=document.getElementById(selId),pool=document.getElementById(poolId);
-  sel.innerHTML=arr.length?'':'<div class="sub">尚未选择项目</div>';
-  arr.forEach((k,i)=>{
-    const it=IMAP[k]||[k,k,''];
-    const d=document.createElement('div');d.className='sel-item';
-    d.innerHTML=`<span class="nm">${i+1}. ${it[1]}</span><span class="ut">${it[2]}</span>`+
-      `<button class="btn sm" ${i===0?'disabled':''}>↑</button>`+
-      `<button class="btn sm" ${i===arr.length-1?'disabled':''}>↓</button>`+
-      `<button class="btn sm dan">×</button>`;
-    const bs=d.querySelectorAll('button');
-    bs[0].onclick=()=>{[arr[i-1],arr[i]]=[arr[i],arr[i-1]];renderBox(arr,selId,poolId);};
-    bs[1].onclick=()=>{[arr[i+1],arr[i]]=[arr[i],arr[i+1]];renderBox(arr,selId,poolId);};
-    bs[2].onclick=()=>{arr.splice(i,1);renderBox(arr,selId,poolId);};
-    sel.appendChild(d);
+function renderSideTabs(){
+  const tl=document.getElementById('tabSideL'),tr=document.getElementById('tabSideR');
+  tl.classList.toggle('on',curSide==='l');tr.classList.toggle('on',curSide==='r');
+  tl.textContent='左信息框'+(lOn?` (${L.length}项)`:' (关)');
+  tr.textContent='右信息框'+(rOn?` (${R.length}项)`:' (关)');
+}
+
+function renderEditor(){
+  const arr=curSide==='l'?L:R;
+  const on=curSide==='l'?lOn:rOn;
+  renderSideTabs();
+  document.getElementById('sideEnable').checked=on;
+  document.getElementById('sideEnableLbl').firstChild.textContent=curSide==='l'?'启用左信息框':'启用常驻右信息框';
+  document.getElementById('sideEnableSub').textContent=curSide==='l'
+    ?'对齐左下挡位斜边，1～5 项享 46px 特大粗体 + 运动刻度条'
+    :'对齐右下车速斜边，未导航时显示；开启导航自动切为大字导航卡';
+  document.getElementById('sizeBadge').textContent=`${arr.length}/10 项 · ${sizeTag(arr.length||1)}`;
+
+  const sel=document.getElementById('selList');
+  sel.innerHTML='';
+  if(!arr.length){
+    const e=document.createElement('div');e.className='sub';e.textContent='尚未选择项目，点击下方标签添加';sel.appendChild(e);
+  }else{
+    arr.forEach((k,i)=>{
+      const it=IMAP[k]||[k,k,''];
+      const d=document.createElement('div');d.className='sel-item';
+      const nm=document.createElement('span');nm.className='nm';nm.textContent=`${i+1}. ${it[1]}`;
+      const ut=document.createElement('span');ut.className='ut';ut.textContent=it[2];
+      const bUp=document.createElement('button');bUp.className='btn sm';bUp.textContent='↑';bUp.disabled=i===0;
+      const bDn=document.createElement('button');bDn.className='btn sm';bDn.textContent='↓';bDn.disabled=i===arr.length-1;
+      const bDel=document.createElement('button');bDel.className='btn sm dan';bDel.textContent='×';
+      bUp.onclick=()=>{[arr[i-1],arr[i]]=[arr[i],arr[i-1]];renderEditor();};
+      bDn.onclick=()=>{[arr[i+1],arr[i]]=[arr[i],arr[i+1]];renderEditor();};
+      bDel.onclick=()=>{arr.splice(i,1);renderEditor();};
+      d.append(nm,ut,bUp,bDn,bDel);sel.appendChild(d);
+    });
+  }
+
+  const wrap=document.getElementById('poolWrap');
+  wrap.innerHTML='';
+  const groups=[];
+  ITEMS.forEach(it=>{
+    let g=groups.find(x=>x.name===it[3]);
+    if(!g){g={name:it[3],list:[]};groups.push(g);}
+    g.list.push(it);
   });
-  pool.innerHTML='';
-  ITEMS.forEach(([k,nm])=>{
-    const c=document.createElement('span');
-    const idx=arr.indexOf(k);
-    c.className='chip'+(idx>=0?' used':'');
-    c.textContent=nm;
-    c.onclick=()=>{
-      const j=arr.indexOf(k);
-      if(j>=0)arr.splice(j,1);
-      else if(arr.length>=10)return toast('单侧最多选 10 项');
-      else arr.push(k);
-      renderBox(arr,selId,poolId);
-    };
-    pool.appendChild(c);
+  groups.forEach(g=>{
+    const t=document.createElement('div');t.className='grp-title';t.textContent=g.name;wrap.appendChild(t);
+    const p=document.createElement('div');p.className='pool';
+    g.list.forEach(([k,nm])=>{
+      const c=document.createElement('span');
+      c.className='chip'+(arr.indexOf(k)>=0?' used':'');
+      c.textContent=nm;
+      c.onclick=()=>{
+        const j=arr.indexOf(k);
+        if(j>=0)arr.splice(j,1);
+        else if(arr.length>=10)return toast('单侧最多选 10 项');
+        else{arr.push(k);if(curSide==='r'&&arr.length===1)rOn=true;}
+        renderEditor();
+      };
+      p.appendChild(c);
+    });
+    wrap.appendChild(p);
   });
+}
+
+function renderFileList(elId,files,type,emptyTxt){
+  const box=document.getElementById(elId);
+  box.innerHTML='';
+  if(!files||!files.length){
+    const e=document.createElement('div');e.className='sub';e.textContent=emptyTxt;box.appendChild(e);return;
+  }
+  const pq=PIN?('&pin='+encodeURIComponent(PIN)):'';
+  files.forEach(f=>{
+    const row=document.createElement('div');row.className='fitem';
+    const info=document.createElement('div');
+    const fn=document.createElement('div');fn.className='fnm';fn.textContent=f.name||'';
+    const fs=document.createElement('div');fs.className='fsz';fs.textContent=fmtSz(Number(f.size)||0);
+    info.append(fn,fs);
+    const a=document.createElement('a');a.className='btn sm';a.textContent='下载';
+    a.href='/api/dl?type='+encodeURIComponent(type)+'&name='+encodeURIComponent(f.name||'')+pq;
+    row.append(info,a);box.appendChild(row);
+  });
+}
+
+function updateHeaderStatus(j){
+  const b=document.getElementById('spdBadge');
+  const driving=j.speed>3;
+  if(driving){b.textContent='行驶中 '+j.speed.toFixed(0)+' km/h (只读)';b.className='badge err';}
+  else if(j.speed>=0){b.textContent='停车就绪';b.className='badge ok';}
+  else{b.textContent='已连接';b.className='badge warn';}
+  document.querySelectorAll('.write-act').forEach(btn=>{btn.disabled=driving||busy;});
+  document.getElementById('ipTxt').textContent='地址: touareg.local ('+(j.bcm2_ip||'--')+')';
+  document.getElementById('procTxt').textContent='进程: clusterd='+(j.clusterd?'开':'关')+' render='+(j.cl_render?'开':'关');
+  document.getElementById('odoTxt').textContent=j.odo>0?('总里程: '+j.odo.toFixed(1)+' km'):'';
 }
 
 async function postForm(url,obj){
@@ -284,55 +399,69 @@ async function postForm(url,obj){
   Object.keys(obj).forEach(k=>body.append(k,String(obj[k])));
   const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Pin':PIN,'X-Requested-With':'touareg-webui'},body:body.toString()});
   const j=await r.json();
-  if(r.status===401||j.need_pin){document.getElementById('pinModal').classList.add('on');throw new Error('需要验证管理口令');}
+  if(r.status===401||j.need_pin){
+    document.getElementById('pinErr').textContent=j.msg||'管理口令错误，请重试';
+    document.getElementById('pinModal').classList.add('on');
+    throw new Error(j.msg||'需要验证管理口令');
+  }
   if(!r.ok||!j.ok)throw new Error(j.msg||('HTTP '+r.status));
   return j;
 }
 
-function confirmReboot(){
+function confirmReboot(btn){
   const noSpd=!S||S.speed<0;
   const msg=noSpd?'当前未读取到实时车速，请先确认车辆已停稳！\n确定软重启车机（过程约 35 秒）？':'确认软重启车机？过程约 35 秒。';
-  if(confirm(msg))doAct('reboot_hu');
+  if(confirm(msg))doAct('reboot_hu',btn);
+}
+
+async function pollBadgeOnly(){
+  if(document.hidden||document.getElementById('pinModal').classList.contains('on'))return;
+  try{
+    const r=await fetch('/api/status',{headers:{'X-Pin':PIN}});
+    if(!r.ok)return;
+    const j=await r.json();
+    if(j&&j.ok){S=j;updateHeaderStatus(j);}
+  }catch(_){}
 }
 
 async function loadStatus(){
   try{
     const r=await fetch('/api/status',{headers:{'X-Pin':PIN}});
     const j=await r.json();
-    if(r.status===401||j.need_pin){document.getElementById('pinModal').classList.add('on');return;}
+    if(r.status===401||j.need_pin){
+      document.getElementById('pinErr').textContent=PIN?(j.msg||'管理口令错误，请重新输入'):'';
+      document.getElementById('pinModal').classList.add('on');
+      return;
+    }
+    if(!r.ok||!j.ok){
+      toast(j.msg||('请求受限 (HTTP '+r.status+')'));
+      return;
+    }
     S=j;
-    const b=document.getElementById('spdBadge');
-    if(S.speed>3){b.textContent='行驶中 '+S.speed.toFixed(0)+' km/h (只读)';b.className='badge err';}
-    else if(S.speed>=0){b.textContent='停车就绪';b.className='badge ok';}
-    else{b.textContent='已连接';b.className='badge warn';}
-    document.getElementById('ipTxt').textContent='地址: touareg.local ('+S.bcm2_ip+')';
-    document.getElementById('procTxt').textContent='进程: clusterd='+(S.clusterd?'开':'关')+' render='+(S.cl_render?'开':'关');
-    document.getElementById('odoTxt').textContent=S.odo>0?('总里程: '+S.odo.toFixed(1)+' km'):'';
+    updateHeaderStatus(S);
     if(S.ssh_enabled===0){
       document.getElementById('sshBox').textContent='当前未启用 SSH（仅开启网页控制台）。如需 SSH 自由开发，请在 U 盘「改装设置」里勾选开启 SSH。';
     }else{
       document.getElementById('sshBox').textContent='ssh -i touareg_ed25519 -p 2012 root@touareg.local\n# 安卓端若不解析 .local，请直连 IP：\nssh -i touareg_ed25519 -p 2012 root@'+S.bcm2_ip;
     }
 
-    const hasCl = S.has_cluster_mod !== 0;
-    document.getElementById('noClusterNote').style.display = hasCl ? 'none' : 'block';
-    document.getElementById('clusterCards').style.display = hasCl ? 'block' : 'none';
-    document.getElementById('ctrlToggles').style.display = hasCl ? 'block' : 'none';
+    const hasCl=S.has_cluster_mod!==0;
+    document.getElementById('noClusterNote').style.display=hasCl?'none':'block';
+    document.getElementById('clusterCards').style.display=hasCl?'block':'none';
+    document.getElementById('ctrlToggles').style.display=hasCl?'block':'none';
 
     const d=S.dash||{};
     L=(d.items||'').split(',').map(x=>x.trim()).filter(x=>x&&IMAP[x]);
     R=(d.r_items||'').split(',').map(x=>x.trim()).filter(x=>x&&IMAP[x]);
-    document.getElementById('show').checked=d.show!=0;
-    document.getElementById('r_show').checked=d.r_show==1;
+    lOn=d.show!=0;rOn=d.r_show==1;
     document.getElementById('bars').checked=d.bars!==0;
     ['car_up','acc_up','amap_turn','alpha','tank_l','trip_base','nav_tz'].forEach(k=>{
       if(d[k]!==undefined)document.getElementById(k).value=d[k];
     });
-    const nb = Number(d.nav_box == null ? 1 : d.nav_box);
-    document.getElementById('nav_mode').value = nb === 0 ? 'off' : ((d.nav_side === 'left' ? 'left' : 'right') + (nb >= 2 ? '_always' : ''));
+    const nb=Number(d.nav_box==null?1:d.nav_box);
+    document.getElementById('nav_mode').value=nb===0?'off':((d.nav_side==='left'?'left':'right')+(nb>=2?'_always':''));
     document.getElementById('lat_flip').checked=d.lat_flip==1;
-    renderBox(L,'lSel','lPool');
-    renderBox(R,'rSel','rPool');
+    renderEditor();
 
     const cl=S.cl||{};
     document.getElementById('wide_on').checked=!!cl.wide_on;
@@ -345,15 +474,8 @@ async function loadStatus(){
     document.getElementById('tg_zoom_flip').checked=!!tg.zoom_flip;
     document.getElementById('tg_switch_off').checked=!!tg.switch_off;
 
-    const pq=PIN?('&pin='+encodeURIComponent(PIN)):'';
-    const dl=document.getElementById('driveList');
-    if(!S.drive_logs||!S.drive_logs.length)dl.innerHTML='<div class="sub">未检测到 U 盘 drive_logs 目录或暂无 CSV</div>';
-    else dl.innerHTML=S.drive_logs.map(f=>`<div class="fitem"><div><div class="fnm">${f.name}</div><div class="fsz">${fmtSz(f.size)}</div></div><a class="btn sm" href="/api/dl?type=drive&name=${encodeURIComponent(f.name)}${pq}">下载</a></div>`).join('');
-
-    const ll=document.getElementById('logList');
-    if(!S.sys_logs||!S.sys_logs.length)ll.innerHTML='<div class="sub">暂无日志</div>';
-    else ll.innerHTML=S.sys_logs.map(f=>`<div class="fitem"><div><div class="fnm">${f.name}</div><div class="fsz">${fmtSz(f.size)}</div></div><a class="btn sm" href="/api/dl?type=log&name=${encodeURIComponent(f.name)}${pq}">下载</a></div>`).join('');
-
+    renderFileList('driveList',S.drive_logs,'drive','未检测到 U 盘 drive_logs 目录或暂无 CSV');
+    renderFileList('logList',S.sys_logs,'log','暂无日志');
     document.getElementById('wifiSaved').textContent='车机已保存热点条目：'+(S.wifi_count||0)+' 条';
   }catch(e){toast('读取状态失败: '+e.message);}
 }
@@ -364,52 +486,66 @@ document.getElementById('btnZeroTrip').onclick=()=>{
 };
 
 document.getElementById('btnSaveDash').onclick=async()=>{
+  if(busy)return;
+  if(lOn&&!L.length)return toast('左信息框至少选 1 项，或取消勾选启用');
+  if(rOn&&!R.length)return toast('右信息框至少选 1 项，或取消勾选启用');
+  busy=true;if(S)updateHeaderStatus(S);
   try{
+    const nm=document.getElementById('nav_mode').value;
     const j=await postForm('/api/dash',{
-      items:L.join(','),show:document.getElementById('show').checked?1:0,
-      r_items:R.join(','),r_show:document.getElementById('r_show').checked?1:0,
+      items:L.join(','),show:lOn?1:0,
+      r_items:R.join(','),r_show:rOn?1:0,
       bars:document.getElementById('bars').checked?1:0,
-      car_up:document.getElementById('car_up').value||0,
-      acc_up:document.getElementById('acc_up').value||0,
-      amap_turn:document.getElementById('amap_turn').value||3,
-      alpha:document.getElementById('alpha').value||200,
-      tank_l:document.getElementById('tank_l').value||90,
+      car_up:document.getElementById('car_up').value||'0',
+      acc_up:document.getElementById('acc_up').value||'0',
+      amap_turn:document.getElementById('amap_turn').value||'3',
+      alpha:document.getElementById('alpha').value||'200',
+      tank_l:document.getElementById('tank_l').value||'90',
       lat_flip:document.getElementById('lat_flip').checked?1:0,
-      nav_box:document.getElementById('nav_mode').value==='off'?0:(document.getElementById('nav_mode').value.endsWith('_always')?2:1),
-      nav_side:document.getElementById('nav_mode').value.startsWith('left')?'left':'right',
-      nav_tz:document.getElementById('nav_tz').value||8,
-      trip_base:document.getElementById('trip_base').value||0
+      nav_box:nm==='off'?0:(nm.endsWith('_always')?2:1),
+      nav_side:nm.startsWith('left')?'left':'right',
+      nav_tz:document.getElementById('nav_tz').value||'8',
+      trip_base:document.getElementById('trip_base').value||'0'
     });
     toast(j.msg||'已保存并刷新仪表');
   }catch(e){toast('保存失败: '+e.message);}
+  finally{busy=false;if(S)updateHeaderStatus(S);}
 };
 
 document.getElementById('btnSaveCl').onclick=async()=>{
+  if(busy)return;
+  busy=true;if(S)updateHeaderStatus(S);
   try{
     const j=await postForm('/api/cl',{
       wide_on:document.getElementById('wide_on').checked?1:0,
-      wide:document.getElementById('cl_wide').value||2688,
-      view:document.getElementById('cl_view').value||85
+      wide:document.getElementById('cl_wide').value||'2688',
+      view:document.getElementById('cl_view').value||'85'
     });
     toast(j.msg||'已保存，请点「重连 CarPlay」生效');
   }catch(e){toast('保存失败: '+e.message);}
+  finally{busy=false;if(S)updateHeaderStatus(S);}
 };
 
 async function doToggle(name,val){
   try{const j=await postForm('/api/toggle',{name,val:val?1:0});toast(j.msg||'已更新');}
-  catch(e){toast('操作失败: '+e.message);loadStatus();}
+  catch(e){toast('操作失败: '+e.message);document.getElementById('tg_'+name).checked=!val;}
 }
 
 async function doAct(act){
-  try{const j=await postForm('/api/action',{act});toast(j.msg||'已执行');setTimeout(loadStatus,1500);}
+  if(busy)return;
+  busy=true;if(S)updateHeaderStatus(S);
+  try{const j=await postForm('/api/action',{act});toast(j.msg||'已执行');setTimeout(pollBadgeOnly,1500);}
   catch(e){toast('执行失败: '+e.message);}
+  finally{busy=false;if(S)updateHeaderStatus(S);}
 }
 
 document.getElementById('btnAddWifi').onclick=async()=>{
+  if(busy)return;
   const ssid=document.getElementById('w_ssid').value.trim();
   const psk=document.getElementById('w_psk').value;
   if(!ssid)return toast('请填写热点名称');
   if(psk.length<8)return toast('WPA2 密码至少 8 位');
+  busy=true;if(S)updateHeaderStatus(S);
   try{
     const j=await postForm('/api/wifi',{ssid,psk});
     document.getElementById('w_ssid').value='';
@@ -417,9 +553,11 @@ document.getElementById('btnAddWifi').onclick=async()=>{
     toast(j.msg||'已追加热点');
     loadStatus();
   }catch(e){toast('添加失败: '+e.message);}
+  finally{busy=false;if(S)updateHeaderStatus(S);}
 };
 
 loadStatus();
+setInterval(pollBadgeOnly,8000);
 </script>
 </body>
 </html>

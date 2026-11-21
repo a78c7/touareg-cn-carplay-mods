@@ -1,2 +1,15 @@
 /touareg-cn-carplay-mods-*.zip
 src/out/
+src/hud-java/out/
+src/hud-java/VWClusterNav_*.jar
+src/popup-filter-java/out/
+src/popup-filter-java/*.jar
+tools/configurator/out/
+tools/axbridge/axbridge
+tools/screen/scrcap
+tools/screen/scrinfo
+tools/screen/winlist
+.DS_Store
+._*
+__pycache__/
+*.pyc
