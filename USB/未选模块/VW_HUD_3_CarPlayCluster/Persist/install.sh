@@ -2,13 +2,10 @@
 # Runs at every boot (ModKit Persist). Switch files for cl_probe.so / VWClusterNav and the cluster daemon.
 # Disable without uninstalling: create an empty file /mnt/app/eso/bin/apps/cluster/disable
 D=/mnt/app/eso/bin/apps/cluster
-touch /tmp/cl_probe_on /tmp/cl_alt_on /tmp/vwcn_noRG
-echo none > /tmp/cl_alt_cmd
-chmod 666 /tmp/cl_alt_cmd
 export LD_LIBRARY_PATH=/mnt/app/armle/lib:/mnt/app/armle/usr/lib:/mnt/app/armle/graphics:/eso/lib:/lib:/usr/lib
 export CL_ZOOM=0
 
-# v22.0 zero-wear 3-crash safe-mode fuse (no eMMC writes on normal boots)
+# v22.0 zero-wear 3-crash safe-mode fuse (checked BEFORE creating /tmp/cl_alt_on to eliminate boot race)
 SAFE_CL=0
 if [ -e $D/safe_mode ]; then
     : > /tmp/vw_dio_safe_mode
@@ -21,7 +18,6 @@ else
         cur_d=$(ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}')
         if [ -n "$base_d" ] && [ "$cur_d" -ge $((base_d + 3)) ]; then
             : > /tmp/vw_dio_safe_mode
-            rm -f /tmp/cl_alt_on /tmp/vwcn_noRG
             SAFE_CL=1
             echo "FUSE TRIPPED: dio_manager cores >= base+3 (base=$base_d cur=$cur_d)" > /tmp/cluster_fuse.log
         fi
@@ -40,9 +36,14 @@ fi
 if [ -e $D/disable ] || [ "$SAFE_CL" = "1" ]; then
     rm -f /tmp/cl_alt_on /tmp/vwcn_noRG
     echo "carplay cluster disabled (disable or safe_mode fuse)"
-elif [ -x $D/clusterd ] && ! pidin -p clusterd 2>/dev/null | grep -q clusterd; then
-    ( trap "" HUP; exec $D/clusterd $D/cl_render capture=h264 xres=1920 yres=639 mode=stretch ) </dev/null >/dev/null 2>&1 &
-    echo "clusterd started"
+else
+    touch /tmp/cl_probe_on /tmp/cl_alt_on /tmp/vwcn_noRG
+    echo none > /tmp/cl_alt_cmd
+    chmod 666 /tmp/cl_alt_cmd
+    if [ -x $D/clusterd ] && ! pidin -p clusterd 2>/dev/null | grep -q clusterd; then
+        ( trap "" HUP; exec $D/clusterd $D/cl_render capture=h264 xres=1920 yres=639 mode=stretch ) </dev/null >/dev/null 2>&1 &
+        echo "clusterd started"
+    fi
 fi
 # every minute: cap the RAM logs; copy them to a USB drive that has a "cluster_logs" folder (troubleshooting)
 (

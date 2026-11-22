@@ -5,7 +5,7 @@
 # 途锐 MH2p CarPlay 改装全家桶 & 无线开发底座
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v22.0"></a>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v22.01"></a>
   <a href="docs/README.md"><img src="docs/img/badges/platform.svg" alt="MH2p QNX 6.6"></a>
   <a href="#手机无线控制台与-ai-自由开发"><img src="docs/img/badges/console.svg" alt="touareg.local:8080"></a>
   <a href="docs/07-无线控制台与SSH开发.md"><img src="docs/img/badges/ssh.svg" alt="Wireless SSH Ed25519"></a>
@@ -14,7 +14,7 @@
 
 **不拆一粒螺丝、无需专用网卡 —— 单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与大字运动信息框，支持手机 `8080` 离线无线升级（OTA）、一键脱敏诊断、3 次崩溃自动安全模式与 GLES2 60fps 独立仪表底座。**
 
-当前主线 **v22.0**（最新版见 **[Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)** · 皮肤与配置交流见 **[Discussions](https://github.com/a78c7/touareg-cn-carplay-mods/discussions)**）
+当前主线 **v22.01**（最新版见 **[Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)** · 皮肤与配置交流见 **[Discussions](https://github.com/a78c7/touareg-cn-carplay-mods/discussions)**）
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载最新版 U 盘包 &amp; OTA</b></a> ·
@@ -74,7 +74,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 | **HUD 与仪表** | **🧭 导航上 HUD** | 苹果/高德/百度转向箭头、距离、路名、车道直投 HUD（全新洁净室自研有线 iAP2 + 无线双栈） | 国行途锐 P 版 |
 | | **🗺️ 仪表地图 + 大字运动信息框** | CarPlay 地图投射 `1920×639` 全液晶仪表（高德自动居中、方向盘缩放）；左右 `295px` 对称 **46px 粗体 + 10Hz 阻尼平滑运动刻度条**（43 项实车物理数据）、**大字导航卡**与独立 **GLES2 60fps 动画引擎**（试验） | 国行途锐 P 版 |
 | | **🔄 方向盘 OK 双击切原车地图** | 方向盘右侧 `OK` 键 2 秒内连按 2 下，在 CarPlay 地图与原车地图间无缝秒切（`VW_HUD_4_OkMapSwitch`） | 国行途锐 P 版 |
-| | **🎙️ 方向盘语音键短按唤 Siri** | 连接 CarPlay 时短按方向盘语音键直接唤出 Siri，不用再长按 2 秒（原厂长按不受影响；`VW_HUD_5_SiriShortPress`） | 国行途锐 P 版 |
+| | **🎙️ 方向盘语音键短按唤 Siri（试验）** | 连接 CarPlay 时短按方向盘语音键直接唤出 Siri（原厂长按不受影响；部分固件短按可能与原车语音同时响应；`VW_HUD_5_SiriShortPress`） | 国行途锐 P 版 |
 | **无线与运维** | **📱 手机无线控制台（OTA + 诊断 + 可选 SSH）** | 手机热点打开 `http://touareg.local:8080` 秒改信息框、调车标、**离线 `.tar` 无线升级与一键回滚**、**一键下载脱敏诊断包**、查看/清除安全模式；可选开 `2012` 无线 SSH 供 AI 自由开发 | MH2p 通用 |
 | **修复与降噪** | **📶 升 P2878 无线 5GHz 修复** | 仅旧固件（如 P9832）升级 P2878 后有线正常但无线连不上时勾选（解除 `enable5GHzCountryAdaption` 拦截） | 国行途锐 P 版 |
 | | **🔕 去除蓝牙「输入用户名」弹窗** | 共享 Bundle `98` 仅拦截蓝牙 OBEX 认证弹窗（`Busrlo`），不影响通话、音乐与 CarPlay | 大众 MH2p |
@@ -230,7 +230,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 - **海外社区引用**：已被德国途锐论坛 **Touareg-Freunde** 的 [欧版 MH2p P2869 仪表投屏项目帖](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)引用参考。
 - **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)**（[官网](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)）：免拆 U 盘刷机框架及可选 `AppleCarPlay` / `AndroidAuto` 模块（[CC BY-NC-SA 4.0](LICENSES/MH2p_SD_ModKit_LICENSE.md)，其中安卓修复引用了 [fifthBro/pcm5-androidauto-connect-fix](https://github.com/fifthBro/pcm5-androidauto-connect-fix)）。
 - **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)** & **[mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**：`dio_cluster.so`（v0034）与 `cl_render` 上游基础（[CC BY-NC-SA 4.0](LICENSES/fifthBro_mh2p-cluster_LICENSE.md)）。
-- **[davecozens / touareg-carplay](https://github.com/davecozens/touareg-carplay)**：全屏几何数值参考；**[luka-dev](https://github.com/luka-dev)**：`mib2q-carplay-rgi`（GPL-3.0）、`jxe2jar`、`qnx65-armv7-toolchain`。
+- **[davecozens / touareg-carplay](https://github.com/davecozens/touareg-carplay)**：全屏几何数值参考；**[luka-dev](https://github.com/luka-dev)**：`jxe2jar`、`qnx65-armv7-toolchain` 编译与逆向工具链。
 
 ## 许可证
 

@@ -2564,9 +2564,11 @@ static void apply_stage_signals(void) {
     }
     /* idle refresh: no decoded frame for 300 ms (or 33 ms while smooth bar interpolation is active) -> re-blit pinned clean base frame into a real back buffer */
     uint64_t idle_iv = g_dash_animating ? 33ULL : 300ULL;
-    if (dash_tick() && g_dec.scr_ready && g_render_stage == STAGE_RENDERING && g_last_posted_pidx >= 0 &&
+    if (g_dec.scr_ready && g_render_stage == STAGE_RENDERING && g_last_posted_pidx >= 0 &&
         g_have_clean_didx && g_last_clean_didx >= 0 &&
-        (now_us() / 1000ULL) - g_last_post_ms >= idle_iv && (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
+        (now_us() / 1000ULL) - g_last_post_ms >= idle_iv &&
+        (now_us() / 1000ULL) >= g_boot_splash_until_ms &&
+        dash_tick()) {
         int pidx = -1;
         screen_buffer_t dst = cl_pick_render_buf(&pidx);
         if (dst) {

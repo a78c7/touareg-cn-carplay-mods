@@ -54,6 +54,7 @@ public final class SiriShort implements Runnable, InvocationHandler {
     private Method mSiriAction;
     private int actDown = 1;
     private int actUp = 2;
+    private volatile int cpDevCount = -1; // >=0 表示已通过 DSICarPlayListener 实时获知连接设备数
 
     public static void start() {
         Thread t = new Thread(new SiriShort(), "vwcn-siri");
@@ -66,8 +67,29 @@ public final class SiriShort implements Runnable, InvocationHandler {
         return new File(FLAG_APP).exists() || new File(FLAG_TMP).exists();
     }
 
-    private static boolean carplayOnline() {
+    private static boolean stateFileSessionActive() {
+        File f = new File("/tmp/cluster_cp.state");
+        if (!f.exists() || f.length() < 12L) return false;
+        java.io.FileInputStream in = null;
+        try {
+            in = new java.io.FileInputStream(f);
+            byte[] buf = new byte[256];
+            int n = in.read(buf);
+            if (n > 0) {
+                String head = new String(buf, 0, n);
+                if (head.indexOf("session_active:b:true") >= 0) return true;
+            }
+        } catch (Throwable ignore) {
+        } finally {
+            if (in != null) try { in.close(); } catch (Throwable ignore) {}
+        }
+        return false;
+    }
+
+    private boolean carplayOnline() {
+        if (cpDevCount > 0) return true;
         if (Rebind.streamHold != null) return true;
+        if (stateFileSessionActive()) return true;
         File st = new File("/tmp/cl_status");
         if (st.exists() && st.length() > 10L) {
             long age = System.currentTimeMillis() - st.lastModified();
@@ -157,6 +179,7 @@ public final class SiriShort implements Runnable, InvocationHandler {
             }
             mSetNotif.invoke(kp, new Object[] { attrs, listener });
             subscribed = true;
+            resolveCarPlayService();
             Log.log("siri: subscribed to DSIKeyPanel ATTR_KEY2");
         } catch (Throwable t) {
             Log.log("siri subscribe failed: " + t);
@@ -214,6 +237,46 @@ public final class SiriShort implements Runnable, InvocationHandler {
                             if (fn.indexOf("BUTTONDOWN") >= 0 || fn.indexOf("START") >= 0) actDown = v;
                             else if (fn.indexOf("BUTTONUP") >= 0 || fn.indexOf("STOP") >= 0) actUp = v;
                         }
+                    }
+                } catch (Throwable ignore) {}
+                // 尝试订阅 DSICarPlayListener 以支持不装仪表地图时的在线检测
+                try {
+                    Class cplCls = Class.forName(svcNames[i] + "Listener");
+                    Field fAttr = null;
+                    try { fAttr = c.getField("ATTR_DEVICELIST"); } catch (Throwable ignore2) {}
+                    if (fAttr == null) {
+                        try { fAttr = c.getField("ATTR_DEVICECONFIGURATION"); } catch (Throwable ignore2) {}
+                    }
+                    if (fAttr != null) {
+                        int[] cpAttrs = new int[] { fAttr.getInt(null) };
+                        ClassLoader cl = cplCls.getClassLoader();
+                        if (cl == null) cl = Thread.currentThread().getContextClassLoader();
+                        if (cl == null) cl = ClassLoader.getSystemClassLoader();
+                        DSIListener cpLsn = (DSIListener) Proxy.newProxyInstance(cl, new Class[] { cplCls }, new InvocationHandler() {
+                            public Object invoke(Object prx, Method md, Object[] ag) throws Throwable {
+                                String mn2 = md.getName();
+                                if ("equals".equals(mn2)) return (ag != null && ag.length == 1 && prx == ag[0]) ? Boolean.TRUE : Boolean.FALSE;
+                                if ("hashCode".equals(mn2)) return new Integer(System.identityHashCode(prx));
+                                if ("toString".equals(mn2)) return "vwcn.SiriShort.CPListener";
+                                try {
+                                    if ("updateDeviceList".equals(mn2) && ag != null && ag.length >= 1) {
+                                        if (ag[0] instanceof Object[]) cpDevCount = ((Object[]) ag[0]).length;
+                                        else cpDevCount = (ag[0] != null) ? 1 : 0;
+                                    } else if ("updateDeviceConfiguration".equals(mn2) && ag != null && ag.length >= 2) {
+                                        int vf = (ag[1] instanceof Number) ? ((Number) ag[1]).intValue() : 0;
+                                        cpDevCount = (vf == 1 && ag[0] != null) ? 1 : 0;
+                                    }
+                                } catch (Throwable ignore3) {}
+                                Class r = md.getReturnType();
+                                if (r == Boolean.TYPE) return Boolean.FALSE;
+                                if (r == Integer.TYPE) return new Integer(0);
+                                if (r == Long.TYPE) return new Long(0L);
+                                return null;
+                            }
+                        });
+                        Method mCpSet = c.getMethod("setNotification", new Class[] { int[].class, DSIListener.class });
+                        mCpSet.invoke(svc, new Object[] { cpAttrs, cpLsn });
+                        Log.log("siri: subscribed to " + svcNames[i] + " online state");
                     }
                 } catch (Throwable ignore) {}
                 if (mSiriAction != null) break;

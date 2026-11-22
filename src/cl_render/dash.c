@@ -13,7 +13,9 @@
  *       4) Crisp subtle row dividers across all rows.
  *   - Independent font sizing per box (left and right boxes never force each other into a smaller font).
  *
- * Licence: GPL-3.0 OR CC BY-NC-SA 4.0 (dual-licensed for compatibility with mh2p-cluster).
+ * Original code by a78c7 (https://github.com/a78c7/touareg-cn-carplay-mods),
+ * licensed under PolyForm Noncommercial 1.0.0 + LICENSE.ADDITIONAL-TERMS.md
+ * (and CC BY-NC-SA 4.0 when compiled into cl_render).
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -932,9 +934,9 @@ static int dash_poll(uint64_t now_ms) {
                 g_dash_animating = 0;
                 if (got_new) { dash_render_all(&g_dash_tgt); changed = 1; }
             } else {
-                float dt = g_dash_sm_ms ? (float)(now_ms - g_dash_sm_ms) * 0.001f : 0.05f;
+                float dt = (!g_dash_animating || !g_dash_sm_ms) ? 0.033f : (float)(now_ms - g_dash_sm_ms) * 0.001f;
                 if (dt < 0.01f) dt = 0.01f;
-                if (dt > 0.15f) dt = 0.15f;
+                if (dt > 0.10f) dt = 0.10f;
                 g_dash_sm_ms = now_ms;
                 float alpha = 1.0f - expf(-14.0f * dt);
                 /* Keep discrete/text values exact, smoothly interpolate dynamic bars & fast gauges */

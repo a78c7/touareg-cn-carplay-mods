@@ -149,6 +149,12 @@ static void gles60_quad_px(float v[24], float x, float y, float w, float h, floa
     memcpy(v, q, sizeof(q));
 }
 
+static void *gles60_sym(const char *name) {
+    void *p = (void *)eglGetProcAddress(name);
+    if (!p) p = dlsym(RTLD_DEFAULT, name);
+    return p;
+}
+
 static int run_gles60_mode(int argc, char **argv) {
     (void)argc; (void)argv;
     signal(SIGTERM, gles60_on_sig);
@@ -168,7 +174,7 @@ static int run_gles60_mode(int argc, char **argv) {
     const char *did = cl_disp_id();
     screen_set_window_property_cv(win, SCREEN_PROPERTY_ID_STRING, (int)strlen(did), did);
     int sz[2] = { DISP_W, DISP_H };
-    int fmt = SCREEN_FORMAT_RGBA8888;
+    int fmt = SCREEN_FORMAT_RGBX8888;
     int usage = SCREEN_USAGE_OPENGL_ES2;
     int transp = SCREEN_TRANSPARENCY_NONE;
     int vis = 1;
@@ -189,7 +195,7 @@ static int run_gles60_mode(int argc, char **argv) {
     eglBindAPI(EGL_OPENGL_ES_API);
     EGLint cfg_attr[] = {
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
+        EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8,
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
         EGL_NONE
     };
@@ -205,11 +211,11 @@ static int run_gles60_mode(int argc, char **argv) {
 
     while (eglGetError() != EGL_SUCCESS) {}
     load_gl();
-    PFN_Uniform1f gl_Uniform1f = (PFN_Uniform1f)eglGetProcAddress("glUniform1f");
-    PFN_Uniform2f gl_Uniform2f = (PFN_Uniform2f)eglGetProcAddress("glUniform2f");
-    PFN_Enable    gl_Enable    = (PFN_Enable)eglGetProcAddress("glEnable");
-    PFN_Disable   gl_Disable   = (PFN_Disable)eglGetProcAddress("glDisable");
-    PFN_BlendFunc gl_BlendFunc = (PFN_BlendFunc)eglGetProcAddress("glBlendFunc");
+    PFN_Uniform1f gl_Uniform1f = (PFN_Uniform1f)gles60_sym("glUniform1f");
+    PFN_Uniform2f gl_Uniform2f = (PFN_Uniform2f)gles60_sym("glUniform2f");
+    PFN_Enable    gl_Enable    = (PFN_Enable)gles60_sym("glEnable");
+    PFN_Disable   gl_Disable   = (PFN_Disable)gles60_sym("glDisable");
+    PFN_BlendFunc gl_BlendFunc = (PFN_BlendFunc)gles60_sym("glBlendFunc");
     if (!gl_CreateShader || !gl_DrawArrays || !gl_Uniform1f || !gl_Uniform2f) {
         LOG("gles60: missing GLES2 symbols\n");
         return 18;
@@ -285,6 +291,12 @@ static int run_gles60_mode(int argc, char **argv) {
     memset(&cur_v, 0, sizeof(cur_v));
 
     while (!g_gles60_stop) {
+        /* Pause GPU rendering if user manually switched cluster back to native map via OK double-tap */
+        if (access("/tmp/vwcn_user_native", F_OK) == 0) {
+            usleep(250000);
+            t_prev = now_us();
+            continue;
+        }
         uint64_t t_now = now_us();
         float dt = (float)(t_now - t_prev) * 1e-6f;
         if (dt < 0.001f) dt = 0.001f;
@@ -301,7 +313,7 @@ static int run_gles60_mode(int argc, char **argv) {
                 char l[2048];
                 if (fgets(l, sizeof(l), sf) && strchr(l, '\n')) {
                     dash_parse(l, &cur_v);
-                    if (cur_v.rpm > 0) t_rpm = (float)cur_v.rpm / 7000.0f;
+                    if (cur_v.rpm >= 0) t_rpm = (float)cur_v.rpm / 7000.0f;
                     if (!DASH_NAN(cur_v.p)) t_pwr = cur_v.p / 265.0f;
                     if (!DASH_NAN(cur_v.spd)) t_spd = cur_v.spd / 240.0f;
                     if (!DASH_NAN(cur_v.gx)) t_gx = cur_v.gx;

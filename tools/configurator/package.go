@@ -30,7 +30,7 @@ var features = []feature{
 	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在抬头显示 HUD 上", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
 	{"cluster", "仪表地图 + 大字运动信息框", "手机导航地图投屏到液晶仪表中央，左右两侧自由定制 43 项真实行车数据（大号粗体 + 运动刻度条）与大字导航卡；需配合「导航上 HUD」", []string{"VW_HUD_3_CarPlayCluster"}},
 	{"mapswitch", "方向盘 OK 双击切换 CarPlay / 原车地图", "方向盘右侧 OK 键 2 秒内连按 2 下，在 CarPlay 导航地图与原车自带地图之间来回切换；需配合「导航上 HUD」与「仪表地图 + 大字运动信息框」", []string{"VW_HUD_4_OkMapSwitch"}},
-	{"siri", "方向盘语音键短按直接唤 Siri", "连接 CarPlay 时短按方向盘语音键直接唤出手机 Siri（无需长按 2 秒，原厂长按不受影响；未连 CarPlay 时仍呼出原车语音）；需配合「导航上 HUD」", []string{"VW_HUD_5_SiriShortPress"}},
+	{"siri", "方向盘语音键短按直接唤 Siri（试验）", "连接 CarPlay 时短按方向盘语音键直接唤出手机 Siri（无需长按 2 秒；原厂长按不受影响，试验功能：部分固件短按可能同时触发原车语音）；需配合「导航上 HUD」", []string{"VW_HUD_5_SiriShortPress"}},
 	{"wifi5gfix", "老固件升 P2878 无线 CarPlay 5GHz 区域修复", "仅从旧版本（如 P9832）升级 P2878 后、有线正常但无线 CarPlay 连不上时勾选：解除 5GHz 国家码校验拦截（原厂 P2878 无线正常无需勾选）", []string{"VW_Wireless5GHzFix"}},
 	{"nobtauth", "去除「输入用户名」弹窗（屏蔽蓝牙 OBEX 认证）", "屏蔽蓝牙连接时反复弹出的「输入用户名」弹窗（Busrlo / BLUETOOTH_CONNECT_AUTH_REQUIRED），不影响正常蓝牙配对、通话、音乐与 CarPlay（大众 MH2p 通用）", []string{"VW_NoBtAuthPopup"}},
 	{"nosimpopup", "屏蔽「SIM 卡仅用于数据连接。」弹窗", "仅屏蔽连接 CarPlay / Android Auto 时反复弹出的 SIM 卡数据模式提示框（PHONE_SIM_DATAONLY），不影响 SIM 卡联网、蓝牙、CarPlay 与 SOS（大众 MH2p 通用）", []string{"VW_NoSimPopup"}},

@@ -142,7 +142,7 @@ let maxStats = { pmax:0, tqmax:0, gmax:0, t100:null };
 
 function confToText(){
   return [
-    '# Touareg MH2p dash.conf (v22.0)',
+    '# Touareg MH2p dash.conf (v22.01)',
     'items=' + cfg.items.join(','),
     'show=' + (cfg.show ? 1 : 0),
     'r_items=' + cfg.r_items.join(','),
@@ -398,6 +398,16 @@ function fmtVal(k, f, src){
   return String(Math.round(Number(v) || 0));
 }
 
+function rrect(x, y, w, h, r){
+  if (typeof ctx.roundRect === 'function') { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 function drawBox(x, items, f, src){
   if (!items.length) return;
   const n = items.length;
@@ -409,7 +419,7 @@ function drawBox(x, items, f, src){
   ctx.fillStyle = `rgba(14,17,23,${(cfg.alpha / 255).toFixed(3)})`;
   ctx.strokeStyle = 'rgba(255,255,255,.14)';
   ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.roundRect(x, y, W, H, 8); ctx.fill(); ctx.stroke();
+  rrect(x, y, W, H, 8); ctx.fill(); ctx.stroke();
 
   items.forEach((k, i) => {
     const it = ITEMS[k]; if (!it) return;
@@ -466,10 +476,10 @@ function drawNavCard(x){
   ctx.save();
   ctx.fillStyle = `rgba(14,17,23,${(cfg.alpha / 255).toFixed(3)})`;
   ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.roundRect(x, y, W, H, 8); ctx.fill(); ctx.stroke();
+  rrect(x, y, W, H, 8); ctx.fill(); ctx.stroke();
 
   ctx.fillStyle = 'rgba(255,255,255,.08)';
-  ctx.beginPath(); ctx.roundRect(x + 16, y + 18, 56, 56, 10); ctx.fill();
+  rrect(x + 16, y + 18, 56, 56, 10); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = '700 36px -apple-system,sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('↱', x + 44, y + 58);
 

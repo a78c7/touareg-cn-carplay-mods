@@ -12,7 +12,8 @@
  *   vhpatch revert <zip> <patch> <out>    patched -> stock copy in <out>
  *
  * The output zip keeps every other entry byte for byte; the patched entries are re-deflated.
- * zlib is compiled in (no dependency on the unit's libz). Licence: GPL-3.0 (this repository).
+ * zlib is compiled in (no dependency on the unit's libz).
+ * Licensed under PolyForm Noncommercial 1.0.0 + LICENSE.ADDITIONAL-TERMS.md.
  */
 #include <stdio.h>
 #include <stdlib.h>

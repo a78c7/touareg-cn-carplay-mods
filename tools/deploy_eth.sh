@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tools/deploy_eth.sh — 免 U 盘直连车机一键部署 v21.0（大字运动刻度信息框 + 大字导航卡 + 四轮胎压/倾角海拔）
+# tools/deploy_eth.sh — 免 U 盘直连车机一键部署 v22.01（安全熔断 + 8080 离线 OTA/脱敏诊断 + 10Hz 阻尼平滑/GLES2 60fps）
 #
 # 支持两种连接方式：
 #   1) 默认有线网卡（D-Link DUB-E100）：自动拉起 sudo axbridge (172.16.250.248:2012)
@@ -22,6 +22,8 @@ find_mod() {
 }
 JAR_SRC="$(find_mod "VW_HUD_2_ClusterNav/Update/VWClusterNav_v6.jar")"
 PER_SRC="$(find_mod "VW_HUD_2_ClusterNav/Persist/install.sh")"
+PER3_SRC="$(find_mod "VW_HUD_3_CarPlayCluster/Persist/install.sh")"
+POP_SRC="$(find_mod "VW_NoBtAuthPopup/Update/VWPopupFilter.jar")"
 PRB_SRC="$(find_mod "VW_HUD_3_CarPlayCluster/Update/cl_probe.so")"
 CLD_SRC="$(find_mod "VW_HUD_3_CarPlayCluster/Update/clusterd")"
 CLR_SRC="$(find_mod "VW_HUD_3_CarPlayCluster/Update/cl_render")"
@@ -212,7 +214,7 @@ for bf in cl_probe.so clusterd cl_render dash.conf; do
 done
 EOF
 
-echo ">>> [2/4] 上传 v21.0 全量组件（VWClusterNav_v6.jar / cl_probe.so / clusterd / cl_render / dash.conf / Persist）..."
+echo ">>> [2/4] 上传 v22.01 全量组件（VWClusterNav_v6.jar / cl_probe.so / clusterd / cl_render / dash.conf / Persist）..."
 if [ "$NO_REBOOT" = "0" ]; then
     push_hu "$JAR_SRC" "/mnt/app/eso/hmi/lsd/jars/VWClusterNav_v6.jar.new"
     push_hu "$PER_SRC" "${PER_DST}.new"
@@ -224,12 +226,26 @@ push_hu "$TMP_CONF" "/mnt/app/eso/bin/apps/cluster/dash.conf.new"
 
 HAS_NETD="$(run_hu '[ -f /mnt/app/eso/bin/apps/wifi_dev/touareg_netd ] && echo 1 || echo 0')"
 if [ "$HAS_NETD" = "1" ]; then
-    echo "    检测到车机已装 VW_WiFi_Dev，同步升级 touareg_netd v21.0..."
+    echo "    检测到车机已装 VW_WiFi_Dev，同步升级 touareg_netd v22.01..."
     push_hu "$NETD_SRC" "/mnt/app/eso/bin/apps/wifi_dev/touareg_netd.new"
+fi
+HAS_POP="$(run_hu '[ -f /mnt/app/eso/hmi/lsd/jars/VWPopupFilter.jar ] && echo 1 || echo 0')"
+POP_SZ=0
+if [ "$HAS_POP" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
+    echo "    检测到车机已装弹窗屏蔽模块，同步升级 VWPopupFilter.jar..."
+    POP_SZ="$(wc -c < "$POP_SRC" | tr -d ' ')"
+    push_hu "$POP_SRC" "/mnt/app/eso/hmi/lsd/jars/VWPopupFilter.jar.new"
+fi
+PER3_DST="/mnt/ota/modkit/Mods/VW_HUD_3_CarPlayCluster/Persist/install.sh"
+HAS_PER3="$(run_hu "[ -f '$PER3_DST' ] && echo 1 || echo 0")"
+PER3_SZ=0
+if [ "$HAS_PER3" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
+    PER3_SZ="$(wc -c < "$PER3_SRC" | tr -d ' ')"
+    push_hu "$PER3_SRC" "${PER3_DST}.new"
 fi
 
 echo ">>> [3/4] 严格校验字节长度并执行原子替换..."
-run_hu "NO_REBOOT=$NO_REBOOT RESET_CONF=$RESET_CONF HAS_NETD=$HAS_NETD JAR_SZ=$JAR_SZ PRB_SZ=$PRB_SZ CLD_SZ=$CLD_SZ CLR_SZ=$CLR_SZ PER_SZ=$PER_SZ CONF_SZ=$CONF_SZ NETD_SZ=$NETD_SZ PER_DST='$PER_DST' /bin/ksh -s" <<'EOF'
+run_hu "NO_REBOOT=$NO_REBOOT RESET_CONF=$RESET_CONF HAS_NETD=$HAS_NETD HAS_POP=$HAS_POP POP_SZ=$POP_SZ HAS_PER3=$HAS_PER3 PER3_SZ=$PER3_SZ PER3_DST='$PER3_DST' JAR_SZ=$JAR_SZ PRB_SZ=$PRB_SZ CLD_SZ=$CLD_SZ CLR_SZ=$CLR_SZ PER_SZ=$PER_SZ CONF_SZ=$CONF_SZ NETD_SZ=$NETD_SZ PER_DST='$PER_DST' /bin/ksh -s" <<'EOF'
 set -e
 chk_sz() {
     f="$1"
@@ -277,7 +293,21 @@ if [ "$HAS_NETD" = "1" ]; then
     W=/mnt/app/eso/bin/apps/wifi_dev/touareg_netd
     chk_sz "$W.new" "$NETD_SZ"
     chmod 755 "$W.new" && mv -f "$W.new" "$W"
+    echo "v22.01" > /mnt/app/eso/bin/apps/wifi_dev/ota_version
 fi
+if [ "$HAS_POP" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
+    PJ=/mnt/app/eso/hmi/lsd/jars/VWPopupFilter.jar
+    chk_sz "$PJ.new" "$POP_SZ"
+    chmod 644 "$PJ.new" && mv -f "$PJ.new" "$PJ"
+fi
+if [ "$HAS_PER3" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
+    chk_sz "$PER3_DST.new" "$PER3_SZ"
+    chmod 755 "$PER3_DST.new" && mv -f "$PER3_DST.new" "$PER3_DST"
+fi
+# 同步刷新 v22.0 崩溃计数基线
+ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > "$D/j9_base_crashes"
+ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/dio_base_cores"
+ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/render_base_cores"
 
 sync
 mount -ur /mnt/app 2>/dev/null || true

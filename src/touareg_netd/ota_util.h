@@ -435,29 +435,76 @@ static int ota_rollback_backup(const char *app_root, char *msg, size_t msz) {
 
 /* ==================== Sanitized Diagnostic Line Filter ==================== */
 
-/* Redact sensitive substrings (Wi-Fi PSK/SSID, navigation destination/road names, keys)
- * in-place into dst so exported diagnostic bundles are safe to post on GitHub Issues. */
+/* Case-insensitive helpers (portable pure C99 across QNX / macOS / Linux) */
+static int diag_starts_ci(const char *s, const char *pfx) {
+    while (*pfx) {
+        if (tolower((unsigned char)*s) != tolower((unsigned char)*pfx)) return 0;
+        s++; pfx++;
+    }
+    return 1;
+}
+
+static int diag_contains_ci(const char *hay, const char *ndl) {
+    size_t nl = strlen(ndl);
+    if (!nl) return 1;
+    for (const char *p = hay; *p; p++) {
+        size_t i = 0;
+        while (i < nl && p[i] && tolower((unsigned char)p[i]) == tolower((unsigned char)ndl[i])) i++;
+        if (i == nl) return 1;
+    }
+    return 0;
+}
+
+/* Redact sensitive lines (Wi-Fi PSK/SSID, PIN, SSH keys, nav destination/road names, VIN/phone)
+ * into dst so exported diagnostic bundles are safe to post on GitHub Issues. */
 static void diag_sanitize_line(const char *line, char *dst, size_t cap) {
     if (!cap) return;
     static const char *redact_prefixes[] = {
         "destination:s:", "current_road:s:", "slot_0_road:s:", "slot_0_description:s:",
-        "psk=", "ssid=", "password=", NULL
+        "psk=", "ssid=", "password=", "pin=", "token=", "vin=", NULL
     };
     const char *p = line;
     while (*p == ' ' || *p == '\t') p++;
     for (int i = 0; redact_prefixes[i]; i++) {
-        size_t pl = strlen(redact_prefixes[i]);
-        if (strncasecmp(p, redact_prefixes[i], pl) == 0) {
+        if (diag_starts_ci(p, redact_prefixes[i])) {
             snprintf(dst, cap, "%.*s%s[REDACTED]\n", (int)(p - line), line, redact_prefixes[i]);
             return;
         }
     }
-    /* Also redact inline psk="..." or ChaCha hex strings */
-    if (strstr(line, "psk=\"") || strstr(line, "PIN=")) {
-        snprintf(dst, cap, "[REDACTED SENSITIVE LINE]\n");
-        return;
+    /* Redact inline sensitive markers (case-insensitive) */
+    static const char *sensitive_ci[] = {
+        "psk=", "pin=", "x-pin:", "password=", "token=", "private key", "ssh-ed25519", "chacha", "vin=", NULL
+    };
+    for (int i = 0; sensitive_ci[i]; i++) {
+        if (diag_contains_ci(line, sensitive_ci[i])) {
+            snprintf(dst, cap, "[REDACTED SENSITIVE LINE]\n");
+            return;
+        }
     }
-    snprintf(dst, cap, "%s", line);
+    /* Copy line while masking standalone 17-char VINs (e.g. WVG...) and 11-digit CN phone numbers */
+    size_t di = 0;
+    for (size_t i = 0; line[i] && di + 1 < cap; ) {
+        if (isalnum((unsigned char)line[i]) && (i == 0 || !isalnum((unsigned char)line[i - 1]))) {
+            size_t j = i;
+            int digits = 0, uppers = 0;
+            while (isalnum((unsigned char)line[j])) {
+                if (isdigit((unsigned char)line[j])) digits++;
+                if (isupper((unsigned char)line[j])) uppers++;
+                j++;
+            }
+            size_t tok_len = j - i;
+            int is_cn_phone = (tok_len == 11 && digits == 11 && line[i] == '1' && line[i + 1] >= '3' && line[i + 1] <= '9');
+            int is_vin = (tok_len == 17 && uppers >= 3 && digits >= 4 && (uppers + digits == 17));
+            if (is_cn_phone || is_vin) {
+                const char *tag = "[REDACTED]";
+                for (size_t k = 0; tag[k] && di + 1 < cap; k++) dst[di++] = tag[k];
+                i = j;
+                continue;
+            }
+        }
+        dst[di++] = line[i++];
+    }
+    dst[di] = '\0';
 }
 
 #endif /* TOUAREG_OTA_UTIL_H */

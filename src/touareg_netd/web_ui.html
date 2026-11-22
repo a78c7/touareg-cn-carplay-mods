@@ -71,7 +71,7 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
 <div class="foss-bar"><b>免费开源项目 · 严禁倒卖</b>｜官方源码 github.com/a78c7/touareg-cn-carplay-mods｜如花钱购买本程序或改装包请立即退款</div>
 <header>
   <h1>
-    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v22.0</span></span>
+    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v22.01</span></span>
     <span id="spdBadge" class="badge">连接中...</span>
   </h1>
   <div class="meta">
@@ -188,12 +188,12 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
       <div class="row"><label>关闭切原车界面保活 (ka_off)<span class="sub">建议保持关闭，防止切收音机 30 秒断联</span></label><input type="checkbox" id="tg_ka_off" onchange="doToggle('ka_off',this.checked)"></div>
       <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放方向反转</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
       <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">v21 默认由 VW_HUD_4 模块开启；取消勾选即允许连按 2 下 OK 键切换地图</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
-      <div class="row"><label>方向盘语音键短按唤 Siri (siri_short)<span class="sub">CarPlay 在线时短按方向盘语音键直接唤出 Siri（原厂长按不受影响；需已装 v22.0 HUD 或 Siri 模块）</span></label><input type="checkbox" id="tg_siri_short" onchange="doToggle('siri_short',this.checked)"></div>
+      <div class="row"><label>方向盘语音键短按唤 Siri（试验，siri_short）<span class="sub">CarPlay 在线时短按方向盘语音键直接唤出 Siri（原厂长按不受影响；部分固件短按可能同时触发原车语音）</span></label><input type="checkbox" id="tg_siri_short" onchange="doToggle('siri_short',this.checked)"></div>
       <div class="row"><label>独立 60fps GLES2 动画仪表（试验，gles60_mode）<span class="sub">无 CarPlay 地图流时启用独立 OpenGL ES 2.0 60fps 仪表；有 CarPlay 地图流时自动切回地图模式</span></label><input type="checkbox" id="tg_gles60_mode" onchange="doToggle('gles60_mode',this.checked)"></div>
       <div class="row"><label>手动安全模式 (safe_mode)<span class="sub">勾选后下次重启跳过全部改装插件，快速回归纯原厂状态排障</span></label><input type="checkbox" id="tg_safe_mode" onchange="doToggle('safe_mode',this.checked)"></div>
     </div>
     <div class="card">
-      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v22.0</span></h2>
+      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v22.01</span></h2>
       <div class="sub" style="margin-bottom:8px">上传从官方 GitHub Release 下载的 <code>touareg-ota-*.tar</code>（最大 6 MB）。流式直写 eMMC 暂存区、逐文件 SHA-256 校验与严格白名单落盘，写入前自动备份当前版本；升级后点下方「软重启车机」生效。</div>
       <input type="file" id="otaFile" accept=".tar">
       <div class="actions">
@@ -436,8 +436,8 @@ function updateHeaderStatus(j){
   document.querySelectorAll('.write-act').forEach(btn=>{btn.disabled=driving||busy;});
   const rb=document.getElementById('btnOtaRollback');
   if(rb)rb.disabled=driving||busy||!j.has_ota_backup;
-  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v22.0';
-  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v22.0');
+  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v22.01';
+  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v22.01');
   document.getElementById('ipTxt').textContent='地址: touareg.local ('+(j.bcm2_ip||'--')+')';
   document.getElementById('procTxt').textContent='进程: clusterd='+(j.clusterd?'开':'关')+' render='+(j.cl_render?'开':'关');
   document.getElementById('odoTxt').textContent=j.odo>0?('总里程: '+j.odo.toFixed(1)+' km'):'';

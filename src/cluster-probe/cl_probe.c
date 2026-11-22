@@ -183,7 +183,7 @@ static void init_once(void) {
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v22.0 loaded pid=%d uid=%d log=%d alt=%d safe=%d", getpid(), getuid(), g_log, g_alt, g_safe_mode);
+    plog("cl_alt v22.01 loaded pid=%d uid=%d log=%d alt=%d safe=%d", getpid(), getuid(), g_log, g_alt, g_safe_mode);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)

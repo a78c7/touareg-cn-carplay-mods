@@ -230,9 +230,33 @@ static int file_exists(const char *p) {
     return stat(p, &st) == 0;
 }
 
-static int proc_alive(const char *check_cmd) {
-    if (g_dry_test) return 1;
-    return system(check_cmd) == 0 ? 1 : 0;
+/* Single-command cached process snapshot (replaces 3x pidin|grep fork storms on every 8s poll) */
+static uint64_t g_ps_cache_ts = 0;
+static int g_ps_clusterd = 0, g_ps_render = 0, g_ps_dio = 0;
+
+static void refresh_proc_flags(int *out_clusterd, int *out_render, int *out_dio) {
+    if (g_dry_test) { *out_clusterd = 1; *out_render = 1; *out_dio = 1; return; }
+    struct timespec ts;
+    uint64_t now = (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) ? (uint64_t)ts.tv_sec : (uint64_t)time(NULL);
+    if (g_ps_cache_ts == 0 || now >= g_ps_cache_ts + 3) {
+        g_ps_cache_ts = now;
+        g_ps_clusterd = 0; g_ps_render = 0; g_ps_dio = 0;
+        if (system("pidin -F '%n' >/tmp/.netd_ps 2>/dev/null") == 0) {
+            FILE *fp = fopen("/tmp/.netd_ps", "r");
+            if (fp) {
+                char line[128];
+                while (fgets(line, sizeof(line), fp)) {
+                    if (strstr(line, "clusterd")) g_ps_clusterd = 1;
+                    else if (strstr(line, "cl_render")) g_ps_render = 1;
+                    else if (strstr(line, "dio_manager")) g_ps_dio = 1;
+                }
+                fclose(fp);
+            }
+        }
+    }
+    *out_clusterd = g_ps_clusterd;
+    *out_render = g_ps_render;
+    *out_dio = g_ps_dio;
 }
 
 static void read_dash_state(double *out_spd, double *out_odo) {
@@ -799,12 +823,12 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], ota_ver[48];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.0");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.01");
 
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v22.0 ota_version=%s bcm2_ip=%s\n"
+        "netd_version=v22.01 ota_version=%s bcm2_ip=%s\n"
         "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d\n"
         "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d\n\n",
         ota_ver, ipstr,
@@ -887,7 +911,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], esc1[320], esc2[320], ota_ver[48], esc_ov[64];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.0");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.01");
     json_escape(ota_ver, esc_ov, sizeof(esc_ov));
     double spd = -1.0, odo = -1.0;
     read_dash_state(&spd, &odo);
@@ -901,8 +925,11 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     json_escape(dc.items, esc1, sizeof(esc1));
     json_escape(dc.r_items, esc2, sizeof(esc2));
 
+    int p_cld = 0, p_ren = 0, p_dio = 0;
+    refresh_proc_flags(&p_cld, &p_ren, &p_dio);
+
     l += (size_t)snprintf(j + l, 32768 - l,
-        "{\"ok\":true,\"version\":\"v22.0\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
+        "{\"ok\":true,\"version\":\"v22.01\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
         "\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
@@ -914,9 +941,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d,\"siri_short\":%d,\"gles60_mode\":%d,\"safe_mode\":%d},\"drive_logs\":[",
         esc_ov, has_ota_backup_files(),
         ipstr, spd, odo, has_cl, ssh_on,
-        proc_alive("pidin -p clusterd 2>/dev/null | grep -q clusterd"),
-        proc_alive("pidin -p cl_render 2>/dev/null | grep -q cl_render"),
-        proc_alive("pidin -p dio_manager 2>/dev/null | grep -q dio_manager"),
+        p_cld, p_ren, p_dio,
         count_wifi_networks(),
         file_exists(CLUSTER_DIR "/safe_mode"),
         file_exists("/tmp/vw_hmi_safe_mode"),
@@ -1260,10 +1285,10 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
                     unlink("/tmp/cl_render_fused");
                     mount_app_rw();
                     unlink(CLUSTER_DIR "/safe_mode");
-                    (void)system("ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/j9_base_crashes");
-                    (void)system("ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/dio_base_cores");
-                    (void)system("ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/render_base_cores");
-                    (void)system("ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " WIFI_DIR "/iopkt_base_cores");
+                    (void)system("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/j9_base_crashes");
+                    (void)system("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/dio_base_cores");
+                    (void)system("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/render_base_cores");
+                    (void)system("[ -d " WIFI_DIR " ] && ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " WIFI_DIR "/iopkt_base_cores");
                     mount_app_ro();
                 }
                 send_json(cfd, 200, 1, "已清除安全模式锁并刷新崩溃基线，建议重启车机生效");
@@ -1319,7 +1344,7 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v22.0 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
+    nlog("touareg_netd v22.01 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
 
     uint32_t cur_ip = 0;
     int http_fd = -1, mdns_fd = -1;

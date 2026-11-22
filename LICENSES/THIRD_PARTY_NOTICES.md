@@ -1,6 +1,6 @@
 # Third-Party Notices & License Boundaries
 
-As of **v22.0**, the wired CarPlay iAP2 Route Guidance parser (`src/cluster-probe/wired/cl_wired_rg.c` & `cl_wired.c`) has been cleanly rewritten from scratch, eliminating all mixed GPL-3.0 / CC BY-NC-SA linkage inside `cl_probe.so`.
+As of **v22.0**, the wired CarPlay iAP2 Route Guidance parser (`src/cluster-probe/wired/cl_wired_rg.c` & `cl_wired.c`) is an independent original implementation in this repository.
 
 All original components in `a78c7/touareg-cn-carplay-mods` are licensed under **PolyForm Noncommercial License 1.0.0 + `LICENSE.ADDITIONAL-TERMS.md`** (personal, non-commercial use; reselling prohibited). Third-party upstream components bundled or derived in this repository retain their respective licenses below:
 

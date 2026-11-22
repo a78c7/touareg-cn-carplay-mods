@@ -46,6 +46,13 @@ public final class Rebind implements Runnable {
     static volatile de.vw.mib.display.DisplayManagementService holdSvc;
     static final int HOLD_FALLBACK_MS = 5000;
     static final File TOGGLE_FILE = new File("/tmp/vwcn_toggle");
+    static final File NATIVE_FLAG = new File("/tmp/vwcn_user_native");
+    private static void setNativeFlag(boolean on) {
+        try {
+            if (on) { java.io.FileWriter fw = new java.io.FileWriter(NATIVE_FLAG); fw.write("1\n"); fw.close(); }
+            else if (NATIVE_FLAG.exists()) NATIVE_FLAG.delete();
+        } catch (Throwable ignore) {}
+    }
     /* v21.1: 事件驱动监听 DSIDisplayManagementListener（display 4 的 showDisplayablesResult / activeContext），
      * 平时 [58,33] 在位时 0 次多余 showDisplayables 盲刷（消除 3 秒盲刷引起的 0.1s 透底闪原车地图），
      * 一旦原车把仪表屏切走，<=100ms 立刻拉回；若特定固件挂不上监听器，自动退回 5 秒兜底（零 NPE）。 */
@@ -177,11 +184,13 @@ public final class Rebind implements Runnable {
         }
         if (hold != null) {
             userNative = true;
+            setNativeFlag(true);
             hold = null;
             Log.log("switch: CarPlay -> native map");
             rebind("33;vis1;rate10;st");
         } else {
             userNative = false;
+            setNativeFlag(false);
             Log.log("switch: native -> CarPlay map " + list(sh));
             rebind("hold" + csv(sh) + ";rate10;st");
         }
@@ -251,6 +260,7 @@ public final class Rebind implements Runnable {
                     int[] parsed = parse(g.substring(4));
                     streamHold = parsed;
                     userNative = false;
+                    setNativeFlag(false);
                     hold = parsed;
                     holdSvc = s;
                     restoreNeeded = false;
@@ -260,7 +270,7 @@ public final class Rebind implements Runnable {
                     Thread.sleep(400);
                     continue;
                 }
-                if (g.equals("unhold")) { hold = null; streamHold = null; userNative = false; restoreNeeded = false; Log.log("rebind: unhold"); continue; }
+                if (g.equals("unhold")) { hold = null; streamHold = null; userNative = false; setNativeFlag(false); restoreNeeded = false; Log.log("rebind: unhold"); continue; }
                 if (g.startsWith("sleep")) { Thread.sleep(Integer.parseInt(g.substring(5).trim())); continue; }
                 int[] ids = parse(g);
                 s.showDisplayables(CLUSTER_DISPLAY, ids);
