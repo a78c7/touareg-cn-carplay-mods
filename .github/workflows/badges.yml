@@ -11,10 +11,10 @@ permissions:
   contents: write
 
 jobs:
-  downloads:
+  badges:
     runs-on: ubuntu-latest
     steps:
-      - name: Compute total release downloads (including archived drafts) and update badges branch
+      - name: Compute total downloads (incl. archived drafts) & stars and update badges branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -24,22 +24,81 @@ jobs:
           pages = json.load(sys.stdin)
           print(sum(a.get('download_count', 0) for page in pages for r in page for a in r.get('assets', [])))
           ")
-          echo "Total downloads (all releases incl. drafts): ${TOTAL}"
-          NEW_JSON=$(printf '{"schemaVersion":1,"label":"Downloads","message":"%s","color":"0969da","labelColor":"24292f"}\n' "$TOTAL")
+          STARS=$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.stargazers_count // 0')
+          echo "Total downloads (all releases incl. drafts): ${TOTAL}, Stars: ${STARS}"
 
-          OLD_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/contents/downloads.json?ref=badges" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || true)
-          if [ "$NEW_JSON" = "$OLD_JSON" ]; then
-            echo "downloads.json unchanged (${TOTAL}), skipping push."
+          TMP=$(mktemp -d)
+          python3 - "$TOTAL" "$STARS" "$TMP" <<'PY'
+          import json, os, sys
+
+          total = int(sys.argv[1])
+          stars = int(sys.argv[2])
+          out_dir = sys.argv[3]
+
+          # JSON endpoint (kept for shields.io compatibility)
+          with open(os.path.join(out_dir, 'downloads.json'), 'w', encoding='utf-8') as f:
+              json.dump({
+                  'schemaVersion': 1,
+                  'label': '累计下载',
+                  'message': f'{total:,} 次',
+                  'color': '0969da',
+                  'labelColor': '24292f',
+              }, f, ensure_ascii=False)
+              f.write('\n')
+
+          def make_pill(label, value, color, icon_svg, lw=96):
+              # Estimate width safely for digits/ASCII + CJK chars
+              vw = 24
+              for ch in value:
+                  vw += 14 if ord(ch) > 127 else 8.5
+              rw = max(76, int(vw + 0.5))
+              w = lw + rw
+              lx = (24 + lw) / 2.0
+              rx = lw + rw / 2.0
+              return (
+                  f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="28" role="img" aria-label="{label}: {value}">\n'
+                  f'  <linearGradient id="s" x2="0" y2="100%">'
+                  f'<stop offset="0" stop-color="#fff" stop-opacity=".12"/>'
+                  f'<stop offset="1" stop-opacity=".12"/></linearGradient>\n'
+                  f'  <clipPath id="r"><rect width="{w}" height="28" rx="6" fill="#fff"/></clipPath>\n'
+                  f'  <g clip-path="url(#r)">\n'
+                  f'    <rect width="{lw}" height="28" fill="#24292f"/>\n'
+                  f'    <rect x="{lw}" width="{rw}" height="28" fill="{color}"/>\n'
+                  f'    <rect width="{w}" height="28" fill="url(#s)"/>\n'
+                  f'  </g>\n'
+                  f'  {icon_svg}\n'
+                  f'  <g fill="#fff" text-anchor="middle" '
+                  f'font-family="-apple-system,BlinkMacSystemFont,\'PingFang SC\',\'Microsoft YaHei\',\'Segoe UI\',Helvetica,Arial,sans-serif" '
+                  f'font-size="13" font-weight="600">\n'
+                  f'    <text x="{lx:.1f}" y="18.5">{label}</text>\n'
+                  f'    <text x="{rx:.1f}" y="18.5">{value}</text>\n'
+                  f'  </g>\n'
+                  f'</svg>\n'
+              )
+
+          dl_icon = '<path d="M16 8.5v7m0 0-3-3m3 3 3-3M11.5 19h9" stroke="#79c0ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+          star_icon = '<path d="M16 7.8l1.8 3.65 4.02.58-2.91 2.84.69 4.01L16 17l-3.6 1.88.69-4.01-2.91-2.84 4.02-.58z" fill="#ffd33d"/>'
+
+          with open(os.path.join(out_dir, 'downloads.svg'), 'w', encoding='utf-8') as f:
+              f.write(make_pill('累计下载', f'{total:,} 次', '#0969da', dl_icon))
+          with open(os.path.join(out_dir, 'stars.svg'), 'w', encoding='utf-8') as f:
+              f.write(make_pill('累计点赞', f'{stars:,} Star', '#bf8700', star_icon))
+          PY
+
+          OLD_DL=$(gh api "repos/${GITHUB_REPOSITORY}/contents/downloads.svg?ref=badges" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || true)
+          OLD_ST=$(gh api "repos/${GITHUB_REPOSITORY}/contents/stars.svg?ref=badges" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || true)
+          NEW_DL=$(cat "$TMP/downloads.svg")
+          NEW_ST=$(cat "$TMP/stars.svg")
+          if [ "$NEW_DL" = "$OLD_DL" ] && [ "$NEW_ST" = "$OLD_ST" ]; then
+            echo "Badges unchanged (downloads=${TOTAL}, stars=${STARS}), skipping push."
             exit 0
           fi
 
-          TMP=$(mktemp -d)
           cd "$TMP"
           git init -q -b badges
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          printf '%s\n' "$NEW_JSON" > downloads.json
-          git add downloads.json
-          git commit -q -m "chore: update total downloads badge (${TOTAL})"
+          git add downloads.json downloads.svg stars.svg
+          git commit -q -m "chore: update badges (downloads=${TOTAL}, stars=${STARS})"
           git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/badges
-          echo "Updated badges/downloads.json -> ${TOTAL}"
+          echo "Updated badges branch -> downloads=${TOTAL}, stars=${STARS}"

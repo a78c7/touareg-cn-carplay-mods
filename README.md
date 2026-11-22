@@ -6,12 +6,11 @@
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v22.1"></a>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fa78c7%2Ftouareg-cn-carplay-mods%2Frefs%2Fheads%2Fbadges%2Fdownloads.json&style=flat" alt="Downloads" height="22"></a>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://img.shields.io/github/stars/a78c7/touareg-cn-carplay-mods?style=flat&label=Stars&labelColor=24292f&color=d29922" alt="Stars" height="22"></a>
+  <a href="docs/README.md"><img src="docs/img/badges/platform.svg" alt="MH2p QNX 6.6"></a>
   <a href="#许可证"><img src="docs/img/badges/license.svg" alt="License PolyForm Noncommercial 1.0"></a>
 </p>
 
-**不拆一粒螺丝、单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与大字运动信息框，支持手机 `8080` 签名 OTA 与无线开发。**
+**不拆螺丝、单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与运动信息框，支持手机 `8080` 签名 OTA 与无线开发。**
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载最新版（v22.1）</b></a> ·
@@ -20,6 +19,12 @@
 </p>
 
 <p><sub>觉得有帮助欢迎点右上角 <b>⭐ Star</b> 支持；如需第一时间收到新版发版提醒，请点 <b>👀 Watch → Custom → 勾选 Releases</b>。</sub></p>
+
+<p>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/downloads.svg" alt="累计下载"></a>
+  &nbsp;
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/stars.svg" alt="累计点赞"></a>
+</p>
 
 </div>
 
