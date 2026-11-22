@@ -396,7 +396,7 @@ static void header_get(const char *req, const char *hdr_end, const char *hname, 
     }
 }
 
-#define PIN_MAX_BUCKETS 8
+#define PIN_MAX_BUCKETS 16
 
 typedef struct {
     uint32_t ip;
@@ -428,7 +428,10 @@ static uint64_t monotonic_sec(void) {
 #endif
 }
 
-static pin_bucket_t *pin_bucket_get(uint32_t peer_ip, uint64_t now) {
+/* 查找或分配按来源 IP 独立的限速槽位。
+ * 满槽时仅淘汰已过期的未锁定槽位；若 16 槽全部处于活跃锁定中，返回 NULL（拒绝新 IP 且不挤掉既有锁定），
+ * 并通过 out_min_wait 返回最短剩余锁定秒数，防止多 IP 轮换绕过限速。 */
+static pin_bucket_t *pin_bucket_get(uint32_t peer_ip, uint64_t now, uint64_t *out_min_wait) {
     for (int i = 0; i < PIN_MAX_BUCKETS; i++) {
         if (g_pin_buckets[i].used && g_pin_buckets[i].ip == peer_ip) {
             g_pin_buckets[i].last_seen = now;
@@ -440,7 +443,6 @@ static pin_bucket_t *pin_bucket_get(uint32_t peer_ip, uint64_t now) {
         if (!g_pin_buckets[i].used) { slot = i; break; }
     }
     if (slot < 0) {
-        /* 优先淘汰未锁定且最久未活跃的 IP 槽位，避免攻击者占满全部槽位后挤掉已锁定记录 */
         for (int i = 0; i < PIN_MAX_BUCKETS; i++) {
             if (g_pin_buckets[i].lock_until == 0 || now >= g_pin_buckets[i].lock_until) {
                 if (slot < 0 || g_pin_buckets[i].last_seen < g_pin_buckets[slot].last_seen) slot = i;
@@ -448,10 +450,15 @@ static pin_bucket_t *pin_bucket_get(uint32_t peer_ip, uint64_t now) {
         }
     }
     if (slot < 0) {
-        slot = 0;
-        for (int i = 1; i < PIN_MAX_BUCKETS; i++) {
-            if (g_pin_buckets[i].last_seen < g_pin_buckets[slot].last_seen) slot = i;
+        uint64_t min_w = PIN_LOCK_SECS[3];
+        for (int i = 0; i < PIN_MAX_BUCKETS; i++) {
+            if (g_pin_buckets[i].lock_until > now) {
+                uint64_t rem = g_pin_buckets[i].lock_until - now;
+                if (rem < min_w) min_w = rem;
+            }
         }
+        if (out_min_wait) *out_min_wait = min_w > 0 ? min_w : 30;
+        return NULL;
     }
     memset(&g_pin_buckets[slot], 0, sizeof(g_pin_buckets[slot]));
     g_pin_buckets[slot].ip = peer_ip;
@@ -468,6 +475,10 @@ static const char *get_pin_file_path(void) {
 static const char *get_setup_pin_path(void) {
     const char *p = getenv("NETD_SETUP_PIN_FILE");
     return (p && p[0]) ? p : SETUP_PIN_PATH;
+}
+
+static void get_pin_unconfirmed_path(const char *pin_path, char *out, size_t osz) {
+    snprintf(out, osz, "%s.unconfirmed", pin_path);
 }
 
 static int read_valid_pin_file(const char *pin_path, char *out, size_t osz) {
@@ -510,13 +521,28 @@ static void gen_random_pin6(char out[7]) {
     out[6] = '\0';
 }
 
-/* 首次启动或旧版无 web.pin 升级兼容：仅当 web.pin 不存在或为空时，自动生成 6 位随机口令落盘，
- * 并写入内存盘 /tmp/touareg_setup_pin 供车机仪表屏幕弹出显示（首次登录 8080 成功后自动清除）。
- * 已有 web.pin 时直接返回，零闪存写入。返回 1=新生成, 0=已存在, -1=落盘失败（将维持 fail-closed）。 */
+/* 首次启动或旧版无 web.pin 升级兼容：
+ * - 若已有 web.pin 且无 .unconfirmed 标记：直接返回 0（零闪存写入、不上屏）；
+ * - 若已有 web.pin 且仍存在 .unconfirmed 标记（上次开机未登录即熄火）：将既有口令重新写入内存盘
+ *   /tmp/touareg_setup_pin（0600）供仪表屏显示，避免首次刷完未连 CarPlay 导致看不到口令；
+ * - 若 web.pin 不存在或为空：生成 6 位随机口令原子落盘并创建 .unconfirmed 标记，同时写 /tmp/touareg_setup_pin（0600）。
+ * 返回 1=新生成或恢复上屏, 0=已确认存在, -1=落盘失败（将维持 fail-closed）。 */
 static int ensure_web_pin_boot(void) {
     const char *pin_path = get_pin_file_path();
+    const char *sp = get_setup_pin_path();
+    char unconf_path[384];
+    get_pin_unconfirmed_path(pin_path, unconf_path, sizeof(unconf_path));
+
     char existing[64];
-    if (read_valid_pin_file(pin_path, existing, sizeof(existing))) return 0;
+    if (read_valid_pin_file(pin_path, existing, sizeof(existing))) {
+        if (file_exists(unconf_path)) {
+            char line[80];
+            int n = snprintf(line, sizeof(line), "%s\n", existing);
+            if (n > 0) (void)atomic_write_file(sp, line, (size_t)n, 0600);
+            return 1;
+        }
+        return 0;
+    }
 
     char pin[7], line[16];
     gen_random_pin6(pin);
@@ -525,17 +551,18 @@ static int ensure_web_pin_boot(void) {
 
     mount_app_rw();
     int rc = atomic_write_file(pin_path, line, (size_t)n, 0600);
+    if (rc == 0) (void)atomic_write_file(unconf_path, "1\n", 2, 0600);
     mount_app_ro();
     if (rc != 0) return -1;
 
-    const char *sp = get_setup_pin_path();
-    (void)atomic_write_file(sp, line, (size_t)n, 0644);
+    (void)atomic_write_file(sp, line, (size_t)n, 0600);
     return 1;
 }
 
 /* 校验管理口令 web.pin（fail-closed：未配置或为空一律拒绝；仅接受 X-Pin 请求头，拒绝 URL query 传参；
- * 按来源 IP 独立限速并阶梯退避 30s -> 120s -> 300s -> 900s；首次登录成功自动撤掉仪表初始口令提示；
- * 返回：1=通过, 0=需口令/错误, -1=该来源 IP 锁定中, -2=车机未配置 web.pin） */
+ * 按来源 IP 独立限速（16 槽防挤占）并阶梯退避 30s -> 120s -> 300s -> 900s；
+ * 首次登录成功自动删除 /tmp/touareg_setup_pin 与 web.pin.unconfirmed；
+ * 返回：1=通过, 0=需口令/错误, -1=该来源 IP 锁定中（或满槽拒绝）, -2=车机未配置 web.pin） */
 static int check_pin_auth(const char *req, const char *hdr_end, uint32_t peer_ip, uint64_t *out_wait_sec) {
     if (out_wait_sec) *out_wait_sec = 0;
     const char *pin_path = get_pin_file_path();
@@ -544,7 +571,12 @@ static int check_pin_auth(const char *req, const char *hdr_end, uint32_t peer_ip
     size_t elen = strlen(expected);
 
     uint64_t now = monotonic_sec();
-    pin_bucket_t *b = pin_bucket_get(peer_ip, now);
+    uint64_t min_wait = 0;
+    pin_bucket_t *b = pin_bucket_get(peer_ip, now, &min_wait);
+    if (!b) {
+        if (out_wait_sec) *out_wait_sec = min_wait;
+        return -1;
+    }
     if (b->lock_until > 0 && now < b->lock_until) {
         if (out_wait_sec) *out_wait_sec = b->lock_until - now;
         return -1;
@@ -560,8 +592,15 @@ static int check_pin_auth(const char *req, const char *hdr_end, uint32_t peer_ip
         b->fails = 0;
         b->lock_level = 0;
         b->lock_until = 0;
-        /* 首次用自动生成的初始口令登录成功后，立即撤下仪表屏幕上的明文提示 */
+        /* 首次用自动生成的初始口令登录成功后，立即撤下仪表屏幕上的明文提示并永久清除未确认标记 */
         unlink(get_setup_pin_path());
+        char unconf_path[384];
+        get_pin_unconfirmed_path(pin_path, unconf_path, sizeof(unconf_path));
+        if (file_exists(unconf_path)) {
+            mount_app_rw();
+            unlink(unconf_path);
+            mount_app_ro();
+        }
         return 1;
     }
     if (++b->fails >= 5) {

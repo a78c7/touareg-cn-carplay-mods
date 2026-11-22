@@ -116,23 +116,42 @@ static void test_http_security_and_routing(void) {
     run_http_req(req_status_nopin, strlen(req_status_nopin), ip_owner, resp, sizeof(resp));
     assert(strstr(resp, "HTTP/1.1 503") != NULL);
 
-    /* 3.5) Boot auto-generation: generates random 6-digit PIN + setup_pin for cluster screen,
-     *      clears setup_pin automatically after first successful login, and never overwrites existing PIN */
+    /* 3.5) Boot auto-generation: generates random 6-digit PIN + 0600 setup_pin + .unconfirmed,
+     *      survives reboot before first login (re-populates setup_pin), then clears both after
+     *      first successful login so subsequent boots stay silent with zero flash writes */
     unlink(pin_path);
     unlink(setup_pin_path);
+    char unconf_path[384];
+    get_pin_unconfirmed_path(pin_path, unconf_path, sizeof(unconf_path));
+    unlink(unconf_path);
+
     assert(ensure_web_pin_boot() == 1);
     char gen_pin[64], screen_pin[64];
     assert(read_valid_pin_file(pin_path, gen_pin, sizeof(gen_pin)));
     assert(read_valid_pin_file(setup_pin_path, screen_pin, sizeof(screen_pin)));
     assert(strlen(gen_pin) == 6 && gen_pin[0] != '0' && strcmp(gen_pin, screen_pin) == 0);
-    /* Subsequent boot with existing web.pin must be a no-op (return 0, zero flash writes) */
-    assert(ensure_web_pin_boot() == 0);
-    /* First valid login clears setup_pin so cluster screen hides the initial PIN */
+    assert(file_exists(unconf_path));
+    struct stat sp_st;
+    assert(stat(setup_pin_path, &sp_st) == 0 && (sp_st.st_mode & 0777) == 0600);
+
+    /* Simulate reboot before first login (/tmp cleared): setup_pin must be restored with same PIN */
+    unlink(setup_pin_path);
+    assert(!file_exists(setup_pin_path));
+    assert(ensure_web_pin_boot() == 1);
+    assert(read_valid_pin_file(setup_pin_path, screen_pin, sizeof(screen_pin)));
+    assert(strcmp(gen_pin, screen_pin) == 0);
+
+    /* First valid login clears both setup_pin and .unconfirmed permanently */
     char req_boot_pin[256];
     snprintf(req_boot_pin, sizeof(req_boot_pin),
         "GET /api/status HTTP/1.1\r\nHost: touareg.local\r\nX-Pin: %s\r\n\r\n", gen_pin);
     run_http_req(req_boot_pin, strlen(req_boot_pin), ip_owner, resp, sizeof(resp));
     assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
+    assert(!file_exists(setup_pin_path));
+    assert(!file_exists(unconf_path));
+
+    /* Subsequent reboot with confirmed web.pin must be a silent no-op (return 0, no setup_pin) */
+    assert(ensure_web_pin_boot() == 0);
     assert(!file_exists(setup_pin_path));
 
     /* 4) Configure valid PIN; URL query ?pin=... MUST be rejected (401) */
@@ -183,6 +202,23 @@ static void test_http_security_and_routing(void) {
     g_test_now_offset += 121;
     run_http_req(req_ok, strlen(req_ok), ip_attacker, resp, sizeof(resp));
     assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
+
+    /* 6.5) 16-slot anti-eviction test: when all 16 slots are actively locked, a 17th IP is rejected (429)
+     *      and previously locked IP #1 is NOT evicted */
+    pin_reset_rate_limit();
+    for (int s = 0; s < PIN_MAX_BUCKETS; s++) {
+        uint32_t sip = htonl(0x0A000001u + (uint32_t)s);
+        for (int k = 0; k < 5; k++) run_http_req(req_wrong, strlen(req_wrong), sip, resp, sizeof(resp));
+        assert(strstr(resp, "HTTP/1.1 429") != NULL);
+    }
+    uint32_t ip_17th = htonl(0x0A000099u);
+    run_http_req(req_ok, strlen(req_ok), ip_17th, resp, sizeof(resp));
+    assert(strstr(resp, "HTTP/1.1 429") != NULL);
+    /* IP #1 must still be locked */
+    run_http_req(req_ok, strlen(req_ok), htonl(0x0A000001u), resp, sizeof(resp));
+    assert(strstr(resp, "HTTP/1.1 429") != NULL);
+    /* Reset rate limit table before remaining routing tests */
+    pin_reset_rate_limit();
 
     /* 7) CSRF guard on POST write endpoints */
     const char *req_post_nocsrf =

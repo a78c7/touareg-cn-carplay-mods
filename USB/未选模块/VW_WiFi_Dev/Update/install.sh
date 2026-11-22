@@ -52,6 +52,7 @@ cp -v "$MOD_PATH/touareg_netd" "$D/touareg_netd.new" && chmod 755 "$D/touareg_ne
 #    若旧版未配置过 web.pin，由 touareg_netd 首次启动自动生成 6 位随机口令并在仪表屏显示）
 if [ -s "$MOD_PATH/web.pin" ]; then
     cp -v "$MOD_PATH/web.pin" "$D/web.pin.new" && chmod 600 "$D/web.pin.new" && mv -f "$D/web.pin.new" "$D/web.pin"
+    rm -f "$D/web.pin.unconfirmed"
 elif [ -s "$D/web.pin" ]; then
     echo "info: keeping existing web.pin on head unit"
 else

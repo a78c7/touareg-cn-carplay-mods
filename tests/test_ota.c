@@ -134,6 +134,10 @@ static void test_diag_sanitize(void) {
     char san[256];
     diag_sanitize_line("psk=\"MySecretPass123\" pin=889900\n", san, sizeof(san));
     assert(strstr(san, "MySecretPass123") == NULL && strstr(san, "889900") == NULL);
+    diag_sanitize_line("GET /api/diag?pin=654321 HTTP/1.1\n", san, sizeof(san));
+    assert(strstr(san, "654321") == NULL);
+    diag_sanitize_line("GET /api/dl?type=log&name=a.log&pin=839201 HTTP/1.1\n", san, sizeof(san));
+    assert(strstr(san, "839201") == NULL);
     diag_sanitize_line("X-Pin: 987654\n", san, sizeof(san));
     assert(strstr(san, "987654") == NULL);
     diag_sanitize_line("-----BEGIN OPENSSH PRIVATE KEY-----\n", san, sizeof(san));
