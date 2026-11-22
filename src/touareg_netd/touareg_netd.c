@@ -409,12 +409,16 @@ typedef struct {
 
 static pin_bucket_t g_pin_buckets[PIN_MAX_BUCKETS];
 static const uint64_t PIN_LOCK_SECS[4] = { 30, 120, 300, 900 };
+static int g_unconf_clear_fails = 0;
+static uint64_t g_unconf_retry_after = 0;
 
 #ifdef TOUAREG_NETD_NO_MAIN
 static uint64_t g_test_now_offset = 0;
 static void pin_reset_rate_limit(void) {
     memset(g_pin_buckets, 0, sizeof(g_pin_buckets));
     g_test_now_offset = 0;
+    g_unconf_clear_fails = 0;
+    g_unconf_retry_after = 0;
 }
 #endif
 
@@ -429,11 +433,18 @@ static uint64_t monotonic_sec(void) {
 }
 
 /* 查找或分配按来源 IP 独立的限速槽位。
+ * 既有槽位若未在锁定中且距上次活动超过 1 小时（3600s）无失败，自动衰减清零 lock_level/fails；
  * 满槽时仅淘汰已过期的未锁定槽位；若 16 槽全部处于活跃锁定中，返回 NULL（拒绝新 IP 且不挤掉既有锁定），
  * 并通过 out_min_wait 返回最短剩余锁定秒数，防止多 IP 轮换绕过限速。 */
 static pin_bucket_t *pin_bucket_get(uint32_t peer_ip, uint64_t now, uint64_t *out_min_wait) {
     for (int i = 0; i < PIN_MAX_BUCKETS; i++) {
         if (g_pin_buckets[i].used && g_pin_buckets[i].ip == peer_ip) {
+            if ((g_pin_buckets[i].lock_until == 0 || now >= g_pin_buckets[i].lock_until) &&
+                now >= g_pin_buckets[i].last_seen + 3600ULL) {
+                g_pin_buckets[i].fails = 0;
+                g_pin_buckets[i].lock_level = 0;
+                g_pin_buckets[i].lock_until = 0;
+            }
             g_pin_buckets[i].last_seen = now;
             return &g_pin_buckets[i];
         }
@@ -592,14 +603,21 @@ static int check_pin_auth(const char *req, const char *hdr_end, uint32_t peer_ip
         b->fails = 0;
         b->lock_level = 0;
         b->lock_until = 0;
-        /* 首次用自动生成的初始口令登录成功后，立即撤下仪表屏幕上的明文提示并永久清除未确认标记 */
+        /* 首次用自动生成的初始口令登录成功后，立即撤下仪表屏幕上的明文提示并永久清除未确认标记（带失败退避） */
         unlink(get_setup_pin_path());
         char unconf_path[384];
         get_pin_unconfirmed_path(pin_path, unconf_path, sizeof(unconf_path));
-        if (file_exists(unconf_path)) {
+        if (file_exists(unconf_path) && g_unconf_clear_fails < 3 && now >= g_unconf_retry_after) {
             mount_app_rw();
-            unlink(unconf_path);
+            int urc = unlink(unconf_path);
             mount_app_ro();
+            if (urc == 0 || errno == ENOENT) {
+                g_unconf_clear_fails = 0;
+                g_unconf_retry_after = 0;
+            } else {
+                g_unconf_clear_fails++;
+                g_unconf_retry_after = now + 60ULL;
+            }
         }
         return 1;
     }
@@ -1314,7 +1332,7 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
     uint64_t wait_sec = 0;
     int auth = check_pin_auth(req, hdr_end, peer_ip, &wait_sec);
     if (auth == -2) {
-        const char *ubody = "{\"ok\":false,\"pin_unconfigured\":true,\"msg\":\"车机未配置管理口令 web.pin，控制台已拒绝访问。请用「改装设置」重刷或通过 SSH 写入 web.pin\"}";
+        const char *ubody = "{\"ok\":false,\"pin_unconfigured\":true,\"msg\":\"车机未配置管理口令 web.pin，控制台已拒绝访问。请用「改装设置」重刷，或（含未装仪表模块的 MH2p 车型）通过 SSH 写入 /mnt/app/eso/bin/apps/wifi_dev/web.pin\"}";
         send_resp(cfd, 503, "Service Unavailable", "application/json; charset=utf-8", ubody, strlen(ubody));
         return;
     }

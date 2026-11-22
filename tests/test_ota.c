@@ -150,6 +150,19 @@ static void test_diag_sanitize(void) {
     assert(strcmp(san, "t=1700000000 spd=86.5 rpm=2100\n") == 0);
 }
 
+static void test_ota_octal_overflow(void) {
+    size_t v = 0;
+    /* Valid octal parses cleanly */
+    const uint8_t ok_oct[] = "00000001234";
+    assert(ota_tar_octal(ok_oct, 11, &v) == 0 && v == 01234u);
+    /* Non-octal digit must fail */
+    const uint8_t bad_oct[] = "00000000089";
+    assert(ota_tar_octal(bad_oct, 11, &v) != 0);
+    /* 23 octal '7' digits (= 69 bits) overflows both 32-bit and 64-bit size_t */
+    const uint8_t huge_oct[] = "77777777777777777777777";
+    assert(ota_tar_octal(huge_oct, sizeof(huge_oct) - 1, &v) != 0);
+}
+
 static void test_ota_signature_and_security(void) {
     /* Throwaway test-only Ed25519 public key and precomputed valid signature over manifest */
     uint8_t test_pk[32];
@@ -202,6 +215,11 @@ static void test_ota_signature_and_security(void) {
     assert(ota_apply_tar_with_key(root, tar_path, test_pk, msg, sizeof(msg)) == -23);
     read_file_str(live_netd, buf, sizeof(buf));
     assert(strcmp(buf, "OLD_NETD_V2201") == 0);
+    /* Verify two-pass guarantee: signature failure MUST NOT create .ota_stage directory or write extracted bytes */
+    char stage_chk[448];
+    snprintf(stage_chk, sizeof(stage_chk), "%s/eso/bin/apps/.ota_stage", root);
+    struct stat st_chk;
+    assert(stat(stage_chk, &st_chk) != 0);
 
     /* 3) Valid signature over manifest, but tampered binary -> SHA-256 mismatch MUST be rejected */
     tfd = open(tar_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
@@ -293,6 +311,7 @@ static void test_ota_signature_and_security(void) {
 int main(void) {
     test_sha256_and_ed25519_vectors();
     test_diag_sanitize();
+    test_ota_octal_overflow();
     test_ota_signature_and_security();
     puts("test_ota: ALL PASSED");
     return 0;

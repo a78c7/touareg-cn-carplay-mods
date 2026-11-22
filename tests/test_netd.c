@@ -198,8 +198,18 @@ static void test_http_security_and_routing(void) {
     assert(strstr(resp, "HTTP/1.1 429") != NULL);
     assert(strstr(resp, "120") != NULL);
 
-    /* After 120s backoff expires, valid PIN succeeds and resets lock level */
-    g_test_now_offset += 121;
+    /* Advance simulated clock > 1 hour (3600s) with no failures: lock_level decays back to 0 (30s) */
+    g_test_now_offset += 3800;
+    for (int i = 0; i < 4; i++) {
+        run_http_req(req_wrong, strlen(req_wrong), ip_attacker, resp, sizeof(resp));
+        assert(strstr(resp, "HTTP/1.1 401") != NULL);
+    }
+    run_http_req(req_wrong, strlen(req_wrong), ip_attacker, resp, sizeof(resp));
+    assert(strstr(resp, "HTTP/1.1 429") != NULL);
+    assert(strstr(resp, "30") != NULL);
+
+    /* After 30s expires, valid PIN succeeds and resets lock level */
+    g_test_now_offset += 31;
     run_http_req(req_ok, strlen(req_ok), ip_attacker, resp, sizeof(resp));
     assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
 

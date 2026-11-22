@@ -181,6 +181,7 @@ static int ota_tar_octal(const uint8_t *p, size_t n, size_t *out) {
     if (i == n) { *out = 0; return 0; }
     for (; i < n && p[i] != '\0' && p[i] != ' '; i++) {
         if (p[i] < '0' || p[i] > '7') return -1;
+        if (v > (SIZE_MAX >> 3)) return -1; /* Prevent 32-bit size_t wraparound on ARMv7 */
         v = (v << 3) | (size_t)(p[i] - '0');
     }
     *out = v;
@@ -249,6 +250,11 @@ static int ota_parse_sig_hex(const char *txt, size_t len, uint8_t sig[64]) {
 }
 
 /* Verify and atomically install an allowlisted, Ed25519-signed OTA .tar package staged at tar_path.
+ * Two-pass design:
+ *   Pass 1 reads ONLY tar headers + metadata (manifest.sha256, manifest.sha256.sig, version.txt)
+ *          and verifies the Ed25519 signature BEFORE writing any extracted component bytes to eMMC.
+ *   Pass 2 extracts allowlisted components into .ota_stage and verifies every file's SHA-256.
+ *   Pass 3 backs up live files and atomically replaces them (.new -> fsync -> rename).
  * app_root is "/mnt/app" on the head unit (or a temp dir in host unit tests).
  * pubkey is 32-byte Ed25519 public key (defaults to OTA_OFFICIAL_PUBKEY via ota_apply_tar).
  * Caller is responsible for mounting app_root rw before and ro after.
@@ -258,10 +264,16 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
     char stage_dir[320], bak_dir[320];
     snprintf(stage_dir, sizeof(stage_dir), "%s/eso/bin/apps/.ota_stage", app_root);
     snprintf(bak_dir, sizeof(bak_dir), "%s/eso/bin/apps/.ota_backup", app_root);
-    mkdir(stage_dir, 0755);
 
     int fd = open(tar_path, O_RDONLY);
     if (fd < 0) { snprintf(msg, msz, "无法打开升级包"); return -1; }
+    struct stat tar_st;
+    if (fstat(fd, &tar_st) != 0 || !S_ISREG(tar_st.st_mode)) {
+        close(fd);
+        snprintf(msg, msz, "无法读取升级包属性");
+        return -1;
+    }
+    size_t tar_size = (size_t)tar_st.st_size;
 
     char manifest[8192];
     size_t manifest_len = 0;
@@ -282,11 +294,14 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
     uint8_t hdr[512];
     uint8_t io_buf[8192];
     int err = 0;
+    size_t pos = 0;
 
+    /* Pass 1: header validation + metadata read ONLY (zero eMMC writes to .ota_stage) */
     for (;;) {
         ssize_t r = read(fd, hdr, 512);
         if (r == 0) break;
         if (r != 512) { snprintf(msg, msz, "升级包格式损坏（头截断）"); err = -2; break; }
+        pos += 512;
         int all_zero = 1;
         for (int i = 0; i < 512; i++) if (hdr[i] != 0) { all_zero = 0; break; }
         if (all_zero) break;
@@ -303,7 +318,6 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
             snprintf(msg, msz, "升级包文件大小非法"); err = -4; break;
         }
         if (tf == '5') {
-            /* allow harmless top-level "." directory entry only */
             if (strcmp(name, ".") != 0 && strcmp(name, "./") != 0 && name[0] != '\0') {
                 snprintf(msg, msz, "升级包不允许包含子目录：%s", name); err = -5; break;
             }
@@ -312,7 +326,7 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
         if (tf != '0' && tf != '\0') {
             snprintf(msg, msz, "升级包拒绝非普通文件（禁止符号链接/特殊节点）"); err = -6; break;
         }
-        if (strchr(name, '/') != NULL || strstr(name, "..") != NULL) {
+        if (!name[0] || strchr(name, '/') != NULL || strstr(name, "..") != NULL) {
             snprintf(msg, msz, "升级包包含非法路径：%s", name); err = -7; break;
         }
 
@@ -335,6 +349,10 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
         }
 
         size_t pad = (512 - (fsz & 511u)) & 511u;
+        if (fsz + pad > tar_size - pos) {
+            snprintf(msg, msz, "升级包截断"); err = -14; break;
+        }
+
         if (is_manifest || is_sig || is_ver) {
             char *dstb = is_manifest ? manifest : (is_sig ? sig_txt : ver_txt);
             size_t cap = is_manifest ? sizeof(manifest) : (is_sig ? sizeof(sig_txt) : sizeof(ver_txt));
@@ -347,41 +365,27 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
             }
             dstb[got] = '\0';
             if (err) { snprintf(msg, msz, "读取清单或签名失败"); break; }
+            if (pad > 0) {
+                uint8_t skip[512];
+                if (read(fd, skip, pad) != (ssize_t)pad) { snprintf(msg, msz, "升级包截断"); err = -14; break; }
+            }
             if (is_manifest) { manifest_len = got; has_manifest = 1; }
             else if (is_sig) { sig_len = got; has_sig = 1; }
             else { ver_len = got; has_ver = 1; }
         } else {
-            char outp[512];
-            snprintf(outp, sizeof(outp), "%s/%s", stage_dir, name);
-            int ofd = open(outp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-            if (ofd < 0) { snprintf(msg, msz, "无法创建暂存文件"); err = -11; break; }
-            size_t rem = fsz;
-            while (rem > 0) {
-                size_t want = rem < sizeof(io_buf) ? rem : sizeof(io_buf);
-                ssize_t k = read(fd, io_buf, want);
-                if (k <= 0) { err = -12; break; }
-                if (write(ofd, io_buf, (size_t)k) != k) { err = -13; break; }
-                rem -= (size_t)k;
+            if (lseek(fd, (off_t)(fsz + pad), SEEK_CUR) == (off_t)-1) {
+                snprintf(msg, msz, "升级包定位失败"); err = -14; break;
             }
-            close(ofd);
-            if (err) { unlink(outp); snprintf(msg, msz, "解包暂存失败"); break; }
             present[slot_idx] = 1;
             count_files++;
         }
-
-        if (pad > 0) {
-            uint8_t skip[512];
-            if (read(fd, skip, pad) != (ssize_t)pad) { snprintf(msg, msz, "升级包截断"); err = -14; break; }
-        }
+        pos += fsz + pad;
     }
-    close(fd);
 
     if (!err && count_files == 0) { snprintf(msg, msz, "升级包中无任何可更新组件"); err = -15; }
     if (!err && (!has_manifest || manifest_len == 0)) { snprintf(msg, msz, "升级包缺少 manifest.sha256 校验清单"); err = -16; }
 
-    /* Phase 1.5: strict Ed25519 signature verification over exact manifest.sha256 bytes.
-     * Unsigned packages are rejected by default; local SSH developers may opt in via
-     * <app_root>/eso/bin/apps/wifi_dev/allow_unsigned_ota (never exposed over HTTP). */
+    /* Pass 1.5: strict Ed25519 signature & manifest pre-checks BEFORE extracting anything to eMMC */
     if (!err) {
         char dev_flag[384];
         snprintf(dev_flag, sizeof(dev_flag), "%s/eso/bin/apps/wifi_dev/allow_unsigned_ota", app_root);
@@ -401,13 +405,9 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
             }
         }
     }
-
-    /* Phase 2: strict SHA-256 verification for every staged component (and version.txt) BEFORE touching any live file */
-    if (!err) {
-        if (memchr(manifest, '\0', manifest_len) != NULL) {
-            snprintf(msg, msz, "manifest.sha256 包含非法空字节");
-            err = -16;
-        }
+    if (!err && memchr(manifest, '\0', manifest_len) != NULL) {
+        snprintf(msg, msz, "manifest.sha256 包含非法空字节");
+        err = -16;
     }
     if (!err && has_ver) {
         char want_vhex[65], got_vhex[65];
@@ -425,6 +425,79 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
             }
         }
     }
+    if (!err) {
+        for (int i = 0; OTA_ALLOWLIST[i].name; i++) {
+            if (!present[i]) continue;
+            char want_hex[65];
+            if (!ota_manifest_lookup(manifest, OTA_ALLOWLIST[i].name, want_hex)) {
+                snprintf(msg, msz, "manifest.sha256 缺少 %s 哈希", OTA_ALLOWLIST[i].name);
+                err = -17; break;
+            }
+        }
+    }
+
+    /* Pass 2: signature verified -> now extract allowlisted components to .ota_stage & check SHA-256 */
+    if (!err) {
+        mkdir(stage_dir, 0755);
+        if (lseek(fd, 0, SEEK_SET) == (off_t)-1) {
+            snprintf(msg, msz, "无法重读升级包"); err = -12;
+        }
+    }
+    if (!err) {
+        for (;;) {
+            ssize_t r = read(fd, hdr, 512);
+            if (r == 0) break;
+            if (r != 512) { snprintf(msg, msz, "升级包格式损坏（头截断）"); err = -2; break; }
+            int all_zero = 1;
+            for (int i = 0; i < 512; i++) if (hdr[i] != 0) { all_zero = 0; break; }
+            if (all_zero) break;
+
+            char raw_name[101];
+            memcpy(raw_name, hdr, 100);
+            raw_name[100] = '\0';
+            const char *name = raw_name;
+            if (strncmp(name, "./", 2) == 0) name += 2;
+            uint8_t tf = hdr[156];
+            size_t fsz = 0;
+            if (ota_tar_octal(hdr + 124, 12, &fsz) != 0 || fsz > OTA_MAX_BYTES) {
+                snprintf(msg, msz, "升级包文件大小非法"); err = -4; break;
+            }
+            if (tf == '5') continue;
+            size_t pad = (512 - (fsz & 511u)) & 511u;
+
+            int slot_idx = -1;
+            for (int i = 0; OTA_ALLOWLIST[i].name; i++) {
+                if (strcmp(OTA_ALLOWLIST[i].name, name) == 0) { slot_idx = i; break; }
+            }
+            if (slot_idx < 0) {
+                if (lseek(fd, (off_t)(fsz + pad), SEEK_CUR) == (off_t)-1) {
+                    snprintf(msg, msz, "升级包定位失败"); err = -14; break;
+                }
+                continue;
+            }
+
+            char outp[512];
+            snprintf(outp, sizeof(outp), "%s/%s", stage_dir, name);
+            int ofd = open(outp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            if (ofd < 0) { snprintf(msg, msz, "无法创建暂存文件"); err = -11; break; }
+            size_t rem = fsz;
+            while (rem > 0) {
+                size_t want = rem < sizeof(io_buf) ? rem : sizeof(io_buf);
+                ssize_t k = read(fd, io_buf, want);
+                if (k <= 0) { err = -12; break; }
+                if (write(ofd, io_buf, (size_t)k) != k) { err = -13; break; }
+                rem -= (size_t)k;
+            }
+            close(ofd);
+            if (err) { unlink(outp); snprintf(msg, msz, "解包暂存失败"); break; }
+            if (pad > 0) {
+                uint8_t skip[512];
+                if (read(fd, skip, pad) != (ssize_t)pad) { snprintf(msg, msz, "升级包截断"); err = -14; break; }
+            }
+        }
+    }
+    close(fd);
+
     if (!err) {
         for (int i = 0; OTA_ALLOWLIST[i].name; i++) {
             if (!present[i]) continue;
@@ -466,7 +539,6 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
             char src[512], dst[512];
             snprintf(src, sizeof(src), "%s/%s", stage_dir, OTA_ALLOWLIST[i].name);
             snprintf(dst, sizeof(dst), "%s/%s", app_root, OTA_ALLOWLIST[i].rel_dst);
-            /* Only upgrade components already installed on this unit (safe for cross-brand MH2p units with only VW_WiFi_Dev) */
             struct stat dst_st;
             if (stat(dst, &dst_st) != 0 || !S_ISREG(dst_st.st_mode)) continue;
             if (ota_copy_atomic(src, dst, OTA_ALLOWLIST[i].mode) != 0) {
@@ -485,7 +557,7 @@ static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
         if (vfd >= 0) { if (write(vfd, ver_txt, strlen(ver_txt)) < 0) {} fsync(vfd); close(vfd); }
     }
 
-    /* Cleanup staged files */
+    /* Cleanup staged files (Pass 1 rejection writes none; Pass 2 files are removed here) */
     for (int i = 0; OTA_ALLOWLIST[i].name; i++) {
         char sp[512];
         snprintf(sp, sizeof(sp), "%s/%s", stage_dir, OTA_ALLOWLIST[i].name);

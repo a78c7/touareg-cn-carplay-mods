@@ -113,7 +113,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 > [!TIP]
 > - **未签名提示与来源校验**：桌面配置器未购商业签名，Windows 点「更多信息 → 仍要运行」；Mac 在「系统设置 → 隐私与安全性」点「仍要打开」。程序由 GitHub Actions 从 [`tools/configurator`](tools/configurator) 源码交叉编译并随 Release 附带 `SHA256SUMS.txt`（仓库源码树不再囤积大体积 `.exe` / `.command` 产物），仅监听本机 `127.0.0.1` 修改当前 U 盘，**绝不联网**。
-> - **旧版升级、PIN 兼容与黑边**：已刷过旧版直接覆盖刷入或用无线 OTA 升级即可，车标校准 `cl.conf` 与已有管理口令 `web.pin` 自动保留（兼容旧版 4～8 位口令）；若早期旧版车机尚未配置过 `web.pin`，`v22.1` 首次启动会**自动生成 6 位随机口令并在仪表屏醒目显示**（手机首次登录 `8080` 后自动隐藏），既不放行裸奔也不锁死老用户（未装仪表模块的其他 MH2p 车型可通过 SSH 查看 `/mnt/app/eso/bin/apps/wifi_dev/web.pin` 或用「改装设置」重设）。首次刷完若 CarPlay 仍有黑边，在 iPhone 蓝牙/CarPlay 设置里「忘记此车辆」重连一次即可。
+> - **旧版升级、PIN 兼容与黑边**：**从 `v22.01` 及更早版本升级到 `v22.1` 必须使用 U 盘覆盖刷入一次**（旧版 OTA 尚未内置 Ed25519 公钥，会安全拒绝含 `manifest.sha256.sig` 的新版升级包，不会损坏车机；刷入 `v22.1` 之后即可继续使用 `8080` 无线 OTA）。U 盘覆盖刷入时车标校准 `cl.conf` 与已有管理口令 `web.pin` 自动保留（兼容旧版 4～8 位口令）；若早期旧版车机尚未配置过 `web.pin`，`v22.1` 首次启动会**自动生成 6 位随机口令并在仪表屏醒目显示**（手机首次登录 `8080` 后自动隐藏），既不放行裸奔也不锁死老用户（未装仪表模块的其他 MH2p 车型可通过 SSH 查看 `/mnt/app/eso/bin/apps/wifi_dev/web.pin` 或用「改装设置」重设）。首次刷完若 CarPlay 仍有黑边，在 iPhone 蓝牙/CarPlay 设置里「忘记此车辆」重连一次即可。
 
 <details>
 <summary><b>🖥️ 点击展开查看：电脑端「途锐改装设置 v22」离线可视化界面</b></summary>

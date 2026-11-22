@@ -6,19 +6,25 @@
     - 彻底移除未配置 `web.pin` 时默认放行的历史兼容路径；`check_pin_auth()` 改为严格 **fail-closed**（无有效口令时返回 `503` 拒绝所有 `/api/` 请求）；
     - 为兼顾无痛上手与旧版升级：`touareg_netd` 启动时若检测到车机尚未配置 `web.pin`，自动使用 `/dev/urandom` 无偏生成 **6 位随机数字初始口令** 原子落盘并写入 `web.pin.unconfirmed` 与内存盘 `/tmp/touareg_setup_pin`（`0600`），由 `cl_render`（`navbox.c`）在仪表屏幕弹出高对比度大字口令卡片（即使 `nav_box=0` 也可显示，首次未登录即熄火重启仍会自动重显）；手机首次使用该口令登录 `8080` 成功后立即永久清除提示与标记；
     - 彻底取消 URL query `?pin=` 传参（文件与诊断包下载前端改为 `fetch` 带 `X-Pin` 请求头转 `Blob` 触发下载），消除浏览器历史与日志泄露口令的风险；
-    - 限速由全局计数升级为**按来源 IP 独立的 16 槽防挤占静态表 + 阶梯指数退避（30s → 120s → 300s → 900s）**，杜绝同 Wi-Fi 他人误输把车主锁死的拒绝服务问题与多 IP 轮换绕过；桌面「改装设置」新建口令要求提升至 **6～16 位**数字/字母（车机端继续兼容旧版已存在的 4～8 位口令）。
-  - **离线无线升级（OTA）新增官方 Ed25519 数字签名防篡改（`ed25519_verify.h` + `ota_pubkey.h` + `ota_util.h`）**：
-    - 车机端内置 32 字节官方 Ed25519 公钥，落盘前先使用零外部依赖、零堆分配纯 C99 RFC 8032 验签引擎核验 `manifest.sha256.sig`（含 `S < L` 规范性检查），再逐文件校验 SHA-256（同步覆盖 `version.txt` 并拒绝重复 tar 条目），仅依靠伪造 `manifest.sha256` 无法绕过；
+    - 限速由全局计数升级为**按来源 IP 独立的 16 槽防挤占静态表 + 阶梯指数退避（30s → 120s → 300s → 900s，1 小时无失败自动衰减降级）**，杜绝同 Wi-Fi 他人误输把车主锁死的拒绝服务问题与多 IP 轮换绕过；桌面「改装设置」新建口令要求提升至 **6～16 位**数字/字母（车机端继续兼容旧版已存在的 4～8 位口令）。
+  - **离线无线升级（OTA）新增官方 Ed25519 数字签名与两阶段先验签后解包（`ed25519_verify.h` + `ota_pubkey.h` + `ota_util.h`）**：
+    - 车机端内置 32 字节官方 Ed25519 公钥（单公钥设计，未来若需轮换公钥须通过 U 盘升级）；采用**两阶段先验签后解包**设计——第一阶段只读 tar 头与元数据并校验 32 位八进制防溢出、完成纯 C99 RFC 8032 Ed25519 验签（含 `S < L` 规范性检查）与 `version.txt` 校验，未通过不向 `.ota_stage` 写入任何解包组件；验签通过后再解包逐文件核对 SHA-256 并拒绝重复 tar 条目；
     - 官方 Release 打包脚本（`tools/make_release.sh`）与 GitHub Actions 自动使用仓库 Secret 私钥签名并核对公钥一致，私钥严格离线/存于独立密钥库、绝不进入 git；本地 SSH 开发者可在车机手动创建 `/mnt/app/eso/bin/apps/wifi_dev/allow_unsigned_ota` 测试未签名开发包（网页端绝不暴露该开关）。
   - **大体积桌面配置器二进制出库 + 发布校验和**：
     - 从 git 源码树移除 16.6 MB 的 `USB/改装设置（Mac）.command` 与 `USB/改装设置（Windows）.exe` 并加入 `.gitignore` 与 CI 拦截；每次发版由 GitHub Actions 从 `tools/configurator` 源码交叉编译打包，并随 Release 同步发布 **`SHA256SUMS.txt`** 供车主核对完整性。
   - **C 代码安全审计收尾 + 测试/静态分析体系升级**：
     - 全仓清理剩余 `strcpy` / `sprintf` 调用，顺带修复 `cluster.c` 调试日志截断写边界，并将 `touareg_netd.c` 全部 9 处常量 `system()` 统一收口并消除 GCC `-Werror=unused-result`；
-    - 将内嵌在 YAML 中的测试抽离至独立 `tests/` 目录（`test_ota.c`、`test_netd.c`、`run_c_tests.sh`、`pre_release_check.sh`），全面覆盖 RFC 8032 Ed25519 向量、OTA 篡改/穿越/回滚、fail-closed PIN、首次随机生成与清除、按 IP 退避限速及 CSRF 拦截；CI 全面开启 **`-fsanitize=address,undefined`（ASan + UBSan）**、**`cppcheck`** 静态分析与 **`go vet` / `go test -race`**。
-- **旧用户升级 PIN 兼容性说明（必读）**：
-  - **已有 `web.pin` 的 `v20+` / `v22.0` 用户**：无论通过 U 盘覆盖刷入还是 `8080` 无线 OTA 升级，车机原有 `web.pin` 均**自动完整保留**（兼容原 4～8 位口令，正常开机零额外闪存写入），不会被锁在控制台外。
-  - **极早期未配置过 `web.pin` 的旧版用户**：`VW_WiFi_Dev` 安装脚本不再误删或阻断升级；重启后 `touareg_netd` 会自动生成随机 6 位口令并在途锐仪表屏醒目显示，手机照屏输入登录一次即自动隐藏提示（未装仪表模块的其他 MH2p 车型可通过 SSH 读取 `/mnt/app/eso/bin/apps/wifi_dev/web.pin`，或在电脑「改装设置」里自定义 6～16 位口令重刷）。
-- **验证边界说明**：全套 QNX 6.6 ARMv7 二进制（`touareg_netd`、`cl_render`、`clusterd`、`cl_probe.so`）已完成交叉编译与 `readelf` 符号审计；macOS Clang 与 Linux GCC 下 ASan/UBSan 全量 C 单测、`cppcheck`、`go vet`/`go test -race` 及真实 Ed25519 私钥签包 + 车机内置公钥验签回滚闭环均已通过；**首次随机 PIN 上仪表屏显示、实车 OTA 签名包/篡改包拦截、实车回滚与 3 次崩溃安全模式待上车实机最终复核**。
+    - 将内嵌在 YAML 中的测试抽离至独立 `tests/` 目录（`test_ota.c`、`test_netd.c`、`run_c_tests.sh`、`pre_release_check.sh`），全面覆盖 RFC 8032 Ed25519 向量、八进制溢出、先验签后解包、OTA 篡改/穿越/回滚、fail-closed PIN、首次随机生成与跨重启保显、按 IP 退避/衰减限速及 CSRF 拦截；CI 全面开启 **`-fsanitize=address,undefined`（ASan + UBSan）**、**`cppcheck`** 静态分析与 **`go vet` / `go test -count=1 -race`**。
+- **旧用户升级路径与 PIN 兼容性说明（必读）**：
+  - **重要：`v22.01` 及更早版本首次升级到 `v22.1` 必须使用 U 盘覆盖刷入**：旧版车机 `ota_util.h` 尚未内置 Ed25519 公钥，白名单不含 `manifest.sha256.sig`，直接上传新版 `touareg-ota-v22.1.tar` 会被旧版安全拒绝（不会损坏车机）；用 U 盘刷入 `v22.1` 之后，后续升级即可继续使用 `8080` 无线 OTA。
+  - **已有 `web.pin` 的 `v20+` / `v22.01` 用户**：通过 U 盘覆盖刷入 `v22.1` 时，车机原有 `web.pin` **自动完整保留**（兼容原 4～8 位口令，正常开机零额外闪存写入），不会被锁在控制台外。
+  - **极早期未配置过 `web.pin` 的旧版用户**：`VW_WiFi_Dev` 安装脚本不再误删或阻断升级；重启后 `touareg_netd` 会自动生成随机 6 位口令并在途锐仪表屏醒目显示（未登录即熄火重启仍会自动重显），手机照屏输入登录一次即永久隐藏（未装仪表模块的其他 MH2p 车型可通过 SSH 读取 `/mnt/app/eso/bin/apps/wifi_dev/web.pin`，或在电脑「改装设置」里自定义 6～16 位口令重刷）。
+- **车机 QNX 6.6 ARMv7 二进制构建信息与校验和**（Ubuntu 22.04 `clang 14.0.0` + `arm-linux-gnueabi-ld` + `qnx65-armv7-toolchain`，`src/build.sh`）：
+  - `touareg_netd`：`2d844e50c167c3ce785450fe12e0dbaa55a92c35d48b06d6bebd38e8ce7d97f2`
+  - `cl_render`：`bf20e3fa9e5ce039e2acb03490cd60170e69d89c58a78fe5d89bcac25f002cef`
+  - `clusterd`：`e88818a0cb4a7778b1cc9fc35845a67872dcf075f15ee002de2f9530982e1f90`
+  - `cl_probe.so`：`e260013df86291611225856c6f1c3c05a1d12857bfeaaa0514d1494192cbfa24`
+- **验证边界说明**：全套 QNX 6.6 ARMv7 二进制已完成交叉编译与 `readelf` 符号审计；macOS Clang 与 Linux GCC 下 ASan/UBSan 全量 C 单测、`cppcheck`、`go vet`/`go test -count=1 -race` 及真实 Ed25519 私钥签包 + 车机内置公钥验签回滚闭环均已通过；**`v22.01 → v22.1` U 盘升级保留旧 PIN、首次随机 PIN 上仪表屏显示与登录后清除、实车 OTA 签名包/篡改包拦截、实车回滚与 3 次崩溃安全模式共 5 项待上车实机最终复核**。
 - 包含 v22.01 的全部内容
 
 ## v22.01

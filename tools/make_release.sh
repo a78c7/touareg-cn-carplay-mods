@@ -133,8 +133,8 @@ quick_guide = f"""途锐 MH2p CarPlay 改装包 {v} — 必看说明与免费开
 4. 安全弹出 U 盘 -> 发动车辆 -> 插入扶手箱 USB 口，等待自动刷机重启几次（期间切勿操作车机），提示移除介质后拔出即可。
 
 【离线无线升级 (OTA)】
-若车机已安装无线控制台（VW_WiFi_Dev），以后升级无需再插拔 U 盘：
-手机下载 Release 中的 touareg-ota-<版本>.tar，连接车机打开 http://touareg.local:8080 -> 开关运维 -> 离线无线升级（强制校验官方 Ed25519 签名与 SHA-256，支持自动备份与一键回滚）。
+- 若车机为 v22.01 及更早版本：首次升级到 v22.1 请使用本 U 盘包覆盖刷入（旧版尚未内置 Ed25519 公钥，会安全拒绝新版签名 .tar 包）；刷入时原有 web.pin 与 cl.conf 自动保留。
+- 刷入 v22.1 及以后版本：后续升级无需再插拔 U 盘，手机下载 Release 中的 touareg-ota-<版本>.tar，连接车机打开 http://touareg.local:8080 -> 开关运维 -> 离线无线升级（先校验官方 Ed25519 签名再解包、逐文件 SHA-256 校验，支持自动备份与一键回滚）。
 
 【许可证】
 本包内附 LICENSE、LICENSE.ADDITIONAL-TERMS.md 与 LICENSES/ 目录；详细适用边界与免责声明见仓库 README.md。

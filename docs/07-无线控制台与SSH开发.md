@@ -71,7 +71,7 @@
 已安装 `v22.0+` 无线控制台后，后续升级核心程序不再需要反复拔插 U 盘：
 
 - **流式落盘（零 `/tmp` 内存压力）**：在手机浏览器打开 `http://touareg.local:8080` → **开关运维 → 离线无线升级**，上传从官方 Release 下载的 `touareg-ota-<版本>.tar`（上限 `6 MB`）。`touareg_netd` 以 16 KB 分块流式直写至 `/mnt/app/eso/bin/apps/.ota_stage/pkg.tar`，绝不把升级包缓存在 `/tmp` 内存盘中。
-- **官方 Ed25519 签名与白名单校验**：解析 POSIX `ustar` 归档时强制拒绝 `..` 路径穿越、子目录、符号链接、设备节点与重复条目，仅放行 6 个白名单核心组件（`cl_render`、`clusterd`、`cl_probe.so`、`touareg_netd`、`VWClusterNav_v6.jar`、`VWPopupFilter.jar`）及版本/清单元数据；落盘前先使用车机内置公钥（`src/touareg_netd/ota_pubkey.h`）验证 `manifest.sha256.sig` 的纯 C RFC 8032 **Ed25519** 数字签名，再逐一对照 `manifest.sha256` 完成 FIPS 180-4 SHA-256 校验（含 `version.txt`），任意字节不匹配即整体中止，不触碰车机任何现役文件。（开发者若需测试本地未签名开发包，可通过 SSH 手动在车机创建 `/mnt/app/eso/bin/apps/wifi_dev/allow_unsigned_ota` 显式放行，该开关绝不通过网页暴露。）
+- **官方 Ed25519 签名与两阶段白名单校验**：解析 POSIX `ustar` 归档时强制校验八进制长度防 32 位溢出，拒绝 `..` 路径穿越、子目录、符号链接、设备节点与重复条目，仅放行 6 个白名单核心组件（`cl_render`、`clusterd`、`cl_probe.so`、`touareg_netd`、`VWClusterNav_v6.jar`、`VWPopupFilter.jar`）及版本/清单元数据；采用**先验签后解包**两阶段设计——第一阶段只读头部与元数据并用车机内置公钥（`src/touareg_netd/ota_pubkey.h`）完成纯 C RFC 8032 **Ed25519** 验签与 `version.txt` 校验，验签未通过不向 `.ota_stage` 写入任何解包组件；验签通过后再解包逐文件完成 FIPS 180-4 SHA-256 校验，任意字节不匹配即整体中止，不触碰车机任何现役文件。（注：`v22.01` 及更早版本因旧版白名单不含 `manifest.sha256.sig`，升级到 `v22.1` 须先用 U 盘刷入一次；当前内置单把官方公钥，若未来需轮换公钥亦须通过 U 盘升级；开发者若需测试本地未签名开发包，可通过 SSH 手动在车机创建 `/mnt/app/eso/bin/apps/wifi_dev/allow_unsigned_ota` 显式放行，该开关绝不通过网页暴露。）
 - **自动备份与一键回滚**：校验通过后先将车机现役文件复制到 `/mnt/app/eso/bin/apps/.ota_backup/`，再用同分区 `.new` → `fsync` → `rename` 原子替换并立刻把 `/mnt/app` 恢复只读。若新版异常，可在网页点 **「回滚上一版备份」** 一键还原。
 
 ## 9. 一键脱敏排障诊断包（v22.0）

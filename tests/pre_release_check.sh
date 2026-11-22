@@ -6,8 +6,8 @@ set -e
 cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-echo "=== [1/5] Go vet & unit tests (-race) ==="
-(cd tools/configurator && go vet ./... && go test -race -v ./...)
+echo "=== [1/5] Go vet & unit tests (-count=1 -race) ==="
+(cd tools/configurator && go vet ./... && go test -count=1 -race -v ./...)
 
 echo "=== [2/5] C unit tests (ASan + UBSan) ==="
 sh tests/run_c_tests.sh
