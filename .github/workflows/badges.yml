@@ -1,0 +1,45 @@
+name: update-badges
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  downloads:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute total release downloads (including archived drafts) and update badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TOTAL=$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases" | python3 -c "
+          import json, sys
+          pages = json.load(sys.stdin)
+          print(sum(a.get('download_count', 0) for page in pages for r in page for a in r.get('assets', [])))
+          ")
+          echo "Total downloads (all releases incl. drafts): ${TOTAL}"
+          NEW_JSON=$(printf '{"schemaVersion":1,"label":"Downloads","message":"%s","color":"0969da","labelColor":"24292f"}\n' "$TOTAL")
+
+          OLD_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/contents/downloads.json?ref=badges" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || true)
+          if [ "$NEW_JSON" = "$OLD_JSON" ]; then
+            echo "downloads.json unchanged (${TOTAL}), skipping push."
+            exit 0
+          fi
+
+          TMP=$(mktemp -d)
+          cd "$TMP"
+          git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '%s\n' "$NEW_JSON" > downloads.json
+          git add downloads.json
+          git commit -q -m "chore: update total downloads badge (${TOTAL})"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/badges
+          echo "Updated badges/downloads.json -> ${TOTAL}"
