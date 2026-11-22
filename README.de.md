@@ -13,24 +13,30 @@
 **Ein-USB-Stick-Modifikationspaket ohne Ausbau für Vollbild- & Wireless-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte & Sport-Infoboxen — inkl. Handy-Web-Konsole (`8080`), Ed25519-signiertem Offline-OTA und WLAN-SSH.**
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Aktuelle Version (v22.1)</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Stabile Version (v22.1)</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1"><b>🧪 Beta-Vorschau (v23.0-beta.1)</b></a> ·
   <a href="#4-schritte-usb-installation"><b>⚡ 4-Schritte-Installation</b></a> ·
   <a href="#11-optionale-module"><b>🧩 Module</b></a> ·
   <a href="README.md"><b>🇨🇳 简体中文</b></a> ·
   <a href="README.en.md"><b>🇺🇸 English</b></a>
 </p>
 
-<p><sub>Wenn dir das Projekt hilft, freue ich mich über einen <b>⭐ Star</b> oben rechts; für Release-Benachrichtigungen einfach <b>👀 Watch → Custom → Releases</b> aktivieren.</sub></p>
+<p><sub>Wenn dir das Projekt hilft, freue ich mich über einen <b>⭐ Star</b> oben rechts oder ein <b>Gefällt mir</b> ohne Login unten; für Release-Benachrichtigungen einfach <b>👀 Watch → Custom → Releases</b> aktivieren.</sub></p>
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/downloads.svg" alt="Downloads gesamt"></a>
   &nbsp;
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/stars.svg" alt="GitHub Stars"></a>
+  &nbsp;
+  <a href="https://touareg-likes.pages.dev/like?lang=de"><img src="https://touareg-likes.pages.dev/badge.svg?lang=de" alt="Gefällt mir (ohne Login)"></a>
 </p>
 
 </div>
 
 ---
+
+> [!TIP]
+> **🧪 Öffentliche Beta [`v23.0-beta.1 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1) verfügbar** — bringt die optionale **60fps-KI-Design-Engine für das Digital Cockpit (GLES2 + QuickJS)**, einen integrierten **1:1-Browser-Fahrsimulator** sowie die KI-Vorlage [`my_theme.js`](tools/preview/my_theme.js) (einmalig per Konfigurator & USB-Stick flashen, ganz ohne `8080`-WLAN; `v23_mode` ist standardmäßig deaktiviert und durch eine 3-stufige Sicherheitsabschaltung geschützt). Für den Alltag bleibt [`v22.1` (Stabil)](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) empfohlen.
 
 <div align="center">
   <img src="docs/img/cluster.png" alt="v22 Kombiinstrument-Karte, Sport-Infoboxen und symmetrische Navigationskarte" width="92%">

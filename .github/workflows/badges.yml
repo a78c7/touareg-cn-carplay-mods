@@ -82,7 +82,7 @@ jobs:
           with open(os.path.join(out_dir, 'downloads.svg'), 'w', encoding='utf-8') as f:
               f.write(make_pill('累计下载', f'{total:,} 次', '#0969da', dl_icon))
           with open(os.path.join(out_dir, 'stars.svg'), 'w', encoding='utf-8') as f:
-              f.write(make_pill('累计点赞', f'{stars:,} Star', '#bf8700', star_icon))
+              f.write(make_pill('累计标星', f'{stars:,} Star', '#bf8700', star_icon))
           PY
 
           OLD_DL=$(gh api "repos/${GITHUB_REPOSITORY}/contents/downloads.svg?ref=badges" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || true)

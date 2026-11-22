@@ -13,24 +13,30 @@
 **Zero-disassembly single-USB unlock for full-screen / wireless CarPlay, HUD navigation, digital cluster map & sport telemetry boxes — with mobile `8080` signed OTA and wireless SSH development.**
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Latest Release (v22.1)</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Stable Release (v22.1)</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1"><b>🧪 Beta Preview (v23.0-beta.1)</b></a> ·
   <a href="#4-step-usb-installation"><b>⚡ 4-Step Install</b></a> ·
   <a href="#11-opt-in-modules"><b>🧩 Modules</b></a> ·
   <a href="README.md"><b>🇨🇳 简体中文</b></a> ·
   <a href="README.de.md"><b>🇩🇪 Deutsch</b></a>
 </p>
 
-<p><sub>If you find this project helpful, please consider clicking <b>⭐ Star</b> at the top right; to get release notifications, click <b>👀 Watch → Custom → Releases</b>.</sub></p>
+<p><sub>If you find this project helpful, click <b>⭐ Star</b> at the top right or tap the red <b>Like</b> button below (no GitHub account required); for release notifications, click <b>👀 Watch → Custom → Releases</b>.</sub></p>
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/downloads.svg" alt="Total Downloads"></a>
   &nbsp;
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/stars.svg" alt="GitHub Stars"></a>
+  &nbsp;
+  <a href="https://touareg-likes.pages.dev/like?lang=en"><img src="https://touareg-likes.pages.dev/badge.svg?lang=en" alt="Like (no login required)"></a>
 </p>
 
 </div>
 
 ---
+
+> [!TIP]
+> **🧪 Public Beta [`v23.0-beta.1 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1) is out** — introduces the opt-in **60fps AI Custom Cluster Theme Engine (GLES2 + QuickJS)**, an embedded **1:1 browser driving simulator**, and the AI-ready [`my_theme.js`](tools/preview/my_theme.js) template (configure & flash via USB without needing the `8080` Wi-Fi console; `v23_mode` is OFF by default and guarded by a 3-layer automatic safety fuse). For daily stability, stick with [`v22.1` Stable](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest).
 
 <div align="center">
   <img src="docs/img/cluster.png" alt="v22 digital cluster map, bold sport telemetry boxes, and symmetrical navigation card" width="92%">

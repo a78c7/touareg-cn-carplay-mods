@@ -13,24 +13,30 @@
 **不拆螺丝、单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与运动信息框，支持手机 `8080` 签名 OTA 与无线开发。**
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载最新版（v22.1）</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载稳定版（v22.1）</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1"><b>🧪 尝鲜版（v23.0-beta.1）</b></a> ·
   <a href="#4-步免拆刷入安装"><b>⚡ 4 步安装</b></a> ·
   <a href="#11-大可选功能全景"><b>🧩 功能清单</b></a> ·
   <a href="README.en.md"><b>🇺🇸 English</b></a> ·
   <a href="README.de.md"><b>🇩🇪 Deutsch</b></a>
 </p>
 
-<p><sub>觉得有帮助欢迎点右上角 <b>⭐ Star</b> 支持；如需第一时间收到新版发版提醒，请点 <b>👀 Watch → Custom → 勾选 Releases</b>。</sub></p>
+<p><sub>觉得有帮助欢迎点右上角 <b>⭐ Star</b>，或直接点下方红色按钮<b>免登录点个赞</b>；如需第一时间收到新版发版提醒，请点 <b>👀 Watch → Custom → 勾选 Releases</b>。</sub></p>
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/downloads.svg" alt="累计下载"></a>
   &nbsp;
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/stars.svg" alt="累计点赞"></a>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/stars.svg" alt="累计标星"></a>
+  &nbsp;
+  <a href="https://touareg-likes.pages.dev/like"><img src="https://touareg-likes.pages.dev/badge.svg" alt="点个赞（免登录）"></a>
 </p>
 
 </div>
 
 ---
+
+> [!TIP]
+> **🧪 尝鲜测试版 [`v23.0-beta.1 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1) 已开放下载** —— 新增 **60fps AI 自定义仪表皮肤引擎（GLES2 + QuickJS）**、**1:1 浏览器试驾模拟器**与空白模板 [`my_theme.js`](tools/preview/my_theme.js)（「改装设置」一键试驾/导入 + U 盘一次写入，无需 8080 热点；默认关闭 `v23_mode`，全程受车机三层自动保险丝保护）。日常求稳请继续下载 [`v22.1` 稳定版](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)。
 
 <div align="center">
   <img src="docs/img/cluster.png" alt="v22 仪表地图、大字运动信息框与对称导航卡示意图" width="92%">
