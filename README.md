@@ -38,7 +38,7 @@
 https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 <div align="center">
-  <sub><i>上方视频可点击有声播放（中英双语字幕） · 收藏最高画质可下载 <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/download/v22.0/touareg-cockpit-demo-1080p60.mp4"><b>🎞️ 1080p 60fps 演示母带 (67 MB)</b></a></i></sub>
+  <sub><i>上方视频可点击有声播放（中英双语字幕）</i></sub>
   <br>
   <sub><i>注：视频前段多套定制仪表为基于本仓库 <code>1920×639</code> 独立图层与 10Hz 实时通道的扩展演示；当前 U 盘包内置「全屏 CarPlay 地图 + 295px 对称大字运动信息框（10Hz + <code>smooth=1</code> 阻尼平滑）与导航卡」及独立 GLES2 60fps 动画通道（<code>gles60.c</code>），并开放电脑端离线预览器 <code>tools/preview/index.html</code> 与无线控制台/SSH 自由定制。</i></sub>
 </div>
@@ -58,7 +58,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 > - **国行途锐 P 版全系自动通刷（`MH2p_CN_VWG36_P*`）**：全屏 CarPlay、导航上 HUD、仪表地图与信息框、OK 切地图、语音键短按唤 Siri、5GHz 修复均已放开至国行途锐全部 `P` 版固件（如 `P2878`、`P2876`、`P2838`、`P9832` 等），非国行途锐 P 版自动跳过不改任何文件。内置 **3 次崩溃零损耗安全模式自动熔断**（覆盖 J9 HMI、`cl_probe.so`、`clusterd`/`cl_render`、`io-pkt`，正常开机零 eMMC 写入）。
 > - **大众 MH2p 通用弹窗屏蔽**：`VW_NoBtAuthPopup` / `VW_NoSimPopup` 校验大众品牌（`VW`），通过共享 Bundle `98` 精准过滤弹窗，与 HUD 插件互不冲突。
 > - **跨品牌同平台通用底座**：`VW_WiFi_Dev`（手机 `8080` 无线控制台 / 离线 OTA / 一键脱敏诊断 / 无线 SSH）与 **[`docs/` 平台技术手册](docs/README.md)** 适用于大众集团同平台 **MH2p（MIB2+ High）**——涵盖 **大众途锐、奥迪（A6/A7/A8/Q3/Q7/Q8/e-tron）、保时捷（PCM 5）、宾利、兰博基尼（Urus LIS III）**。
-> - **免费开源，严禁任何形式的转售或高价代刷**：本项目遵循 **PolyForm Noncommercial 1.0.0 + [附加条款](LICENSE.ADDITIONAL-TERMS.md)**，严禁售卖程序与安装包，非官方协助安装仅可收取合理劳务费（上限 ¥100）。如果您是花钱买到压缩包的，请立即退款！
+> - **免费开源，严禁任何形式的转售或付费代刷**：本项目遵循 **PolyForm Noncommercial 1.0.0 + [附加条款](LICENSE.ADDITIONAL-TERMS.md)**，仅供个人非商业学习与使用，严禁售卖程序/安装包、付费代刷或商业捆绑。如果您是花钱买到压缩包或付费代刷的，请立即退款！
 
 ---
 
@@ -236,7 +236,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 - **本仓库原创代码**（`src/hud-java`、`src/popup-filter-java`、`src/cluster-probe/` 含自研有线 iAP2 解析器 `cl_wired_rg.c`、`src/clusterd`、`src/touareg_netd`、`src/vhpatch`、`src/common`、`tools/`、模块脚本）：采用 **[PolyForm Noncommercial 1.0.0](LICENSE) + [非商业附加条款](LICENSE.ADDITIONAL-TERMS.md)**。`docs/` 文档文字允许按 **CC BY-SA 4.0** 署名共享。
 - **第三方开源组件**：`src/cl_render`、`dio_cluster.so`、ModKit 及 LawPaul 模块遵循 **CC BY-NC-SA 4.0**（详见 [THIRD_PARTY_NOTICES.md](LICENSES/THIRD_PARTY_NOTICES.md)）；`dash_font.h` 预渲染字形基于 Noto Sans CJK SC（[SIL OFL 1.1](LICENSES/NotoSansCJK_OFL.md)）；`stb_truetype.h` 为公有领域（[Public Domain](LICENSES/stb_PUBLIC_DOMAIN.md)）；`vhpatch` 静态链接 `zlib 1.3.1`（[zlib License](LICENSES/zlib_LICENSE.md)）。
-- **非商业与反倒卖边界声明**：**整个 U 盘发布包与无线 OTA 包仅供个人非商业学习与使用，严禁商用、售卖安装包或捆绑收费**；非官方协助车主安装仅可收取合理劳务费（上限 ¥100）并须告知开源免费来源，且本程序在桌面配置器、车机 `8080` 控制台与刷机脚本中均内嵌免费开源声明。本仓库全部原创代码与自研 `VW_*` 模块不含任何大众或苹果受版权保护的原厂文件；可选的第三方 `AppleCarPlay` / `AndroidAuto` 模块原样引用自上游 LawPaul `MH2p_SD_ModKit`（默认未开启，按需选装）。
+- **非商业与反倒卖边界声明**：**整个 U 盘发布包与无线 OTA 包仅供个人非商业学习与使用，严禁任何形式的商用、售卖安装包、付费代刷或捆绑收费**；本程序在桌面配置器、车机 `8080` 控制台与刷机脚本中均内嵌免费开源声明。本仓库全部原创代码与自研 `VW_*` 模块不含任何大众或苹果受版权保护的原厂文件；可选的第三方 `AppleCarPlay` / `AndroidAuto` 模块原样引用自上游 LawPaul `MH2p_SD_ModKit`（默认未开启，按需选装）。
 
 ## 免责声明
 
