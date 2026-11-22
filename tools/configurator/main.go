@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-//go:embed web/index.html
+//go:embed web/index.html web/v23_preview.html web/my_theme.js
 var web embed.FS
 
 var version = "dev"
@@ -46,6 +46,7 @@ type stateResp struct {
 	MaxRows   int               `json:"maxRows"`
 	Dash      dashConf          `json:"dash"`
 	DashFound bool              `json:"dashFound"`
+	V23       v23State          `json:"v23"`
 	Wifi      wifiState         `json:"wifi"`
 	MacJunk   int               `json:"macJunk"`
 	UsbMode   string            `json:"usbMode"` // "flash" (Data/Meta: inserting it flashes) or "record" (_Data/_Meta + drive_logs)
@@ -90,6 +91,7 @@ func (p pkg) state() stateResp {
 		s.States[f.ID] = st
 	}
 	s.Dash, s.DashFound = p.readDash()
+	s.V23 = p.readV23()
 	s.Wifi = p.readWifi()
 	s.MacJunk = len(p.macJunk())
 	s.UsbMode = p.usbMode()
@@ -145,6 +147,19 @@ func main() {
 		}
 		b, _ := web.ReadFile("web/index.html")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(b)
+	})
+	mux.HandleFunc("/v23-preview.html", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := web.ReadFile("web/v23_preview.html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(b)
+	})
+	mux.HandleFunc("/my_theme.js", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := web.ReadFile("web/my_theme.js")
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="my_theme.js"`)
 		w.Header().Set("Cache-Control", "no-store")
 		w.Write(b)
 	})

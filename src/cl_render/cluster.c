@@ -732,6 +732,10 @@ int run_idle_logo(int argc, char **argv, int default_duration_s);
 int run_canim_splash(int argc, char **argv, int default_duration_s);
 #ifdef USE_DASH
 static int run_gles60_mode(int argc, char **argv);
+static volatile int g_v23_mode = 0;
+static int v23_map_setup(int w, int h);
+static void v23_map_on_decoded_frame(int didx, const int *blit_attribs);
+static int run_v23_idle_mode(int argc, char **argv);
 #endif
 
 /* Forward declarations for canim helper used by run_h264_mode (defined later
@@ -801,6 +805,13 @@ int main(int argc, char **argv) {
 #ifdef USE_DASH
     if (strcmp(capture, "gles60") == 0) {
         return run_gles60_mode(argc, argv);
+    }
+    if (strcmp(capture, "v23") == 0) {
+        g_v23_mode = 1;
+        return run_h264_mode(argc, argv);
+    }
+    if (strcmp(capture, "v23_idle") == 0) {
+        return run_v23_idle_mode(argc, argv);
     }
 #endif
     if (strcmp(capture, "test") == 0) {
@@ -1743,8 +1754,13 @@ static int setup_screen(int width, int height) {
 #ifdef USE_SCREEN_BLIT
     /* v3: post_win must accept compositor writes (screen_blit destination)
      * AND remain a cluster displayable. NATIVE+WRITE for blit dest, OPENGL_ES2
-     * preserved so id_string="33" binding still succeeds. */
-    int pusage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_OPENGL_ES2;
+     * preserved so id_string="33" binding still succeeds.
+     * v23: when g_v23_mode is on, post_win is owned purely by the 60fps EGL/GLES2 thread. */
+    int pusage =
+#ifdef USE_DASH
+        g_v23_mode ? SCREEN_USAGE_OPENGL_ES2 :
+#endif
+        (SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_OPENGL_ES2);
 #else
     /* OPENGL_ES2 only — keep post_win clean for the NvMedia mixer's HW write
      * path. Canim is painted by a SEPARATE window (canim_win, created below)
@@ -1781,7 +1797,13 @@ static int setup_screen(int width, int height) {
     screen_flush_context(g_dec.scr_ctx, 0);
     /* Retry on EINTR — see decode_win buffers comment above. */
     do {
-        rc = screen_create_window_buffers(g_dec.post_win, MAX_SURFACES);
+        rc = screen_create_window_buffers(g_dec.post_win,
+#ifdef USE_DASH
+                                          g_v23_mode ? 2 : MAX_SURFACES
+#else
+                                          MAX_SURFACES
+#endif
+        );
     } while (rc < 0 && errno == EINTR);
     if (rc) {
         LOG("create post_win buffers failed rc=%d errno=%d\n", rc, errno);
@@ -1791,7 +1813,15 @@ static int setup_screen(int width, int height) {
     screen_get_window_property_pv(g_dec.post_win, SCREEN_PROPERTY_RENDER_BUFFERS,
                                   (void**)g_dec.post_bufs);
 #ifdef USE_DASH
-    dash_setup(width, height);
+    if (g_v23_mode) {
+        if (v23_map_setup(width, height) != 0) {
+            LOG("v23_map_setup failed\n");
+            sigprocmask(SIG_SETMASK, &old_sig_mask, NULL);
+            return -1;
+        }
+    } else {
+        dash_setup(width, height);
+    }
 #endif
     /* Verify ID_STRING and VISIBLE actually took effect — read back. */
     char idbuf[16] = {0};
@@ -2085,6 +2115,9 @@ static int setup_screen(int width, int height) {
      * apply_stage_signals already consumed it with scr_ready=0 and skipped
      * the boot splash. Fire it here now that boot_pixmap exists. */
     if (!g_boot_splash_shown_in_session && g_render_stage == STAGE_RENDERING &&
+#ifdef USE_DASH
+        !g_v23_mode &&
+#endif
         g_dec.boot_pixmap && g_dec.boot_pix_buf) {
         int pidx = g_dec.post_buf_idx;
         g_dec.post_buf_idx = (pidx + 1) % MAX_SURFACES;
@@ -2531,6 +2564,9 @@ static screen_buffer_t cl_pick_render_buf(int *out_pidx) {
 }
 
 static void cl_post_buf(screen_buffer_t dst, int pidx, int is_real_frame) {
+#ifdef USE_DASH
+    if (g_v23_mode) return;
+#endif
     if (!dst || !g_dec.post_win) return;
     int dd[4] = { 0, 0, g_post_w ? g_post_w : g_dec.width, g_post_h ? g_post_h : g_dec.height };
     int rc = screen_post_window(g_dec.post_win, dst, 1, dd, 0);
@@ -2548,6 +2584,7 @@ static void cl_post_buf(screen_buffer_t dst, int pidx, int is_real_frame) {
 
 static void apply_stage_signals(void) {
 #ifdef USE_DASH
+    if (g_v23_mode) return;
     /* 突发多帧连解节流收尾：距上次真实帧送显满 20ms 后立即补齐最新锁定解码帧的同步 Blit + Post */
     if (g_batch_deferred && g_have_clean_didx && g_last_clean_didx >= 0 &&
         g_dec.scr_ready && g_render_stage == STAGE_RENDERING &&
@@ -2950,6 +2987,10 @@ static int cb_display_picture(void* user, void* disp_info) {
     g_last_clean_didx = didx;
     memcpy(g_last_blit_attribs, blit_attribs, sizeof(blit_attribs));
     g_have_clean_didx = 1;
+    if (g_v23_mode) {
+        v23_map_on_decoded_frame(didx, blit_attribs);
+        return 1;
+    }
 #endif
     /* 若 Wi-Fi 抖动积压导致距上次送显不足 20ms，合并跳过中间帧 Blit/Post，保留已锁定的最新解码帧在满 20ms 时送显 */
     if (g_render_stage == STAGE_RENDERING &&
@@ -4386,6 +4427,7 @@ int run_canim_splash(int argc, char **argv, int default_duration_s) {
 
 #ifdef USE_DASH
 #include "gles60.c"
+#include "v23_gles.c"
 #endif
 
 /* When built as the standalone aa_cluster_decoder binary (-DSTANDALONE),

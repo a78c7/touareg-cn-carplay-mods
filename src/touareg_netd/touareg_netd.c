@@ -995,9 +995,11 @@ static const char *USB_MOUNTS[] = {
 static const char *SYS_LOG_ALLOW[] = {
     "cl_probe.log", "cl_wired.log", "clusterd.log", "cluster_fuse.log", "vwcn.log", "vwcn_persist.log",
     "dio_cluster.log", "dash.state", "cluster_cp.state", "cl_render_dbg", "cl_car_dbg",
-    "vw_popup_filter.log", "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log",
+    "theme_status.json", "vw_popup_filter.log", "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log",
     "touareg_netd.log", "wifi_dev_persist.log", NULL
 };
+
+#define THEME_MAX_BYTES (128u * 1024u)
 
 static int has_ota_backup_files(void) {
     for (int i = 0; OTA_ALLOWLIST[i].name; i++) {
@@ -1026,21 +1028,22 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], ota_ver[48];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.1");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.1");
 
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v22.1 ota_version=%s bcm2_ip=%s\n"
-        "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d\n"
-        "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d\n\n",
+        "netd_version=v23.0-beta.1 ota_version=%s bcm2_ip=%s\n"
+        "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d v23_fallback=%d\n"
+        "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d v23_mode=%d\n\n",
         ota_ver, ipstr,
         file_exists(CLUSTER_DIR "/safe_mode"), file_exists("/tmp/vw_hmi_safe_mode"),
         file_exists("/tmp/vw_dio_safe_mode"), file_exists("/tmp/vw_cluster_safe_mode"),
-        file_exists("/tmp/cl_render_fused"),
+        file_exists("/tmp/cl_render_fused"), file_exists("/tmp/v23_fallback_v22"),
         file_exists(CLUSTER_DIR "/disable"), file_exists(CLUSTER_DIR "/ka_off"),
         file_exists(CLUSTER_DIR "/zoom_flip"), file_exists(CLUSTER_DIR "/switch_off"),
-        file_exists(CLUSTER_DIR "/siri_short"), file_exists(CLUSTER_DIR "/gles60_mode"));
+        file_exists(CLUSTER_DIR "/siri_short"), file_exists(CLUSTER_DIR "/gles60_mode"),
+        file_exists(CLUSTER_DIR "/v23_mode"));
 
     /* Include dash.conf & cl.conf (non-sensitive display config) */
     const char *cfgs[] = { DASH_CONF_PATH, CL_CONF_PATH, NULL };
@@ -1114,7 +1117,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], esc1[320], esc2[320], ota_ver[48], esc_ov[64];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.1");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.1");
     json_escape(ota_ver, esc_ov, sizeof(esc_ov));
     double spd = -1.0, odo = -1.0;
     read_dash_state(&spd, &odo);
@@ -1132,16 +1135,17 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     refresh_proc_flags(&p_cld, &p_ren, &p_dio);
 
     l += (size_t)snprintf(j + l, 32768 - l,
-        "{\"ok\":true,\"version\":\"v22.1\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
+        "{\"ok\":true,\"version\":\"v23.0-beta.1\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
         "\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
         "\"safe_mode\":{\"manual\":%d,\"hmi\":%d,\"dio\":%d,\"cluster\":%d,\"render_fused\":%d},"
+        "\"v23\":{\"fallback_v22\":%d,\"has_live\":%d,\"has_saved\":%d},"
         "\"dash\":{\"items\":\"%s\",\"show\":%d,\"r_items\":\"%s\",\"r_show\":%d,\"bars\":%d,\"smooth\":%d,"
         "\"car_up\":%d,\"acc_up\":%d,\"amap_turn\":%d,\"alpha\":%d,\"tank_l\":%d,\"lat_flip\":%d,\"trip_base\":%.1f,"
         "\"nav_box\":%d,\"nav_side\":\"%s\",\"nav_tz\":%d},"
         "\"cl\":{\"wide_on\":%d,\"wide\":%d,\"view\":%d},"
-        "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d,\"siri_short\":%d,\"gles60_mode\":%d,\"safe_mode\":%d},\"drive_logs\":[",
+        "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d,\"siri_short\":%d,\"gles60_mode\":%d,\"v23_mode\":%d,\"safe_mode\":%d},\"drive_logs\":[",
         esc_ov, has_ota_backup_files(),
         ipstr, spd, odo, has_cl, ssh_on,
         p_cld, p_ren, p_dio,
@@ -1151,6 +1155,9 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         file_exists("/tmp/vw_dio_safe_mode"),
         file_exists("/tmp/vw_cluster_safe_mode"),
         file_exists("/tmp/cl_render_fused"),
+        file_exists("/tmp/v23_fallback_v22"),
+        file_exists("/tmp/theme_live.js"),
+        file_exists(CLUSTER_DIR "/themes_user/my_theme.js"),
         esc1, dc.show, esc2, dc.r_show, dc.bars, dc.smooth,
         dc.car_up, dc.acc_up, dc.amap_turn, dc.alpha, dc.tank_l, dc.lat_flip, dc.trip_base,
         dc.nav_box, dc.nav_side, dc.nav_tz,
@@ -1161,6 +1168,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         file_exists(CLUSTER_DIR "/switch_off"),
         file_exists(CLUSTER_DIR "/siri_short"),
         file_exists(CLUSTER_DIR "/gles60_mode"),
+        file_exists(CLUSTER_DIR "/v23_mode"),
         file_exists(CLUSTER_DIR "/safe_mode"));
 
     /* 扫描 U 盘 drive_logs CSV 文件 */
@@ -1397,6 +1405,78 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
         return;
     }
 
+    /* Streaming v23 JS theme upload (up to 128 KB):
+     *   /api/theme/live -> writes ONLY to RAM /tmp/theme_live.js (0 eMMC wear, <1s hot reload)
+     *   /api/theme/save -> writes to <app_root>/eso/bin/apps/cluster/themes_user/my_theme.js */
+    if (strcmp(method, "POST") == 0 &&
+        (strcmp(target, "/api/theme/live") == 0 || strcmp(target, "/api/theme/save") == 0)) {
+        char xrw[64];
+        header_get(req, hdr_end, "X-Requested-With", xrw, sizeof(xrw));
+        if (strcmp(xrw, "touareg-webui") != 0) { send_json(cfd, 403, 0, "非法跨站请求（缺少安全头）"); return; }
+        if (is_driving_now()) { send_json(cfd, 403, 0, "车辆行驶中，请停车后再操作皮肤"); return; }
+        if (clen == 0 || clen > THEME_MAX_BYTES) {
+            send_json(cfd, 413, 0, "皮肤文件大小超限（需 1 B ～ 128 KB）");
+            return;
+        }
+        int is_save = (strcmp(target, "/api/theme/save") == 0);
+        char dst_path[384];
+        if (is_save) {
+            const char *app_root = getenv("NETD_APP_ROOT");
+            if (!app_root || !app_root[0]) app_root = "/mnt/app";
+            char dir1[320], dir2[352];
+            snprintf(dir1, sizeof(dir1), "%s/eso/bin/apps/cluster", app_root);
+            snprintf(dir2, sizeof(dir2), "%s/themes_user", dir1);
+            snprintf(dst_path, sizeof(dst_path), "%s/my_theme.js", dir2);
+            mount_app_rw();
+            mkdir(dir2, 0755);
+        } else {
+            const char *tmp_path = getenv("NETD_THEME_LIVE_PATH");
+            snprintf(dst_path, sizeof(dst_path), "%s", (tmp_path && tmp_path[0]) ? tmp_path : "/tmp/theme_live.js");
+        }
+        int tfd = open(dst_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (tfd < 0) {
+            if (is_save) mount_app_ro();
+            send_json(cfd, 500, 0, "无法写入皮肤文件");
+            return;
+        }
+        size_t pre = (got > hdr_len) ? (got - hdr_len) : 0;
+        if (pre > clen) pre = clen;
+        size_t written = 0;
+        int io_ok = 1;
+        if (pre > 0) {
+            if (write(tfd, req + hdr_len, pre) != (ssize_t)pre) io_ok = 0;
+            else written += pre;
+        }
+        struct timeval tv_th = { 10, 0 };
+        setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv_th, sizeof(tv_th));
+        uint8_t sbuf[8192];
+        while (io_ok && written < clen) {
+            size_t want = clen - written;
+            if (want > sizeof(sbuf)) want = sizeof(sbuf);
+            ssize_t r = recv(cfd, sbuf, want, 0);
+            if (r <= 0) { io_ok = 0; break; }
+            if (write(tfd, sbuf, (size_t)r) != r) { io_ok = 0; break; }
+            written += (size_t)r;
+        }
+        if (is_save) fsync(tfd);
+        close(tfd);
+        if (is_save) {
+            if (io_ok && written == clen) {
+                unlink("/tmp/theme_live.js");
+                unlink("/tmp/v23_theme_loading");
+            }
+            mount_app_ro();
+        }
+        if (!io_ok || written != clen) {
+            unlink(dst_path);
+            send_json(cfd, 400, 0, "皮肤上传中断");
+        } else {
+            send_json(cfd, 200, 1, is_save ? "已固化保存 my_theme.js 到车机，约 1 秒自动热加载"
+                                           : "已写入内存盘 /tmp/theme_live.js（0 次闪存写），约 1 秒热生效");
+        }
+        return;
+    }
+
     if (clen > 4096 || hdr_len + clen >= sizeof(req)) { send_json(cfd, 413, 0, "请求过大"); return; }
     while (got < hdr_len + clen && got + 1 < sizeof(req)) {
         size_t rem_body = hdr_len + clen - got;
@@ -1413,7 +1493,19 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
         if (strcmp(target, "/api/status") == 0) handle_status(cfd, bcm2_ip);
         else if (strcmp(target, "/api/dl") == 0) handle_download(cfd, query);
         else if (strcmp(target, "/api/diag") == 0) handle_diag_bundle(cfd, bcm2_ip);
-        else send_json(cfd, 404, 0, "未找到路径");
+        else if (strcmp(target, "/api/theme/status") == 0) {
+            char tbuf[4096];
+            FILE *tf = fopen("/tmp/theme_status.json", "r");
+            if (tf) {
+                size_t tn = fread(tbuf, 1, sizeof(tbuf) - 1, tf);
+                fclose(tf);
+                tbuf[tn] = '\0';
+                send_resp(cfd, 200, "OK", "application/json; charset=utf-8", tbuf, tn);
+            } else {
+                const char *defj = "{\"ok\":true,\"mode\":\"v22_classic\",\"theme_id\":\"default_classic\",\"theme_name\":\"v22.1 经典通道（未启用 v23）\",\"themes\":[]}";
+                send_resp(cfd, 200, "OK", "application/json; charset=utf-8", defj, strlen(defj));
+            }
+        } else send_json(cfd, 404, 0, "未找到路径");
         return;
     }
 
@@ -1446,7 +1538,7 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
             if (strcmp(name, "disable") != 0 && strcmp(name, "ka_off") != 0 &&
                 strcmp(name, "zoom_flip") != 0 && strcmp(name, "switch_off") != 0 &&
                 strcmp(name, "siri_short") != 0 && strcmp(name, "gles60_mode") != 0 &&
-                strcmp(name, "safe_mode") != 0) {
+                strcmp(name, "v23_mode") != 0 && strcmp(name, "safe_mode") != 0) {
                 send_json(cfd, 400, 0, "不支持的开关");
                 return;
             }
@@ -1461,7 +1553,36 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
                 ok = (unlink(path) == 0 || errno == ENOENT);
             }
             mount_app_ro();
+            if (ok && strcmp(name, "v23_mode") == 0 && !g_dry_test) {
+                unlink("/tmp/v23_fallback_v22");
+                unlink("/tmp/v23_theme_loading");
+                run_const_cmd("slay -f cl_render >/dev/null 2>&1");
+            }
             send_json(cfd, ok ? 200 : 500, ok, ok ? "开关已更新" : "开关写入失败");
+        } else if (strcmp(target, "/api/theme/select") == 0) {
+            char act[24], idx_s[16];
+            form_get(body, "act", act, sizeof(act));
+            form_get(body, "idx", idx_s, sizeof(idx_s));
+            if (strcmp(act, "reset") == 0) {
+                unlink("/tmp/theme_live.js");
+                unlink("/tmp/v23_theme_select");
+                unlink("/tmp/v23_theme_loading");
+                mount_app_rw();
+                unlink(CLUSTER_DIR "/themes_user/my_theme.js");
+                mount_app_ro();
+                send_json(cfd, 200, 1, "已清除自定义皮肤，切回官方默认 60fps 经典版");
+            } else {
+                int fd_sel = open("/tmp/v23_theme_select", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                if (fd_sel >= 0) {
+                    char sb[24];
+                    int sl = snprintf(sb, sizeof(sb), "%d\n", atoi(idx_s));
+                    (void)write(fd_sel, sb, (size_t)sl);
+                    close(fd_sel);
+                    send_json(cfd, 200, 1, "已发送皮肤切换指令");
+                } else {
+                    send_json(cfd, 500, 0, "写入切换指令失败");
+                }
+            }
         } else if (strcmp(target, "/api/ota/rollback") == 0) {
             const char *app_root = getenv("NETD_APP_ROOT");
             if (!app_root || !app_root[0]) app_root = "/mnt/app";
@@ -1482,6 +1603,8 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
             } else if (strcmp(act, "restart_render") == 0) {
                 if (!g_dry_test) {
                     unlink("/tmp/cl_render_fused");
+                    unlink("/tmp/v23_fallback_v22");
+                    unlink("/tmp/v23_theme_loading");
                     run_const_cmd("slay -f cl_render >/dev/null 2>&1");
                 }
                 send_json(cfd, 200, 1, "已刷新仪表渲染进程");
@@ -1494,6 +1617,8 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
                     unlink("/tmp/vw_dio_safe_mode");
                     unlink("/tmp/vw_cluster_safe_mode");
                     unlink("/tmp/cl_render_fused");
+                    unlink("/tmp/v23_fallback_v22");
+                    unlink("/tmp/v23_theme_loading");
                     mount_app_rw();
                     unlink(CLUSTER_DIR "/safe_mode");
                     run_const_cmd("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/j9_base_crashes");

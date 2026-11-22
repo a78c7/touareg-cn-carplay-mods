@@ -490,6 +490,7 @@ func (p pkg) macJunk() []string {
 type applyReq struct {
 	Features map[string]string `json:"features"` // id -> install / uninstall / skip
 	Dash     dashConf          `json:"dash"`
+	V23      v23ApplyReq       `json:"v23"`
 	Wifi     wifiReq           `json:"wifi"`
 }
 
@@ -528,6 +529,9 @@ func validate(r applyReq) error {
 		return fmt.Errorf("右边信息框最多 %d 项", maxRows)
 	}
 	if r.Features["cluster"] == "install" {
+		if err := validateV23(r.V23); err != nil {
+			return err
+		}
 		if r.Dash.Show && len(r.Dash.Items) == 0 {
 			return errors.New("左边信息框至少选一项，或者关掉左边框")
 		}
@@ -665,6 +669,11 @@ func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
 			} else {
 				log = append(log, "大字导航信息卡：关闭")
 			}
+			v23Logs, err := p.writeV23(r.V23)
+			if err != nil {
+				return log, wout, fmt.Errorf("写入 v23 皮肤配置失败：%v", err)
+			}
+			log = append(log, v23Logs...)
 		}
 	}
 	if len(log) == 0 {

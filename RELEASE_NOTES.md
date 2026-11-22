@@ -1,5 +1,33 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v23.0-beta.1
+> **Pre-release 尝鲜测试版说明**：本版本为下一代 `v23` 60fps AI 自定义皮肤架构的首个公开尝鲜包，**正式稳定版仍保持 `v22.1`**。**默认安装不启用 `v23_mode`，开机 100% 稳跑与 `v22.1` 完全一致的经典稳定通道**；仅当你在「改装设置」里主动勾选「启用 v23 60fps 皮肤引擎（Beta 尝鲜）」后才会切换进入新引擎，且全程受车机三层自动保险丝保护。
+
+- **普通车主一站式零门槛体验（「改装设置」 + U 盘一次写入，无需连 8080 热点）**：
+  - **「改装设置」（Mac / Windows）整合全流程（`tools/configurator`）**：
+    - 新增 **「v23 60fps AI 自定义皮肤（Beta 尝鲜 · 可选）」** 面板，默认不勾选（稳跑 `v22.1`）；
+    - 内置 **一键下载空白模板 `my_theme.js`**（文件头写满给 AI 看的坐标禁区、43 项车况变量与画笔规范，支持同一个文件用 `const THEMES = [...]` 写 1～8 套皮肤，并提醒 AI 写完引导你在浏览器预览）；
+    - 内置 **1:1 浏览器试驾模拟器**（直接从「改装设置」点按钮打开，零额外文件；支持键盘 `W/S` 油门刹车、`A/D` 转向、空格一键弹射、`ACC 巡航底部居中遮挡区`模拟、冷车传感器未就绪模拟、拖拽加载 `my_theme.js` 与三层保险丝破坏测试）；
+    - 导入 AI 写好的 `my_theme.js` 后，点一次「保存到 U 盘」即可把 `v23_mode` 与 `themes_user/my_theme.js` 写入 U 盘；上车插 U 盘一次刷入生效（不装 8080 无线控制台模块也能 100% 使用；取消勾选重刷一次 U 盘即可退回 `v22.1`，升级未提供新皮肤时自动保留车机原有皮肤）。
+  - **独立离线预览包随压缩包附赠**：发布包 `v23皮肤模板/` 目录与仓库 `tools/preview/` 同步提供单文件零依赖 `preview.html`（108 KB，断网双击即用）+ `my_theme.js` + `THEME_API_SPEC.md`，方便直接分享给车友或 GitHub Discussions。
+- **车机端统一单画布 60fps OpenGL ES 2.0 + QuickJS 零编译皮肤引擎（`cl_render` + `clusterd`）**：
+  - **CarPlay 实时地图与 60fps 仪表同屏（窗口 `58`，`[58, 33]`）**：NVDEC 硬解 CarPlay 地图流（~20fps）经 `screen_blit` 写入三缓冲离屏 RGBX8888 表面，优先通过实车驱动原生 `EGL_KHR_image_pixmap` 零拷贝绑定为 GLES2 纹理（不兼容时自动无缝退回 20fps `glTexSubImage2D`），上层指针、圆弧、运动条、导航卡与文字全部由 Tegra K1 GPU 以 60fps VSync 合成；复用 `navbox.c` 已加载的原厂 `ZYHei_GB18030_c.ttf` + `VWTextCarUI-Bold.ttf` 升级为 `1024×1024` 共享 GLES2 动态字形图集；支持稀疏采样地图亮度 + 滞回防闪烁自动昼夜判定。
+  - **默认只内置 1 套官方经典皮肤（`default_classic`）**：100% 沿用老用户 `dash.conf` 43 项勾选与大字导航卡；支持全部 17 个 `ctx.*` 高速画笔 + 可选 ≤ 8 KB 自定义 GLSL ES 1.00 光效着色器；冷车未就绪信号（`NaN/-999`）统一清洗为有限 `0` 并提供 `bus.ready.*`，杜绝 `.toFixed()` 抛错。
+  - **三层自动保险丝保障（无需 8080 救砖）**：
+    - **第 1 层（QuickJS 安全沙盒）**：纯核心 QuickJS（零 `quickjs-libc`/`pthread`/`assert`、物理移除 `eval`/`Function`），强制 **128 KB 单文件上限 + 4 MB 16B 对齐精确内存封顶 + 256 KB 栈上限 + 单帧 10 ms 硬中断强杀 + 掉帧看门狗 + 冷启动崩溃哨兵**；任一触发当帧 **0 黑屏** 补画官方默认经典皮肤并在仪表顶栏弹出报错原因与行号，坏 GLSL 光效仅降级关闭光效层；
+    - **第 2 层（`clusterd` 秒退 `v22.1`）**：`v23` 渲染进程异常退出或 8 秒内未就绪，立即写 `/tmp/v23_fallback_v22` 并自动无缝拉起久经验证的 `v22.1` 经典 `screen_blit` 通道，本次行车照常看导航；
+    - **第 3 层（原车地图硬兜底）**：30 秒内连续崩溃 3 次自动熔断回大众原车地图 `[33]`，行车中方向盘双击 `OK` 随时可手动切回原车地图。
+- **8080 无线控制台（进阶可选）同步支持 `v23` 极客热调（`touareg_netd`）**：
+  - 新增 `v23_mode` 开关、`/api/theme/status` 状态查询、流式 **128 KB** `/api/theme/live`（直写 `/tmp/theme_live.js` 内存盘，**0 次 eMMC 闪存写**，1 秒热生效）、`/api/theme/save` 停车固化保存与 `/api/theme/select` 风格切换（全部受 `X-Pin`、`X-Requested-With` 与车速停车锁保护）。
+- **车机 QNX 6.6 ARMv7 二进制构建信息与校验和**（Ubuntu `clang 14.0.0` + `arm-linux-gnueabi-ld --hash-style=both` + `qnx65-armv7-toolchain`，`src/build.sh`）：
+  - `cl_render`（含 QuickJS + GLES2 引擎，1.4 MB，0 非弱缺失符号 / 0 私有 `libm` 符号）：`768e8875f0b6047d2f74b273d1a5e2eec342da83e154fcb855c035c27fade116`
+  - `clusterd`：`096a71c1b37bdcf9ebba3b1d3e66428af38488177c585ed0e3d7f4db695d4f64`
+  - `touareg_netd`：`1154362bc7b52c4434e839485baf1c0a757aeab162b017ea7641b5413f2f1259`
+  - `cl_probe.so`（与 `v22.1` 完全一致）：`e260013df86291611225856c6f1c3c05a1d12857bfeaaa0514d1494192cbfa24`
+- **诚实透明的验证边界说明**：
+  - ✅ **已全量实测通过**：独立离线 `preview.html`（真 Chrome 隔离零外链 0 报错）、`tools/configurator` Go `vet`/`-race` 单测、主机 4 套 C 单测（`test_wired_rg`/`test_ota`/`test_netd`/`test_v23_theme`，含 17 项 `ctx` 接口、7 项安全熔断、冷车兜底、72KB/140KB 限额、32KB 8080 流式上传、亮度自动昼夜，ASan + UBSan 全绿）、`cppcheck` 静态分析、QNX 6.6 ARMv7 真实交叉编译与 `carlibs_v1.tgz` 全量符号审计（0 缺失非弱符号、0 私有数学符号）。
+  - ⚠️ **待实车最终复核（因此发为 Pre-release 且默认不启用 `v23_mode`）**：Tegra K1 实车 GLES2 60fps 帧率与 CPU 占用、`EGL_KHR_image_pixmap` 零拷贝命中率（未命中会自动降级 `glTexSubImage2D`）、CarPlay 重连切屏与实车中文字体图集观感、以及车机端三层保险丝真机触发表现。欢迎有兴趣尝鲜并愿意反馈脱敏诊断包的车友测试！
+
 ## v22.1
 - **无线控制台全面安全加固 + OTA 官方 Ed25519 数字签名 + CI/测试与发布体系升级**：
   - **无线控制台 PIN 鉴权 Fail-Closed + 首次启动自动随机生成并上屏显示（`touareg_netd` + `cl_render`）**：

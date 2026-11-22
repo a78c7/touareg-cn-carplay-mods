@@ -30,16 +30,22 @@ arm-linux-gnueabi-ld --hash-style=both -shared -soname cl_alt.so -o out/cl_probe
 clang $CF -fvisibility=hidden -c clusterd/clusterd.c -o out/clusterd.o
 arm-linux-gnueabi-ld --hash-style=both -o out/clusterd $EXE_START -L$L -L$UL out/clusterd.o -lc $EXE_END
 
-# 3) cl_render (fifthBro cluster.c, CC BY-NC-SA 4.0) - screen_blit path, NvMedia decoder loaded with dlopen
+# 3) cl_render (fifthBro cluster.c, CC BY-NC-SA 4.0 + QuickJS MIT v23 60fps JS theme engine)
 #    libscreen/libEGL/libGLESv2/libz must resolve to the head unit's own libraries at run time: link against
 #    stub libraries with the same soname (do NOT use --unresolved-symbols=ignore-all, that crashes).
-clang $CF -DUSE_SCREEN_BLIT -DUSE_DASH -Icl_render -include cl_render/glchar.h -w -c cl_render/cluster.c -o out/cluster.o
+QJS_CF="--target=armv7a-none-eabi -mfloat-abi=softfp -mfpu=neon -mthumb -fPIC -Os -fwrapv -DNDEBUG -DQJS_NO_ATOMICS -DCONFIG_VERSION=\"2026-06-04\" -D__QNX__ -D__QNXNTO__ -D__ARM__ -D__LITTLEENDIAN__ -nostdinc -Icl_render/qnx_math_clean -Icommon -Icl_render/quickjs -isystem $(clang -print-resource-dir)/include -isystem $SCREEN_INC -isystem $QNX_TARGET/usr/include -fno-stack-protector -Wno-format -w"
+for f in quickjs dtoa libregexp libunicode cutils; do
+    clang $QJS_CF -c cl_render/quickjs/$f.c -o out/qjs_$f.o
+done
+clang $CF -DNDEBUG -DQJS_NO_ATOMICS -Icl_render/qnx_math_clean -DUSE_SCREEN_BLIT -DUSE_DASH -Icl_render -include cl_render/glchar.h -w -c cl_render/cluster.c -o out/cluster.o
 clang $CF -fvisibility=hidden -c cl_render/shim.c -o out/shim.o
 for lib in libscreen.so.1 libEGL.so.1 libGLESv2.so.2 libz.so.2; do
     [ -f out/$lib ] || { echo "need stub out/$lib (copy the real one from the head unit or build a stub with that soname)"; exit 1; }
 done
 arm-linux-gnueabi-ld --hash-style=both -o out/cl_render $EXE_START -L$L -L$UL out/cluster.o out/shim.o \
+    out/qjs_quickjs.o out/qjs_dtoa.o out/qjs_libregexp.o out/qjs_libunicode.o out/qjs_cutils.o \
     out/libscreen.so.1 out/libEGL.so.1 out/libz.so.2 out/libGLESv2.so.2 -lm -lc $EXE_END
+arm-linux-gnueabi-strip out/cl_render
 
 # 4) vhpatch - applies / reverts the full-screen CarPlay byte patch on the car's own viewhandler.zip (zlib built in)
 if [ -n "$ZLIB_SRC" ]; then

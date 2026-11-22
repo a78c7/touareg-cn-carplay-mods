@@ -18,8 +18,8 @@ else
     echo "json: cl_probe.so not present"
 fi
 mount -uw /mnt/app
-rm -fv $D/cl_probe.so $D/cl_render $D/clusterd $D/disable $D/switch_off $D/triple_off $D/ka_off $D/zoom_flip $D/tire_ref.state $D/cl.conf $D/cl.conf.default $D/cl.sh $D/dash.conf /tmp/ultra_theme /tmp/media_cp.state /tmp/rdk_probe.log
-rm -rf $D/bak_v14 $D/bak_v15 $D/bak_pre_v21 $D/v15 $D/dm
+rm -fv $D/cl_probe.so $D/cl_render $D/clusterd $D/disable $D/switch_off $D/triple_off $D/ka_off $D/zoom_flip $D/v23_mode $D/gles60_mode $D/tire_ref.state $D/cl.conf $D/cl.conf.default $D/cl.sh $D/dash.conf /tmp/ultra_theme /tmp/media_cp.state /tmp/rdk_probe.log /tmp/theme_live.js /tmp/theme_status.json /tmp/v23_fallback_v22 /tmp/v23_theme_loading
+rm -rf $D/bak_v14 $D/bak_v15 $D/bak_pre_v21 $D/v15 $D/dm $D/themes_user
 rmdir $D 2>/dev/null
 [[ ! -e "/mnt/ota" ]] && mount -t qnx6 /dev/mnanda0t177.16 /mnt/ota 2>/dev/null
 mount -uw /mnt/ota 2>/dev/null || true

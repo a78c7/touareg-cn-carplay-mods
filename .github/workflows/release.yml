@@ -43,5 +43,12 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "touareg-cn-carplay-mods-$TAG.zip" "touareg-ota-$TAG.tar" "SHA256SUMS.txt" --clobber
           else
-            gh release create "$TAG" "touareg-cn-carplay-mods-$TAG.zip" "touareg-ota-$TAG.tar" "SHA256SUMS.txt" --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md --latest
+            case "$TAG" in
+              *-*)
+                gh release create "$TAG" "touareg-cn-carplay-mods-$TAG.zip" "touareg-ota-$TAG.tar" "SHA256SUMS.txt" --target "$GITHUB_SHA" --title "$TAG (Pre-release)" --notes-file notes.md --prerelease
+                ;;
+              *)
+                gh release create "$TAG" "touareg-cn-carplay-mods-$TAG.zip" "touareg-ota-$TAG.tar" "SHA256SUMS.txt" --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md --latest
+                ;;
+            esac
           fi

@@ -277,14 +277,14 @@ int main(int argc, char **argv) {
      * window created later. So the list is now set only after the renderer reports its window
      * (/tmp/cl_render_ready = its pid); a renderer that never reports within 12 s is restarted. */
     int new_stream = 1, stage = 0, zoomed = 0;
-    int fast_crash_cnt = 0, safe_logged = 0, gles_child = 0;
+    int fast_crash_cnt = 0, safe_logged = 0, gles_child = 0, v23_child = 0;
     uint32_t wd_bytes = 0; int wd_init = 0, wd_frozen = 0; time_t wd_last_wake = 0; unsigned wd_seq = 0;
     time_t shown_t = 0;
     const char *did = getenv("CL_DISPID");
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
     char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate10;st", did);   /* ours on top, native 33 kept underneath */
     const char *back_seq = getenv("CL_BACKSEQ") ? getenv("CL_BACKSEQ") : "unhold;33;vis1;rate10;st";
-    logm("clusterd v22.1 start", getpid());
+    logm("clusterd v23.0-beta start", getpid());
     for (;;) {
         int safe_mode = (access("/mnt/app/eso/bin/apps/cluster/safe_mode", F_OK) == 0 ||
                          access("/tmp/vw_cluster_safe_mode", F_OK) == 0 ||
@@ -293,7 +293,7 @@ int main(int argc, char **argv) {
             if (!safe_logged) { logs("safe_mode / render fuse active -> yielding cluster back to stock map [33]"); safe_logged = 1; }
             if (child > 0) {
                 kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
-                waitpid(child, NULL, 0); child = 0; gles_child = 0; new_stream = 1;
+                waitpid(child, NULL, 0); child = 0; gles_child = 0; v23_child = 0; new_stream = 1;
                 rebind(back_seq);
             }
             usleep(1000000);
@@ -312,6 +312,9 @@ int main(int argc, char **argv) {
         uint32_t flags = s ? s->flags : 0u;
         int flag_on = s && s->magic == 0x48323634u && (flags & 1u);
         int active = flag_on;
+        int want_v23 = ((access("/mnt/app/eso/bin/apps/cluster/v23_mode", F_OK) == 0 ||
+                         access("/tmp/v23_mode", F_OK) == 0) &&
+                        access("/tmp/v23_fallback_v22", F_OK) != 0);
         int want_gles60 = (!active && access("/mnt/app/eso/bin/apps/cluster/gles60_mode", F_OK) == 0);
         /* v21.1 fallback: cl_probe increments upper 24 bits of flags on EVERY stream-111 packet (incl. op=5 keepalive
          * and wait_idr). Only treat a live flag as a crashed dio_manager if BOTH heartbeat and total_bytes freeze for 10 s. */
@@ -331,8 +334,18 @@ int main(int argc, char **argv) {
                 logm("renderer exited", child);
                 child = 0;
                 int was_gles = gles_child;
+                int was_v23 = v23_child;
                 gles_child = 0;
-                /* v22.0: 3 rapid crashes within 30s -> fuse off renderer and restore stock map [33] */
+                v23_child = 0;
+                /* v23 Layer-2 fuse: if opt-in v23 renderer crashes rapidly once, immediately
+                 * trip /tmp/v23_fallback_v22 and fall back to battle-tested v22.1 screen_blit! */
+                if (was_v23 && alive < 30 && (!WIFEXITED(wst) || WEXITSTATUS(wst) != 0)) {
+                    int ffd = open("/tmp/v23_fallback_v22", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                    if (ffd >= 0) { const char *msg = "v23 rapid exit\n"; (void)write(ffd, msg, strlen(msg)); close(ffd); }
+                    logs("LAYER-2 FUSE: v23 renderer exited abnormally -> auto fallback to v22.1 classic renderer");
+                    continue;
+                }
+                /* v22.0 Layer-3 fuse: 3 rapid crashes within 30s -> fuse off renderer and restore stock map [33] */
                 if (alive < 30 && (!WIFEXITED(wst) || WEXITSTATUS(wst) != 0)) {
                     fast_crash_cnt++;
                     logm("renderer rapid crash count", fast_crash_cnt);
@@ -355,14 +368,28 @@ int main(int argc, char **argv) {
             inactive = 0;
             if (child > 0 && gles_child) {
                 kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
-                waitpid(child, NULL, 0); child = 0; gles_child = 0; new_stream = 1;
+                waitpid(child, NULL, 0); child = 0; gles_child = 0; v23_child = 0; new_stream = 1;
             }
             if (child <= 0) {
                 child = fork();
-                if (child == 0) { execv(argv[1], argv + 1); _exit(127); }
-                started = time(NULL); stage = 0; gles_child = 0;
+                if (child == 0) {
+                    if (want_v23) {
+                        char *vargv[32];
+                        int n = 0;
+                        for (int i = 1; i < argc && n < 30; i++) {
+                            if (strcmp(argv[i], "capture=h264") == 0) vargv[n++] = (char *)"capture=v23";
+                            else vargv[n++] = argv[i];
+                        }
+                        vargv[n] = NULL;
+                        execv(argv[1], vargv);
+                    } else {
+                        execv(argv[1], argv + 1);
+                    }
+                    _exit(127);
+                }
+                started = time(NULL); stage = 0; gles_child = 0; v23_child = want_v23;
                 if (new_stream) { unlink("/tmp/cl_pan_mode"); new_stream = 0; zoomed = 0; wd_init = 0; wd_frozen = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
-                logm("renderer started", child);
+                logm(want_v23 ? "v23 60fps renderer started" : "renderer started", child);
             } else if (stage == 0 && time(NULL) - started >= 2) {
                 /* get a fresh key frame: the renderer creates its window on it. v19.4.1: the renderer also asks by itself
                  * once its decoder listens (a cold start took 2.4 s to get there, so this 2 s request was missed) */
@@ -379,7 +406,15 @@ int main(int argc, char **argv) {
                     /* v19.4: 6 s (was 12). A cold boot needed 3 renderer starts (window never created although key
                      * frames arrived); the cause is being traced in /tmp/cl_render_dbg, meanwhile retry sooner. */
                     kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
-                    waitpid(child, NULL, 0); logm("renderer window not ready after 8 s, restarting", child); child = 0;
+                    waitpid(child, NULL, 0);
+                    if (v23_child) {
+                        int ffd = open("/tmp/v23_fallback_v22", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                        if (ffd >= 0) { const char *msg = "v23 init timeout\n"; (void)write(ffd, msg, strlen(msg)); close(ffd); }
+                        logs("LAYER-2 FUSE: v23 window ready timeout (8s) -> auto fallback to v22.1 classic renderer");
+                    } else {
+                        logm("renderer window not ready after 8 s, restarting", child);
+                    }
+                    child = 0; v23_child = 0;
                 }
             } else if (stage == 2 && time(NULL) - shown_t >= 2) {
                 /* the phone keeps its zoom for the whole connection: zoom in once per connection, not per renderer */
@@ -427,17 +462,17 @@ int main(int argc, char **argv) {
             inactive = 0;
             if (child > 0 && !gles_child) {
                 kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
-                waitpid(child, NULL, 0); child = 0; new_stream = 1;
+                waitpid(child, NULL, 0); child = 0; v23_child = 0; new_stream = 1;
             }
             if (child <= 0) {
                 child = fork();
                 if (child == 0) {
-                    char *gargv[] = { argv[1], "capture=gles60", "xres=1920", "yres=639", NULL };
+                    char *gargv[] = { argv[1], (char *)(want_v23 ? "capture=v23_idle" : "capture=gles60"), (char *)"xres=1920", (char *)"yres=639", NULL };
                     execv(argv[1], gargv);
                     _exit(127);
                 }
-                started = time(NULL); stage = 0; gles_child = 1;
-                logm("gles60 standalone renderer started", child);
+                started = time(NULL); stage = 0; gles_child = 1; v23_child = want_v23;
+                logm(want_v23 ? "v23 idle 60fps renderer started" : "gles60 standalone renderer started", child);
             } else if (stage == 0) {
                 char rb[32];
                 if (read_file("/tmp/cl_render_ready", rb, sizeof rb) > 0 && atoi(rb) == child) {
@@ -446,12 +481,12 @@ int main(int argc, char **argv) {
                     logm("gles60 window ready", child);
                 } else if (time(NULL) - started >= 8) {
                     kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
-                    waitpid(child, NULL, 0); child = 0; gles_child = 0;
+                    waitpid(child, NULL, 0); child = 0; gles_child = 0; v23_child = 0;
                 }
             }
         } else if (child > 0 && ++inactive >= 6) {   /* ~3 s without stream: release window 33 */
             kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
-            waitpid(child, NULL, 0); logm("renderer stopped", child); child = 0; gles_child = 0;
+            waitpid(child, NULL, 0); logm("renderer stopped", child); child = 0; gles_child = 0; v23_child = 0;
             new_stream = 1;
             usleep(500000);
             rebind(back_seq);                 /* back to native map 33, same steps as the VIEW key */

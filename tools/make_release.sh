@@ -132,7 +132,12 @@ quick_guide = f"""途锐 MH2p CarPlay 改装包 {v} — 必看说明与免费开
    - 不运行「改装设置」直接插车会空刷，不会安装任何模块。
 4. 安全弹出 U 盘 -> 发动车辆 -> 插入扶手箱 USB 口，等待自动刷机重启几次（期间切勿操作车机），提示移除介质后拔出即可。
 
-【离线无线升级 (OTA)】
+【v23 60fps AI 自定义皮肤（Beta 尝鲜 · 可选，无需连 8080）】
+- 在「改装设置」里即可一站式：勾选 v23 60fps 尝鲜开关（默认关闭，不勾稳跑 v22.1）-> 下载空白模板 my_theme.js 发给 AI 写皮肤 -> 打开内置 1:1 浏览器试驾模拟器预览 -> 导入写好的 my_theme.js 并点「保存到 U 盘」，上车插 U 盘一次写入即生效。
+- 本压缩包「v23皮肤模板/」目录也额外附带了独立离线版 preview.html 与 my_theme.js，方便分享给朋友。
+- 车机内置三层自动保险丝（坏皮肤当帧 0 黑屏退回默认经典 / 渲染异常秒退回 v22.1 / 3 次崩溃退回原车地图 [33]），无需依赖 8080 救砖。
+
+【离线无线升级 (OTA)（进阶可选）】
 - 若车机为 v22.01 及更早版本：首次升级到 v22.1 请使用本 U 盘包覆盖刷入（旧版尚未内置 Ed25519 公钥，会安全拒绝新版签名 .tar 包）；刷入时原有 web.pin 与 cl.conf 自动保留。
 - 刷入 v22.1 及以后版本：后续升级无需再插拔 U 盘，手机下载 Release 中的 touareg-ota-<版本>.tar，连接车机打开 http://touareg.local:8080 -> 开关运维 -> 离线无线升级（先校验官方 Ed25519 签名再解包、逐文件 SHA-256 校验，支持自动备份与一键回滚）。
 
@@ -175,6 +180,13 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
             p = os.path.join('LICENSES', f)
             if os.path.isfile(p) and not f.startswith('.'):
                 add_file(z, p, os.path.join('LICENSES', f), 0o644)
+    for src_p, arc_p in (
+        ('tools/preview/index.html', 'v23皮肤模板/preview.html'),
+        ('tools/preview/my_theme.js', 'v23皮肤模板/my_theme.js'),
+        ('tools/preview/THEME_API_SPEC.md', 'v23皮肤模板/THEME_API_SPEC.md'),
+    ):
+        if os.path.isfile(src_p):
+            add_file(z, src_p, arc_p, 0o644)
     add_bytes(z, '必看-使用说明与免费声明.txt', quick_guide.encode('utf-8'), 0o644)
 
 # Build allowlisted POSIX ustar offline OTA .tar (matches src/touareg_netd/ota_util.h)

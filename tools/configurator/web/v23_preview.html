@@ -1,0 +1,2120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>途锐 MH2p v23 · 60fps 真 .js 皮肤 1:1 模拟器 &amp; 键盘试驾台</title>
+<style>
+:root{
+  --bg:#070a10; --panel:#101622; --panel2:#0b101a; --bd:#222e42;
+  --tx:#edf2fa; --mut:#8a98b0; --acc:#2f81f7; --cyan:#22d3ee;
+  --ok:#34d399; --warn:#f59e0b; --err:#f43f5e;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:13.5px/1.45 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1460px;margin:0 auto;padding:12px 16px 32px}
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+header h1{margin:0;font-size:18px;font-weight:800;letter-spacing:.2px}
+.sub{color:var(--mut);font-size:12px}
+.badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pill{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:99px;border:1px solid var(--bd);background:#141d2e;color:#cbd5e1}
+.pill.ok{background:rgba(52,211,153,.14);color:var(--ok);border-color:rgba(52,211,153,.35)}
+.pill.warn{background:rgba(245,158,11,.15);color:#fbbf24;border-color:rgba(245,158,11,.4)}
+.pill.err{background:rgba(244,63,94,.16);color:#fda4af;border-color:rgba(244,63,94,.45)}
+
+.stage{background:#04060a;border:1px solid var(--bd);border-radius:14px;padding:10px;margin-bottom:12px;box-shadow:0 12px 34px rgba(0,0,0,.45)}
+canvas#cockpit{width:100%;height:auto;display:block;border-radius:8px;background:#05080f}
+
+.drive-deck{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #1b2538}
+.pedals{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pedal{
+  user-select:none;-webkit-user-select:none;touch-action:none;
+  display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+  min-width:96px;height:52px;padding:0 14px;border-radius:10px;cursor:pointer;
+  border:1.5px solid #2e3d57;background:#151f31;color:#f1f5f9;font-weight:800;font-size:13.5px;
+  transition:transform .06s,background .08s,border-color .08s;
+}
+.pedal small{font-weight:600;font-size:11px;color:#94a3b8;margin-top:1px}
+.pedal.gas{border-color:rgba(34,211,238,.55);background:linear-gradient(180deg,#112838,#0c1c28)}
+.pedal.gas.pressed,.pedal.gas:active{transform:translateY(2px) scale(.98);background:#0891b2;border-color:#67e8f9}
+.pedal.brake{border-color:rgba(244,63,94,.55);background:linear-gradient(180deg,#34141d,#220d14)}
+.pedal.brake.pressed,.pedal.brake:active{transform:translateY(2px) scale(.98);background:#e11d48;border-color:#fda4af}
+.pedal.steer{min-width:74px}
+.pedal.steer.pressed,.pedal.steer:active{transform:translateY(2px);background:#2563eb;border-color:#93c5fd}
+.pedal.launch{border-color:rgba(245,158,11,.6);background:linear-gradient(180deg,#33240d,#211708);color:#fde68a}
+.pedal.okkey{border-color:rgba(52,211,153,.55);background:linear-gradient(180deg,#102b24,#0b1d19);color:#a7f3d0}
+.pedal.okkey.pressed,.pedal.okkey:active{transform:translateY(2px);background:#059669;border-color:#6ee7b7;color:#fff}
+
+.toggles{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed #1b2538}
+label.cb{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px;color:#cbd5e1}
+select,button{font:inherit}
+select{background:var(--panel2);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:5px 10px;font-size:12.5px}
+.btn{background:#182234;color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer}
+.btn:hover{border-color:#4b648a}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.ok{background:#0f766e;border-color:#14b8a6;color:#fff}
+.btn.on{background:rgba(34,211,238,.18);border-color:var(--cyan);color:#67e8f9}
+.btn.danger{background:rgba(244,63,94,.16);border-color:rgba(244,63,94,.45);color:#fda4af}
+.btn.warn{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.45);color:#fde68a}
+
+.grid{display:grid;grid-template-columns:1fr 1.25fr;gap:12px}
+@media(max-width:1020px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
+.card h2{margin:0 0 8px;font-size:14.5px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:7px 0}
+textarea#codeEditor{
+  width:100%;height:330px;resize:vertical;
+  background:#080c14;color:#a5f3fc;border:1px solid #24334b;border-radius:9px;padding:10px;
+  font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;tab-size:2;
+}
+pre#statusJson{
+  margin:8px 0 0;background:#080c14;border:1px solid #1e2a3f;border-radius:8px;padding:8px 10px;
+  color:#cbd5e1;font:11.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:140px;overflow:auto;
+}
+.hint{color:var(--mut);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>途锐 MH2p v23 · 60fps 真 <code>.js</code> 皮肤 1:1 模拟器</h1>
+      <div class="sub">键盘直接试驾：<b>W/↑</b> 油门 · <b>S/↓</b> 刹车 · <b>A/D</b> 转向 · <b>空格</b> 一键弹射 0-100 · <b>长按 O 两秒</b> 像 Ultra 一样盲切风格（连按两下 O 切原车地图）</div>
+    </div>
+    <div class="badges">
+      <span class="pill ok" id="fpsBadge">仪表 60 fps · 地图底图 20 fps</span>
+      <span class="pill" id="liveTele">38 km/h · 1420 rpm · D3</span>
+      <span class="pill ok" id="healthPill">运行正常</span>
+      <button class="btn" id="btnSnap" type="button">保存 1920×639 截图</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <canvas id="cockpit" width="1920" height="639"></canvas>
+
+    <!-- 试驾踏板 & 方向盘快捷键区 -->
+    <div class="drive-deck">
+      <div class="pedals">
+        <button class="pedal gas" id="btnGas" type="button">踩油门<small>按住 W / ↑</small></button>
+        <button class="pedal brake" id="btnBrake" type="button">踩刹车<small>按住 S / ↓</small></button>
+        <button class="pedal steer" id="btnLeft" type="button">← 左转<small>A / ←</small></button>
+        <button class="pedal steer" id="btnRight" type="button">右转 →<small>D / →</small></button>
+        <button class="pedal launch" id="btnLaunch" type="button">⚡ 一键弹射<small>0-100 (空格)</small></button>
+      </div>
+
+      <div class="pedals">
+        <button class="pedal okkey" id="btnOk" type="button">方向盘 OK<small>长按 2s 切风格 (O)</small></button>
+        <button class="btn" id="btnOkDouble" type="button">双击 OK：切原车地图</button>
+        <select id="selDriveMode" title="数据源模式">
+          <option value="manual" selected>手动试驾（键盘/按钮）</option>
+          <option value="auto_city">自动场景：城市巡航</option>
+          <option value="auto_pull">自动场景：反复地板油</option>
+          <option value="auto_offroad">自动场景：山路越野坡度</option>
+          <option value="csv">真实行车 CSV 回放</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 车机环境模拟开关 -->
+    <div class="toggles">
+      <label class="cb"><input type="checkbox" id="cbCarplay" checked> CarPlay 已连接（地图底图）</label>
+      <label class="cb"><input type="checkbox" id="cbIdleFull" checked> 断 CarPlay 自动进全屏 60fps 仪表</label>
+      <label class="cb"><input type="checkbox" id="cbNav" checked> 高德导航进行中</label>
+      <label class="cb"><input type="checkbox" id="cbNight" checked> 夜间模式</label>
+      <label class="cb"><input type="checkbox" id="cbAcc"> ACC 巡航开启（显示底部居中遮挡区）</label>
+      <label class="cb"><input type="checkbox" id="cbColdStart"> 冷车刚通电（部分传感器未就绪）</label>
+      <label class="cb"><input type="checkbox" id="cbOem" checked> 显示途锐原车遮挡区（顶栏/挡位/车速/ACC）</label>
+      <label class="cb"><input type="checkbox" id="cbSmooth" checked> 60fps 阻尼平滑（取消可对比 10Hz 跳格）</label>
+      <label class="cb"><input type="checkbox" id="cbLock20" checked> 地图底图真实锁 20fps（对比上层 60fps）</label>
+      <label class="cb"><input type="checkbox" id="cbLegacy"> 保险丝第2层：强制退回 v22.1 经典通道</label>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- 左栏：皮肤库 + 8080 停车安全锁 + 老配置兼容 + 真车数据 -->
+    <div class="card">
+      <h2>
+        <span>皮肤库 &amp; 8080 控制台模拟</span>
+        <label class="cb" style="font-size:12px;color:#fbbf24"><input type="checkbox" id="cbBypass"> 调试免停车锁（允许行驶中改代码）</label>
+      </h2>
+      <div class="hint">正式包默认仅内置「官方最原始经典版」；把 AI 写好的 <code>my_theme.js</code>（可含 1～多套皮肤）<b>直接拖进本网页任意位置</b>即可一键加载并按住 O 两秒切换！</div>
+      <div class="row" id="themeList"></div>
+
+      <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid #1d293e">
+        <button class="btn pri" id="btnLoadTemplate" type="button">📄 下载空白模板 my_theme.js（给 AI 写）</button>
+        <button class="btn ok" id="btnImportJs" type="button">📂 导入本地 .js 皮肤</button>
+        <input type="file" id="fileJs" accept=".js,.txt" style="display:none">
+        <button class="btn" id="btnImportCsv" type="button">导入真实行车 CSV</button>
+        <input type="file" id="fileCsv" accept=".csv,.txt" style="display:none">
+        <button class="btn" id="btnImportMap" type="button">替换实车地图截图底图</button>
+        <input type="file" id="fileMapImg" accept="image/*" style="display:none">
+      </div>
+
+      <div class="row" style="margin-top:8px;padding-top:10px;border-top:1px solid #1d293e">
+        <span class="hint">老用户 <code>dash.conf</code> 快捷勾选（1 号官方默认皮肤实时联动）：</span>
+        <button class="btn" type="button" data-dash-preset="torque,rpm,g,oil,cons|tires,pitch,roll,alt,gearbox">5项大字运动</button>
+        <button class="btn" type="button" data-dash-preset="power,torque,g,rpm,oil,gearbox|t100,pmax,tqmax,gmax,fuel,range">6项动力极值</button>
+        <button class="btn" type="button" data-dash-preset="tires,tpfl,tpfr,tprl,tprr,pitch,roll,alt|oil,gearbox,coolant,outside,fuel,range">8项越野胎压</button>
+      </div>
+
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1d293e">
+        <div style="background:rgba(16,185,129,.08);border:1px solid rgba(52,211,153,.32);border-radius:10px;padding:9px 11px;margin-bottom:9px;font-size:12px;line-height:1.55;color:#d1fae5">
+          <b style="color:#6ee7b7">🛡️ 车机三层自动保险丝保障（普通车主放心导入 AI 皮肤，无需 8080 救砖）</b><br>
+          • <b>第 1 层（防坏皮肤）</b>：AI 皮肤写错语法、死循环或爆内存 → 当帧 0 黑屏自动退回官方默认经典皮肤，仪表顶栏弹出报错原因；<br>
+          • <b>第 2 层（防显卡/渲染异常）</b>：v23 渲染进程异常 → 车机守护进程 <code>clusterd</code> 自动秒切回稳定的 v22.1 经典通道，本次行车照常看导航地图；<br>
+          • <b>第 3 层（防极端崩溃）</b>：连续崩溃 3 次 → 自动熔断回大众原车地图 <code>[33]</code>，且行车中方向盘双击 <code>OK</code> 随时可手动切回原车地图。
+        </div>
+        <div class="row" style="justify-content:space-between">
+          <span style="font-weight:700;font-size:13px">三层保险丝 · 故意搞破坏测试</span>
+          <span class="hint">检验 AI 写错代码时车机绝不黑屏/卡死</span>
+        </div>
+        <div class="row">
+          <button class="btn danger" id="btnFaultSyntax" type="button">💥 注入语法错误</button>
+          <button class="btn danger" id="btnFaultLoop" type="button">⏱️ 注入死循环(10ms强杀)</button>
+          <button class="btn warn" id="btnFaultShader" type="button">🎨 注入坏光效 Shader</button>
+        </div>
+        <div class="hint" style="margin-top:6px">车机反馈给 AI 与 8080 的实时状态（模拟 <code>/tmp/theme_status.json</code>）：</div>
+        <pre id="statusJson"></pre>
+      </div>
+    </div>
+
+    <!-- 右栏：实时 .js 皮肤编辑器（内存热重载 + 一键复制 AI 提示词） -->
+    <div class="card">
+      <h2>
+        <span>实时 <code>.js</code> 皮肤代码（纯文本单文件 · 热生效）</span>
+        <div class="row" style="margin:0">
+          <button class="btn pri" id="btnApplyLive" type="button">▶ 内存热试跑 (0写闪存)</button>
+          <button class="btn ok" id="btnSaveTheme" type="button">💾 固化保存到皮肤库</button>
+          <button class="btn" id="btnExportJs" type="button">导出 .js</button>
+          <button class="btn warn" id="btnCopyPrompt" type="button">复制给 AI 写皮肤的提示词</button>
+        </div>
+      </h2>
+      <div class="hint" style="margin-bottom:6px">直接修改下面代码（比如改颜色、调表盘位置、加文字）点「内存热试跑」，1 秒无闪烁生效；写错了自动弹错因回退默认皮肤。</div>
+      <textarea id="codeEditor" spellcheck="false"></textarea>
+    </div>
+  </div>
+</div>
+
+<div id="dropOverlay" style="display:none;position:fixed;inset:0;background:rgba(7,12,24,.86);border:3px dashed #22d3ee;z-index:999;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:#67e8f9;pointer-events:none">
+  松手直接加载 .js 皮肤（支持 my_theme.js 多皮肤包）/ 行车 CSV / 地图截图
+</div>
+<script>
+// 自动生成：发布包仅内置 1 套官方默认 60fps 经典皮肤 + 给 AI 用的空白模板 my_theme.js
+window.BUILTIN_THEMES = {
+  default_classic: "// ① 官方默认 60fps 经典版 — 100% 忠实原版视觉，完全沿用 dash.conf 43 项勾选\nconst THEME = {\n  id: \"default_classic\",\n  name: \"① 官方默认 60fps 经典版\",\n  author: \"a78c7\",\n  version: \"1.0\",\n  desc: \"最原始经典外观：满屏 CarPlay 地图 + 左右 295px 60fps 丝滑信息框/自动导航卡，完全沿用 dash.conf\",\n  shader: \"\"\n};\n\nfunction render(ctx, bus, state) {\n  var mapOn = bus.sys.mapLive;\n  ctx.clear(8, 13, 22, 1);\n\n  if (mapOn) {\n    // 满屏 CarPlay 实时地图（20fps 底图），左右信息框/导航卡 60fps 丝滑叠加\n    ctx.drawMap(0, 0, 1920, 639, { alpha: 1.0 });\n  } else {\n    // 断开 CarPlay 且开启「断流进全屏 60fps 仪表」时的纯净中置车速/转速表\n    ctx.rect(0, 0, 1920, 639, { fill: \"#070c15\", fill2: \"#0d1829\", gradDir: \"v\" });\n    var cx = 960, cy = 355, R = 182;\n    var rpmFrac = Math.min(1, Math.max(0, bus.rpm / 6500));\n    var rpmCol = rpmFrac > 0.85 ? \"#ff3b4e\" : (rpmFrac > 0.65 ? \"#f59e0b\" : \"#22d3ee\");\n\n    ctx.arc(cx, cy, R, 135, 405, { color: \"rgba(255,255,255,0.09)\", lineWidth: 20, cap: \"round\" });\n    ctx.ticks(cx, cy, R - 22, R - 8, 135, 405, 35, {\n      color: \"rgba(180,205,230,0.35)\", majorEvery: 5, majorLen: 10,\n      lineWidth: 2, majorWidth: 3, redFromFrac: 0.84, redColor: \"#ef4444\"\n    });\n    ctx.arc(cx, cy, R, 135, 135 + 270 * rpmFrac, {\n      color: rpmCol, lineWidth: 20, cap: \"round\", glow: 16, glowColor: rpmCol\n    });\n    ctx.needle(cx, cy, R - 22, 20, 135 + 270 * rpmFrac, {\n      color: \"#ffffff\", tipColor: rpmCol, width: 5, glow: 12\n    });\n    ctx.circle(cx, cy, 86, { fill: \"rgba(9,14,24,0.94)\", stroke: \"rgba(255,255,255,0.12)\", lineWidth: 1.5 });\n    ctx.text(String(Math.round(bus.speed)), cx, cy + 20, {\n      size: 82, bold: true, color: \"#ffffff\", align: \"center\", glow: 12, glowColor: \"rgba(56,189,248,0.35)\"\n    });\n    ctx.text(\"km/h  ·  \" + Math.round(bus.rpmRaw) + \" rpm  ·  \" + bus.gear, cx, cy + 56, {\n      size: 20, bold: true, color: \"#94a3b8\", align: \"center\"\n    });\n  }\n\n  // 左右两侧 100% 沿用用户 dash.conf 勾选，导航激活时自动接管指定侧\n  var navOn = bus.nav.live && bus.conf.nav_box > 0;\n  var navLeft = navOn && bus.conf.nav_side === \"left\";\n  var navRight = navOn && bus.conf.nav_side !== \"left\";\n\n  if (navLeft) {\n    ctx.drawNavCard(5, 164, 295, 344, { alpha: bus.conf.alpha });\n  } else if (bus.conf.show) {\n    ctx.drawDashBox(5, 164, 295, \"left\");\n  }\n\n  if (navRight) {\n    ctx.drawNavCard(1620, 164, 295, 344, { alpha: bus.conf.alpha });\n  } else if (bus.conf.r_show) {\n    ctx.drawDashBox(1620, 164, 295, \"right\");\n  }\n}\n"
+};
+window.MY_THEME_TEMPLATE = "/*\n * ============================================================================\n * 途锐 MH2p v23 · 60fps 仪表自定义皮肤模板（给 AI 直接编写用）\n * ============================================================================\n *\n * 【车主怎么用（3 步零编程）】\n *   1. 直接把这个 my_theme.js 文件发给任意 AI（DeepSeek / ChatGPT / Claude / 手机 DSH Go），\n *      用大白话告诉它你想要什么风格（例如：“帮我在这个文件里写 2 套皮肤：一套红黑运动双表盘中间嵌高德地图，\n *      一套越野姿态+四轮胎压风格”）。\n *   2. AI 改好保存后，双击打开同目录的单文件 preview.html（或 index.html），把本文件直接拖进网页里 1:1 试驾预览\n *      （键盘 W 油门 / S 刹车 / A D 转向 / 空格弹射 / 长按 O 两秒切换多套风格）。\n *   3. 浏览器里试驾顺滑且右上角绿灯「运行正常」后，连上车机 http://touareg.local:8080 上传即可生效。\n *\n * ----------------------------------------------------------------------------\n * 【给 AI 的编写规范（必须严格遵守）】\n * 1. 本文件支持写「1 套或多套皮肤」：直接往下面的 THEMES 数组里追加对象即可（建议 1~5 套）。\n *    每套皮肤包含：{ id, name, author, desc, shader(可选), render(ctx, bus, state) }。\n *    （也兼容单皮肤写法：顶层 const THEME = {...}; function render(ctx, bus, state) {...}）\n *\n * 2. 途锐实车画布分辨率固定为 1920 × 639，必须避开原车仪表自绘遮挡区：\n *    - 顶部原车信息栏 / 时钟：y = 0 .. 156（时钟中心 x = 965），重要内容请放在 y >= 160\n *    - 左下原车挡位斜梯形：x = 0 .. 355, y = 509 .. 639\n *    - 右下原车车速斜梯形：x = 1565 .. 1920, y = 509 .. 639\n *    - 【重要】底部正中 ACC 巡航图标遮挡区：当 bus.sys.acc === true 时，原车会在 x = 760 .. 1160, y = 495 .. 639\n *      绘制 ACC 跟车图示（实车地图车标会自动上移 80px）。底部居中的组件请避开此区域，或在 bus.sys.acc 为 true 时自动上移/隐藏！\n *    - 黄金无遮挡区：左右侧 y = 160 .. 506；正中央 x = 370 .. 1550, y = 160 .. 490（ACC 关闭时可用至 y = 628）\n *\n * 3. 可用的 60fps 显卡高速画笔 ctx（车机 OpenGL ES 2.0 与浏览器 1:1 同源）：\n *    - ctx.clear(r, g, b, a)\n *    - ctx.drawMap(x, y, w, h, { radius, alpha, vignette, shape:\"rect\"|\"circle\", borderColor, borderWidth })\n *      * 提示：用 bus.sys.mapLive 判断当前是否连着 CarPlay 地图；断开时请自行绘制全屏自绘仪表内容。\n *    - ctx.drawShader({ alpha, blend:\"normal\"|\"add\" })\n *      * 若皮肤填写了 shader（标准 GLSL ES 1.00 片段着色器，<= 8KB），调用此函数叠画显卡光效；\n *      * 统一 uniforms: u_res(vec2), u_time(float), u_rpm(0..1), u_speed(0..1), u_power(0..1),\n *        u_pedal(0..1), u_brake(0..1), u_g(vec2), u_map_live(0/1), u_night(0/1)\n *    - ctx.rect(x, y, w, h, { fill, fill2, gradDir:\"v\"|\"h\", stroke, lineWidth, radius, glow, glowColor })\n *    - ctx.circle(cx, cy, r, { fill, stroke, lineWidth, glow, glowColor })\n *    - ctx.line(x1, y1, x2, y2, { color, lineWidth, cap, glow, glowColor })\n *    - ctx.poly([[x,y], ...], { fill, stroke, lineWidth, glow, glowColor })   // 可矢量绘制车标/姿态剪影\n *    - ctx.arc(cx, cy, r, startDeg, endDeg, { color, lineWidth, cap:\"round\"|\"butt\", glow, glowColor })\n *    - ctx.ticks(cx, cy, rIn, rOut, startDeg, endDeg, count, { color, majorEvery, majorLen, lineWidth, majorWidth, redFromFrac, redColor })\n *    - ctx.needle(cx, cy, len, tail, angleDeg, { color, tipColor, width, glow, hubRadius, hubColor })\n *    - ctx.segBar(x, y, w, h, frac, { segs, redSegs, color, warnColor, redColor, pulse })\n *    - ctx.biBar(x, y, w, h, signedFrac, { posColor, negColor })\n *    - ctx.rangeBar(x, y, w, h, frac, { color, tickLo, tickHi })\n *    - ctx.text(str, x, y, { size, bold, italic, color, align:\"left\"|\"center\"|\"right\", glow, glowColor, maxWidth })\n *    - ctx.drawDashBox(x, y, w, \"left\"|\"right\")        // 复用用户 8080 勾选的 dash.conf 信息框\n *    - ctx.drawNavCard(x, y, w, h, { alpha })          // 复用大字高德/百度/苹果导航卡\n *    - ctx.drawTurnArrow(x, y, size, bus.nav.turnType, { color })\n *\n * 4. 可用的 60fps 车辆与导航数据总线 bus（连续量已平滑，加 Raw 后缀可取原始值，如 bus.rpmRaw）：\n *    - 动力速度：rpm, rpmRaw, rpmPeak, speed, power(kW), torque(Nm), pedal(%), brake(bar), gear(\"D4\"/\"S1\"), steer(°)\n *    - 车身动态：g(合G), glong(纵G), glat(横G), pitch(俯仰°), roll(侧倾°), alt(海拔m)\n *    - 温度油量：oil(机油°C), gearbox(波箱°C), coolant(水温°C), outside(车外°C), cons(L/100km), fuel(L), range(km)\n *    - 胎压极值：tpfl, tpfr, tprl, tprr(bar), tires, t100(0-100秒), t100Running, pmax, tqmax, gmax\n *    - 导航状态：nav.{ live, distM, remDistKm, remMin, eta, road, nextRoad, action, turnType, lanes }\n *    - 系统配置：sys.{ mapLive, night, acc, time, dt, fps, mapFps, width, height }, conf(dash.conf 配置)\n *    - 冷车就绪标志：ready.{ oil, gearbox, tires, t100, alt }（车机保证所有数值字段永远为有限数字、不会是 null/NaN，\n *      因此可直接安全调用 .toFixed()；若想在冷车未就绪时显示 \"--\"，可用 bus.ready.oil ? ... : \"--\"）\n *\n * 5. 安全红线（车机端强制校验，违者自动熔断回退默认皮肤并报错行号）：\n *    - 禁止使用 window / document / fetch / XMLHttpRequest / WebSocket / localStorage / eval / Function / setTimeout\n *    - 禁止死循环或超大数组分配（车机单帧预算 <= 10ms、JS 内存上限 4MB）\n *    - 禁止引用任何外部图片 URL，车标与图形全部用矢量 ctx 函数绘制\n *\n * 6. 【给 AI 的必执行收尾提示】\n *    写完或修改完本 my_theme.js 后，请务必明确提示用户：\n *    「皮肤已写入 my_theme.js！请直接双击打开 preview.html（单文件断网即用，或 index.html），\n *    把本 my_theme.js 拖进浏览器页面（或点击“导入本地 .js 皮肤”加载本文件），即可按键盘 W/S 踩油门刹车、\n *    勾选 ACC 巡航/冷车测试、长按 O 两秒切换风格，在浏览器中 1:1 实时验证 60fps 效果与安全体检！」\n * ============================================================================\n */\n\nconst THEMES = [\n  // ======================== 皮肤 1（请让 AI 直接修改或替换为你的设计） ========================\n  {\n    id: \"my_custom_1\",\n    name: \"我的自定义皮肤 1（空白模板）\",\n    author: \"车主 / AI\",\n    version: \"1.0\",\n    desc: \"请把本文件交给 AI，告诉它你想要的仪表风格；也可在 THEMES 数组里一次写多套皮肤\",\n    shader: \"\",\n    render: function (ctx, bus, state) {\n      ctx.clear(8, 12, 20, 1);\n\n      // 连着 CarPlay 时满屏显示实时地图，断开时铺深色座舱底板\n      if (bus.sys.mapLive) {\n        ctx.drawMap(0, 0, 1920, 639, { alpha: 1.0 });\n      } else {\n        ctx.rect(0, 0, 1920, 639, { fill: \"#070c16\", fill2: \"#101b2e\", gradDir: \"v\" });\n      }\n\n      // 模板占位提示卡（AI 修改时请删除这里，换成你的正式表盘/动效）\n      ctx.rect(580, 210, 760, 200, {\n        fill: \"rgba(10,16,28,0.82)\", stroke: \"rgba(34,211,238,0.45)\", lineWidth: 2, radius: 18\n      });\n      ctx.text(\"空白自定义模板已加载 (my_theme.js)\", 960, 272, {\n        size: 30, bold: true, color: \"#67e8f9\", align: \"center\"\n      });\n      ctx.text(\"当前车速 \" + Math.round(bus.speed) + \" km/h · \" + Math.round(bus.rpmRaw) + \" rpm · \" + bus.gear, 960, 326, {\n        size: 24, bold: true, color: \"#ffffff\", align: \"center\"\n      });\n      ctx.text(\"把 my_theme.js 发给 AI 写皮肤，写完拖回本网页即可 60fps 试驾验证\", 960, 374, {\n        size: 19, color: \"#94a3b8\", align: \"center\"\n      });\n    }\n  }\n\n  // AI 如需一次生成第 2 套、第 3 套皮肤，直接在上方大括号后加逗号并继续添加同结构对象即可：\n  // , { id: \"my_custom_2\", name: \"我的自定义皮肤 2\", ..., render: function(ctx, bus, state) { ... } }\n];\n";
+
+</script>
+<script>
+// 途锐 MH2p v23 浏览器 1:1 真 .js 皮肤模拟器核心引擎
+// 100% 模拟：10Hz CAN 采样 -> 60fps 阻尼总线 | 20fps CarPlay 地图底图 | WebGL 1.0 真 GLSL 光效 | JS 安全沙盒+三层保险丝 | 途锐 3.0T ZF 8AT 物理试驾
+
+(function () {
+  "use strict";
+
+  // ==================== 1. 43 项遥测目录（与 src/cl_render/dash.c 1:1 对齐） ====================
+  const ITEMS = {
+    power: ["功率", "kW", "seg", 265], torque: ["扭矩", "Nm", "seg", 460], rpm: ["转速", "rpm", "seg", 6500],
+    pedal: ["油门", "%", "seg", 100], brake: ["制动压力", "bar", "seg", 80],
+    g: ["G 值", "g", "bi", 0.85], glong: ["纵向 G", "g", "bi", 0.85], glat: ["横向 G", "g", "bi", 0.85],
+    t100: ["0–100", "s", "", 0], pmax: ["最大功率", "kW", "", 0], tqmax: ["最大扭矩", "Nm", "", 0], gmax: ["最大 G 值", "g", "", 0],
+    speed: ["车速", "km/h", "", 0], steer: ["转向角", "°", "bi", 450], gear: ["挡位", "", "", 0], tripkm: ["Trip", "km", "", 0],
+    tires: ["四轮胎压", "bar", "rng", 3.2], tpfl: ["左前胎压", "bar", "rng", 3.2], tpfr: ["右前胎压", "bar", "rng", 3.2],
+    tprl: ["左后胎压", "bar", "rng", 3.2], tprr: ["右后胎压", "bar", "rng", 3.2],
+    pitch: ["俯仰角", "°", "bi", 25], roll: ["侧倾角", "°", "bi", 25], alt: ["海拔", "m", "", 0],
+    oil: ["机油温度", "°C", "rng", 130], gearbox: ["变速箱油温", "°C", "rng", 130], coolant: ["冷却液温度", "°C", "rng", 120], outside: ["车外温度", "°C", "", 0],
+    cons: ["当前消耗", "L/100km", "", 0], fuel: ["燃油存量", "L", "rng", 90], range: ["续驶里程", "km", "", 0],
+    trip: ["本次油耗", "L/100km", "", 0], tripdist: ["本次里程", "km", "", 0], tripspeed: ["本次均速", "km/h", "", 0], triptime: ["本次时长", "h", "", 0],
+    refuel: ["加油后油耗", "L/100km", "", 0], refueldist: ["加油后里程", "km", "", 0], refuelspeed: ["加油后均速", "km/h", "", 0], refueltime: ["加油后时长", "h", "", 0],
+    total: ["累计油耗", "L/100km", "", 0], totaldist: ["累计里程", "km", "", 0], totalspeed: ["累计均速", "km/h", "", 0], totaltime: ["累计时长", "h", "", 0]
+  };
+
+  // 途锐 3.0T ZF 8HP65A 实车路测齿比（来自 Dash.java）
+  const GEAR_RATIOS = [103.0, 68.5, 46.0, 36.8, 28.3, 21.7, 17.9, 14.1];
+
+  // ==================== 2. 全局状态 ====================
+  const W = 1920, H = 639;
+  const mainCanvas = document.getElementById("cockpit");
+  const g2d = mainCanvas.getContext("2d");
+
+  // 20fps CarPlay 地图离屏画布（真实锁定 20fps 更新，模拟 iPhone 视频流）
+  const mapCanvas = document.createElement("canvas");
+  mapCanvas.width = W; mapCanvas.height = H;
+  const mapCtx = mapCanvas.getContext("2d");
+
+  // 大众原车地图 [33] 离屏画布
+  const stockCanvas = document.createElement("canvas");
+  stockCanvas.width = W; stockCanvas.height = H;
+  const stockCtx = stockCanvas.getContext("2d");
+
+  // 真 WebGL 1.0 离屏着色器渲染器（GLSL ES 1.00，与车机 GLES2 1:1 同源）
+  const glCanvas = document.createElement("canvas");
+  glCanvas.width = 960; glCanvas.height = 320; // 半分辨率高帧率光效，省电且流畅
+  const gl = glCanvas.getContext("webgl", { alpha: true, premultipliedAlpha: false, antialias: false });
+  let glProg = null, glLocs = {}, glBuf = null, glShaderErr = null, glShaderActive = false;
+
+  // 自定义地图截图底图（用户可拖入真车 PNG）
+  let customMapImg = null;
+
+  // 皮肤存储库（仅内置 1 套官方默认最原始经典版；用户拖入 my_theme.js 后可动态追加多套皮肤）
+  const themeOrder = ["default_classic"];
+  const themeStore = {};
+  for (const k of themeOrder) {
+    themeStore[k] = { code: window.BUILTIN_THEMES[k], builtin: true, meta: parseMetaQuick(window.BUILTIN_THEMES[k], k), compiledEntry: null };
+  }
+
+  let activeThemeId = "default_classic";
+  let compiledCurrent = null;
+  let compiledFallback = null;
+  let themeState = {};
+  let fallbackActive = false;
+  let bannerMsg = null; // { text, level: 'err'|'warn'|'info', until }
+  let themeStatus = {
+    ok: true, theme_id: activeThemeId, theme_name: "", compile_ms: 0,
+    fps: 60, map_fps: 20, fallback: false, error: null, shader_error: null,
+    mode: "gles60_js"
+  };
+
+  // 老用户 dash.conf 兼容配置
+  const dashConf = {
+    show: true, r_show: true, bars: true, smooth: true, alpha: 205, tank_l: 90,
+    nav_box: 1, nav_side: "right",
+    items: ["power", "torque", "g", "rpm", "oil", "gearbox"],
+    r_items: ["tires", "pitch", "roll", "alt", "cons"]
+  };
+
+  // 环境模拟开关
+  const env = {
+    driveMode: "manual", // manual | auto_city | auto_pull | auto_offroad | csv
+    carplayConnected: true,
+    idleFullscreen: true, // 断开 CarPlay 后：false=回原车地图，true=进全屏 60fps 自绘仪表
+    userNativeMap: false, // 方向盘双击 OK 切回原车地图
+    forceLegacy22: false, // 保险丝第 2 层：手动切回 v22.1 经典模式
+    navLive: true,
+    night: true,
+    acc: false,
+    coldStart: false,
+    oemGuides: true,
+    lockMap20fps: true,
+    smooth60: true,
+    parkingBypass: false // 调试用：是否允许行驶中编辑皮肤
+  };
+
+  // 键盘与踏板输入状态
+  const input = { gas: false, brake: false, left: false, right: false, boost: false };
+  let launchActive = false, launchPhase = 0, launchT = 0;
+
+  // 方向盘 OK 键长按 2 秒 / 双击状态
+  const okKey = { down: false, downAt: 0, firedLong: false, lastTapAt: 0 };
+
+  // 物理车辆状态（途锐 3.0T ZF 8AT）
+  const phys = {
+    speed: 38, rpm: 1420, gear: 3, shiftTimer: 0,
+    pedal: 14, brake: 0, power: 36, torque: 180,
+    glong: 0.02, glat: 0, steer: 0,
+    pitch: 0.6, roll: 0, alt: 88,
+    oil: 94, gearbox: 78, coolant: 90, outside: 21,
+    cons: 9.2, fuel: 58, range: 520,
+    tpfl: 2.4, tpfr: 2.4, tprl: 2.3, tprr: 2.3,
+    t100: 6.12, t100Running: false, t100Armed: false, t100Start: 0,
+    pmax: 258, tqmax: 452, gmax: 0.64,
+    distDriven: 14.2, roadOffset: 0, navDistM: 320,
+    navRoadIdx: 0
+  };
+
+  const NAV_ROADS = [
+    { action: "前方右转", road: "滨江大道", next: "中山路", type: "right" },
+    { action: "前方左转", road: "景明高架", next: "清风大道", type: "left" },
+    { action: "靠右驶入匝道", road: "滨海高速", next: "中心出口", type: "slight_right" },
+    { action: "进入环岛第2出口", road: "云帆路", next: "星河大道", type: "roundabout" }
+  ];
+
+  // CSV 回放轨迹
+  let csvFrames = [];
+  let csvTime = 0;
+
+  // 10Hz CAN 采样快照 vs 60fps 平滑总线
+  let canAccum = 0;
+  let rawSnap = snapshotFromPhys();
+  const smoothBus = Object.assign({}, rawSnap);
+  smoothBus.rpmPeak = smoothBus.rpm;
+  let rpmPeakHold = 0;
+
+  // 帧率统计
+  let mapAccum = 0, mapFrameCount = 0, mapFpsMeasured = 20;
+  let renderFrames = 0, fpsLastTs = performance.now(), renderFpsMeasured = 60;
+  let slowFrames = 0;
+  let simClock = 0;
+
+  // ==================== 3. WebGL 1.0 真着色器引擎（与车机 GLES2 同源） ====================
+  const VS_SRC =
+    "attribute vec2 a_pos;\n" +
+    "varying vec2 v_uv;\n" +
+    "void main() {\n" +
+    "  v_uv = vec2(a_pos.x * 0.5 + 0.5, 0.5 - a_pos.y * 0.5);\n" +
+    "  gl_Position = vec4(a_pos, 0.0, 1.0);\n" +
+    "}\n";
+
+  function initWebGLBase() {
+    if (!gl) return;
+    glBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, glBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, 1]), gl.STATIC_DRAW);
+  }
+  initWebGLBase();
+
+  function compileThemeShader(fragSrc) {
+    glShaderErr = null;
+    glShaderActive = false;
+    if (glProg && gl) { gl.deleteProgram(glProg); glProg = null; }
+    if (!fragSrc || !fragSrc.trim()) return { ok: true, active: false };
+    if (fragSrc.length > 8192) {
+      glShaderErr = "Shader 长度超过 8KB 车机安全上限";
+      return { ok: false, err: glShaderErr };
+    }
+    if (!gl) {
+      glShaderErr = "当前浏览器未开启 WebGL 1.0";
+      return { ok: false, err: glShaderErr };
+    }
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, VS_SRC);
+    gl.compileShader(vs);
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, fragSrc);
+    gl.compileShader(fs);
+    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+      const log = (gl.getShaderInfoLog(fs) || "GLSL 编译失败").trim();
+      gl.deleteShader(vs); gl.deleteShader(fs);
+      glShaderErr = "GLSL 光效编译失败: " + log;
+      return { ok: false, err: glShaderErr };
+    }
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    gl.deleteShader(vs); gl.deleteShader(fs);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      const log = (gl.getProgramInfoLog(prog) || "GLSL 链接失败").trim();
+      gl.deleteProgram(prog);
+      glShaderErr = "GLSL 光效链接失败: " + log;
+      return { ok: false, err: glShaderErr };
+    }
+    glProg = prog;
+    glLocs = {
+      a_pos: gl.getAttribLocation(prog, "a_pos"),
+      u_res: gl.getUniformLocation(prog, "u_res"),
+      u_time: gl.getUniformLocation(prog, "u_time"),
+      u_rpm: gl.getUniformLocation(prog, "u_rpm"),
+      u_speed: gl.getUniformLocation(prog, "u_speed"),
+      u_power: gl.getUniformLocation(prog, "u_power"),
+      u_pedal: gl.getUniformLocation(prog, "u_pedal"),
+      u_brake: gl.getUniformLocation(prog, "u_brake"),
+      u_g: gl.getUniformLocation(prog, "u_g"),
+      u_map_live: gl.getUniformLocation(prog, "u_map_live"),
+      u_night: gl.getUniformLocation(prog, "u_night")
+    };
+    glShaderActive = true;
+    return { ok: true, active: true };
+  }
+
+  function renderWebGLShader(bus) {
+    if (!gl || !glProg || !glShaderActive) return false;
+    gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(glProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, glBuf);
+    if (glLocs.a_pos >= 0) {
+      gl.enableVertexAttribArray(glLocs.a_pos);
+      gl.vertexAttribPointer(glLocs.a_pos, 2, gl.FLOAT, false, 0, 0);
+    }
+    if (glLocs.u_res) gl.uniform2f(glLocs.u_res, W, H);
+    if (glLocs.u_time) gl.uniform1f(glLocs.u_time, bus.sys.time);
+    if (glLocs.u_rpm) gl.uniform1f(glLocs.u_rpm, Math.max(0, Math.min(1, bus.rpm / 6500)));
+    if (glLocs.u_speed) gl.uniform1f(glLocs.u_speed, Math.max(0, Math.min(1, bus.speed / 240)));
+    if (glLocs.u_power) gl.uniform1f(glLocs.u_power, Math.max(0, Math.min(1, bus.power / 265)));
+    if (glLocs.u_pedal) gl.uniform1f(glLocs.u_pedal, Math.max(0, Math.min(1, bus.pedal / 100)));
+    if (glLocs.u_brake) gl.uniform1f(glLocs.u_brake, Math.max(0, Math.min(1, bus.brake / 80)));
+    if (glLocs.u_g) gl.uniform2f(glLocs.u_g, bus.glat, bus.glong);
+    if (glLocs.u_map_live) gl.uniform1f(glLocs.u_map_live, bus.sys.mapLive ? 1.0 : 0.0);
+    if (glLocs.u_night) gl.uniform1f(glLocs.u_night, bus.sys.night ? 1.0 : 0.0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    return true;
+  }
+
+  // ==================== 4. JS 安全沙盒 + 死循环 10ms 强制掐断插桩 ====================
+  function parseMetaQuick(code, fallbackId) {
+    const mName = code.match(/name\s*:\s*["']([^"']+)["']/);
+    const mDesc = code.match(/desc\s*:\s*["']([^"']+)["']/);
+    return { id: fallbackId, name: mName ? mName[1] : fallbackId, desc: mDesc ? mDesc[1] : "" };
+  }
+
+  // 给循环体注入单帧步数 + 10ms 超时看门狗，既 100% 模拟车机 QuickJS 中断，又绝不卡死浏览器
+  function instrumentLoops(src) {
+    // 跳过字符串和注释做简单安全的循环体头部注入
+    let out = "";
+    let i = 0;
+    const n = src.length;
+    while (i < n) {
+      const c = src[i];
+      // 单行注释
+      if (c === "/" && src[i + 1] === "/") {
+        const end = src.indexOf("\n", i);
+        if (end < 0) { out += src.slice(i); break; }
+        out += src.slice(i, end + 1); i = end + 1; continue;
+      }
+      // 多行注释
+      if (c === "/" && src[i + 1] === "*") {
+        const end = src.indexOf("*/", i + 2);
+        if (end < 0) { out += src.slice(i); break; }
+        out += src.slice(i, end + 2); i = end + 2; continue;
+      }
+      // 字符串字面量
+      if (c === '"' || c === "'" || c === "`") {
+        const q = c;
+        let j = i + 1;
+        while (j < n && src[j] !== q) { if (src[j] === "\\") j += 2; else j++; }
+        out += src.slice(i, j + 1); i = j + 1; continue;
+      }
+      // 匹配 while(...) { 或 for(...) { 或 do {
+      const rem = src.slice(i);
+      const mLoop = rem.match(/^(?:while|for)\s*\(/);
+      if (mLoop && (i === 0 || !/[A-Za-z0-9_$]/.test(src[i - 1]))) {
+        let j = i + mLoop[0].length, depth = 1;
+        while (j < n && depth > 0) {
+          if (src[j] === "(") depth++;
+          else if (src[j] === ")") depth--;
+          else if (src[j] === '"' || src[j] === "'") {
+            const q = src[j++];
+            while (j < n && src[j] !== q) { if (src[j] === "\\") j += 2; else j++; }
+          }
+          j++;
+        }
+        let k = j;
+        while (k < n && (src[k] === " " || src[k] === "\t" || src[k] === "\r")) k++;
+        if (src[k] === "{") {
+          out += src.slice(i, k + 1) + " __g(); ";
+          i = k + 1;
+          continue;
+        } else {
+          // 无大括号单行死循环 while(true) x++;
+          out += src.slice(i, j) + " { __g(); ";
+          // 找到分号结束
+          let semi = j;
+          while (semi < n && src[semi] !== ";" && src[semi] !== "\n") semi++;
+          out += src.slice(j, semi + 1) + " } ";
+          i = semi + 1;
+          continue;
+        }
+      }
+      const mDo = rem.match(/^do\s*\{/);
+      if (mDo && (i === 0 || !/[A-Za-z0-9_$]/.test(src[i - 1]))) {
+        out += mDo[0] + " __g(); ";
+        i += mDo[0].length;
+        continue;
+      }
+      out += c; i++;
+    }
+    return out;
+  }
+
+  function extractLineNum(err, offset) {
+    if (!err || !err.stack) return null;
+    const m = err.stack.match(/<anonymous>:(\d+):(\d+)/);
+    if (m) {
+      const ln = parseInt(m[1], 10) - offset;
+      return ln > 0 ? ln : 1;
+    }
+    return null;
+  }
+
+  function stripCommentsForCheck(src) {
+    return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  }
+
+  function compileThemeCode(rawCode, idHint) {
+    const t0 = performance.now();
+    if (!rawCode || typeof rawCode !== "string") {
+      return { ok: false, err: "皮肤代码为空", line: 1 };
+    }
+    if (rawCode.length > 131072) {
+      return { ok: false, err: "皮肤文件超过 128 KB 车机上限", line: 1 };
+    }
+    if (/\b(?:eval|Function|window|document|fetch|XMLHttpRequest|WebSocket|localStorage)\b/.test(stripCommentsForCheck(rawCode))) {
+      return { ok: false, err: "沙盒拦截：皮肤禁止访问 window / document / fetch / eval 等外部对象", line: 1 };
+    }
+    const instrumented = instrumentLoops(rawCode);
+    // 同时支持两种写法：
+    //   1) 多皮肤包：const THEMES = [ { id, name, ..., render(ctx, bus, state) {} }, ... ];
+    //   2) 单皮肤：const THEME = { ... }; function render(ctx, bus, state) { ... }
+    const wrapper =
+      '"use strict";\n' +
+      'var __steps = 0, __t0 = 0;\n' +
+      'function __g() { if (++__steps > 18000 || ((__steps & 255) === 0 && (__now() - __t0) > 10.0)) { throw new Error("单帧脚本执行超时 (>10ms 或疑似死循环)，已触发车机安全熔断"); } }\n' +
+      instrumented + "\n" +
+      'var __list = [];\n' +
+      'if (typeof THEMES !== "undefined" && Array.isArray(THEMES) && THEMES.length > 0) {\n' +
+      '  for (var __i = 0; __i < THEMES.length; __i++) {\n' +
+      '    (function(item, idx) {\n' +
+      '      if (!item || typeof item.render !== "function") throw new Error("THEMES[" + idx + "] 缺少 render(ctx, bus, state) 函数");\n' +
+      '      __list.push({\n' +
+      '        meta: { id: item.id || ("custom_" + (idx + 1)), name: item.name || ("自定义皮肤 " + (idx + 1)), author: item.author || "", desc: item.desc || "", shader: item.shader || "" },\n' +
+      '        run: function(ctx, bus, state) { __steps = 0; __t0 = __now(); return item.render(ctx, bus, state); }\n' +
+      '      });\n' +
+      '    })(THEMES[__i], __i);\n' +
+      '  }\n' +
+      '} else if (typeof render === "function") {\n' +
+      '  var __m = (typeof THEME === "object" && THEME) ? THEME : { id: "' + (idHint || "custom") + '", name: "未命名皮肤" };\n' +
+      '  __list.push({\n' +
+      '    meta: { id: __m.id || "' + (idHint || "custom") + '", name: __m.name || "未命名皮肤", author: __m.author || "", desc: __m.desc || "", shader: __m.shader || "" },\n' +
+      '    run: function(ctx, bus, state) { __steps = 0; __t0 = __now(); return render(ctx, bus, state); }\n' +
+      '  });\n' +
+      '} else {\n' +
+      '  throw new Error("缺少皮肤定义：请定义 THEMES 数组或 render(ctx, bus, state) 函数");\n' +
+      '}\n' +
+      'return { entries: __list };';
+    const LINE_OFFSET = 5;
+    try {
+      const factory = new Function(
+        "__now", "window", "document", "fetch", "XMLHttpRequest", "WebSocket", "localStorage", "alert", "setInterval", "setTimeout",
+        wrapper
+      );
+      const mod = factory(() => performance.now(), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+      const compileMs = +(performance.now() - t0).toFixed(2);
+      const first = mod.entries[0];
+      return { ok: true, entries: mod.entries, meta: first.meta, run: first.run, compileMs, code: rawCode };
+    } catch (e) {
+      const ln = extractLineNum(e, LINE_OFFSET);
+      return { ok: false, err: e.message || String(e), line: ln };
+    }
+  }
+
+  function showBanner(text, level, durSec) {
+    bannerMsg = { text, level: level || "info", until: performance.now() + (durSec || 4.5) * 1000 };
+  }
+
+  function applyCompiledEntry(entry, compileMs, opts) {
+    opts = opts || {};
+    const shRes = compileThemeShader(entry.meta.shader || "");
+    compiledCurrent = { ok: true, meta: entry.meta, run: entry.run, compileMs: compileMs || 0 };
+    themeState = {};
+    fallbackActive = false;
+    slowFrames = 0;
+
+    themeStatus = {
+      ok: true, theme_id: entry.meta.id, theme_name: entry.meta.name,
+      compile_ms: compileMs || 0, fps: renderFpsMeasured, map_fps: mapFpsMeasured,
+      fallback: false, error: null,
+      shader_error: shRes.ok ? null : shRes.err,
+      mode: env.forceLegacy22 ? "legacy_v22" : "gles60_js"
+    };
+
+    if (!shRes.ok) {
+      showBanner("⚠️ 光效 Shader 编译失败，已自动仅关闭光效层（主皮肤正常 60fps）：" + shRes.err, "warn", 6.0);
+    } else if (!opts.silent) {
+      const extra = opts.multiCount > 1 ? (" · 共导入 " + opts.multiCount + " 套皮肤，长按 OK 2秒可循环切换") : "";
+      showBanner("✓ 已热切换：" + themeStatus.theme_name + "（耗时 " + themeStatus.compile_ms + " ms" + extra + "）", "info", opts.multiCount > 1 ? 4.0 : 2.4);
+    }
+    updateStatusUI();
+    return true;
+  }
+
+  function activateThemeCode(code, idHint, opts) {
+    opts = opts || {};
+    const res = compileThemeCode(code, idHint);
+    if (!res.ok) {
+      const lnTxt = res.line ? ("第 " + res.line + " 行：") : "";
+      const fullErr = "AI 皮肤脚本语法/加载错（" + lnTxt + res.err + "）";
+      fallbackActive = true;
+      themeStatus = {
+        ok: false, theme_id: idHint || activeThemeId, theme_name: "已回退默认皮肤",
+        compile_ms: 0, fps: renderFpsMeasured, map_fps: mapFpsMeasured,
+        fallback: true, error: fullErr, shader_error: null, mode: env.forceLegacy22 ? "legacy_v22" : "gles60_js"
+      };
+      showBanner("⚠️ " + fullErr + " · 已自动回退官方默认 60fps 皮肤", "err", 6.5);
+      updateStatusUI();
+      return false;
+    }
+
+    // 若代码定义了多套皮肤（THEMES 数组）或导入外部文件，自动将每套皮肤注册到皮肤库
+    if (opts.registerIntoStore || res.entries.length > 1) {
+      for (const ent of res.entries) {
+        const eid = ent.meta.id;
+        if (!themeStore[eid]) themeOrder.push(eid);
+        themeStore[eid] = { code, builtin: false, meta: ent.meta, compiledEntry: ent, compileMs: res.compileMs };
+      }
+      activeThemeId = res.entries[0].meta.id;
+      renderThemeButtons();
+    }
+
+    return applyCompiledEntry(res.entries[0], res.compileMs, { silent: opts.silent, multiCount: res.entries.length });
+  }
+
+  function selectThemeById(id, silent) {
+    const item = themeStore[id];
+    if (!item) return;
+    activeThemeId = id;
+    const editor = document.getElementById("codeEditor");
+    if (editor) editor.value = item.code;
+    if (item.compiledEntry) {
+      applyCompiledEntry(item.compiledEntry, item.compileMs || 0.2, { silent: !!silent });
+    } else {
+      activateThemeCode(item.code, id, { silent: !!silent });
+    }
+    renderThemeButtons();
+  }
+
+  function cycleNextTheme() {
+    if (themeOrder.length <= 1) {
+      showBanner("当前只有官方默认皮肤 · 把 AI 写好的 my_theme.js 拖进网页即可添加多套风格", "info", 3.5);
+      return;
+    }
+    const idx = themeOrder.indexOf(activeThemeId);
+    const nextId = themeOrder[(idx + 1) % themeOrder.length];
+    selectThemeById(nextId, false);
+  }
+
+  // ==================== 5. 20fps 高德地图底图 & 原车地图绘制 ====================
+  function drawSimulatedCarPlayMap() {
+    const c = mapCtx;
+    const night = env.night;
+    if (customMapImg) {
+      c.drawImage(customMapImg, 0, 0, W, H);
+      return;
+    }
+    // 逼真的高德 CarPlay 夜间/白天仪表地图底图
+    const bg = c.createLinearGradient(0, 0, 0, H);
+    if (night) { bg.addColorStop(0, "#0b1523"); bg.addColorStop(1, "#122134"); }
+    else { bg.addColorStop(0, "#e5eef4"); bg.addColorStop(1, "#d2e2ec"); }
+    c.fillStyle = bg;
+    c.fillRect(0, 0, W, H);
+
+    // 绿地与水域色块（随行驶滚动）
+    const off = phys.roadOffset;
+    const steerShift = (phys.steer / 450) * 180;
+    c.save();
+    c.fillStyle = night ? "rgba(16, 48, 54, 0.55)" : "rgba(187, 224, 200, 0.75)";
+    for (let i = -2; i <= 5; i++) {
+      const y = ((i * 220 + off * 0.7) % 1300) - 220;
+      c.beginPath();
+      c.roundRect(140 - steerShift * 0.25, y, 420, 140, 26);
+      c.roundRect(1360 - steerShift * 0.25, y + 90, 440, 150, 26);
+      c.fill();
+    }
+    // 蓝色江河
+    c.strokeStyle = night ? "rgba(22, 78, 118, 0.65)" : "rgba(125, 198, 245, 0.85)";
+    c.lineWidth = 68;
+    c.beginPath();
+    c.moveTo(-40, ((off * 0.55) % 900) - 180);
+    c.bezierCurveTo(600, ((off * 0.55) % 900) + 40, 1320, ((off * 0.55) % 900) - 120, W + 40, ((off * 0.55) % 900) + 180);
+    c.stroke();
+
+    // 纵横城市次干道网
+    c.strokeStyle = night ? "rgba(100, 130, 165, 0.28)" : "rgba(148, 163, 184, 0.55)";
+    c.lineWidth = 10;
+    for (let i = -3; i <= 8; i++) {
+      const y = ((i * 115 + off) % 1050) - 180;
+      c.beginPath();
+      c.moveTo(0, y - steerShift * 0.15);
+      c.lineTo(W, y + 48 + steerShift * 0.15);
+      c.stroke();
+    }
+    c.lineWidth = 12;
+    for (let k = -2; k <= 2; k++) {
+      const xTop = 960 + k * 280 - steerShift * 0.4;
+      const xBot = 960 + k * 460;
+      c.beginPath();
+      c.moveTo(xTop, 0);
+      c.lineTo(xBot, H);
+      c.stroke();
+    }
+
+    // 主干道高亮带
+    const curveTopX = 960 - steerShift * 0.9;
+    c.strokeStyle = night ? "#1f3754" : "#ffffff";
+    c.lineWidth = 54;
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(960, H + 20);
+    c.quadraticCurveTo(960, 380, curveTopX, -20);
+    c.stroke();
+
+    // 导航状态：高德经典翠绿路线 + 流动白色导向箭头
+    if (env.navLive) {
+      c.strokeStyle = "#16a34a";
+      c.lineWidth = 26;
+      c.beginPath();
+      c.moveTo(960, H + 20);
+      c.quadraticCurveTo(960, 370, curveTopX, 220);
+      c.lineTo(curveTopX + 220, 175);
+      c.stroke();
+
+      c.strokeStyle = "#4ade80";
+      c.lineWidth = 16;
+      c.stroke();
+
+      // 路名标签
+      c.fillStyle = night ? "rgba(15,23,42,0.85)" : "rgba(255,255,255,0.9)";
+      c.beginPath();
+      c.roundRect(curveTopX - 96, 252, 192, 34, 8);
+      c.fill();
+      c.fillStyle = night ? "#e2e8f0" : "#0f172a";
+      c.font = "700 18px -apple-system,PingFang SC,sans-serif";
+      c.textAlign = "center";
+      c.fillText(NAV_ROADS[phys.navRoadIdx].road, curveTopX, 275);
+    }
+
+    // 车标（对准途锐实测时钟正下方；开启 ACC 时按实车 cluster.c g_acc_up=80 上移 80px 避让原车 ACC 图标）
+    c.save();
+    c.translate(960, env.acc ? 408 : 488);
+    c.rotate((phys.steer / 450) * 0.16);
+    c.fillStyle = "rgba(56,189,248,0.22)";
+    c.beginPath(); c.arc(0, 0, 34, 0, Math.PI * 2); c.fill();
+    c.fillStyle = "#ffffff";
+    c.beginPath(); c.arc(0, 0, 22, 0, Math.PI * 2); c.fill();
+    c.fillStyle = "#0ea5e9";
+    c.beginPath(); c.moveTo(0, -16); c.lineTo(13, 12); c.lineTo(0, 6); c.lineTo(-13, 12); c.closePath(); c.fill();
+    c.restore();
+
+    // 右下角小小的高德模拟水印 + 20fps 真实帧号标尺（肉眼对比底图 20fps vs 上层 60fps！）
+    c.fillStyle = night ? "rgba(15,23,42,0.7)" : "rgba(255,255,255,0.75)";
+    c.beginPath(); c.roundRect(1140, 560, 190, 32, 8); c.fill();
+    c.fillStyle = night ? "#94a3b8" : "#334155";
+    c.font = "600 15px -apple-system,sans-serif";
+    c.textAlign = "center";
+    c.fillText("CarPlay 地图 · " + mapFpsMeasured + "fps", 1235, 581);
+    c.restore();
+  }
+
+  function drawStockVWMap() {
+    const c = stockCtx;
+    const bg = c.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#7f9bb3");
+    bg.addColorStop(0.14, "#c9c4b4");
+    bg.addColorStop(1, "#beb8a7");
+    c.fillStyle = bg;
+    c.fillRect(0, 0, W, H);
+
+    // 还原大众原车 3D 透视地图灰白道路 + 黄省道
+    const off = (phys.roadOffset * 0.6) % 240;
+    c.strokeStyle = "#e8e4d8";
+    c.lineWidth = 7;
+    for (let i = -1; i <= 5; i++) {
+      const y = 120 + i * 115 + off * 0.45;
+      c.beginPath(); c.moveTo(120, y); c.lineTo(1800, y + 60); c.stroke();
+    }
+    c.strokeStyle = "#f2e088";
+    c.lineWidth = 14;
+    c.beginPath(); c.moveTo(260, 180); c.lineTo(1680, 520); c.stroke();
+
+    // 原车红三角圆环车标
+    c.strokeStyle = "#991b1b"; c.lineWidth = 5;
+    c.beginPath(); c.ellipse(960, 495, 52, 30, 0, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = "#b91c1c";
+    c.beginPath(); c.moveTo(960, 466); c.lineTo(982, 512); c.lineTo(938, 512); c.closePath(); c.fill();
+
+    // 提示标牌
+    c.fillStyle = "rgba(15,23,42,0.72)";
+    c.beginPath(); c.roundRect(700, 178, 520, 46, 12); c.fill();
+    c.fillStyle = "#f8fafc";
+    c.font = "700 20px -apple-system,PingFang SC,sans-serif";
+    c.textAlign = "center";
+    c.fillText("大众原车仪表地图 [窗口 33]（双击 OK 或连 CarPlay 切回）", 960, 208);
+  }
+
+  // ==================== 6. 显卡高速画笔 ctx（车机 GLES2 接口的 1:1 浏览器实现） ====================
+  function drawTurnArrowInternal(c, x, y, size, type, color) {
+    c.save();
+    c.translate(x + size / 2, y + size / 2);
+    const s = size / 64;
+    c.strokeStyle = color || "#ffffff";
+    c.fillStyle = color || "#ffffff";
+    c.lineWidth = 8.5 * s;
+    c.lineCap = "round";
+    c.lineJoin = "round";
+    if (type === "left" || type === "slight_left") {
+      c.beginPath(); c.moveTo(6 * s, 22 * s); c.lineTo(6 * s, -4 * s); c.lineTo(-14 * s, -12 * s); c.stroke();
+      c.beginPath(); c.moveTo(-22 * s, -16 * s); c.lineTo(-6 * s, -22 * s); c.lineTo(-10 * s, -2 * s); c.closePath(); c.fill();
+    } else if (type === "roundabout") {
+      c.lineWidth = 6.5 * s;
+      c.beginPath(); c.arc(0, -2 * s, 14 * s, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.moveTo(0, 24 * s); c.lineTo(0, 12 * s); c.stroke();
+      c.beginPath(); c.moveTo(0, -16 * s); c.lineTo(0, -26 * s); c.stroke();
+      c.beginPath(); c.moveTo(0, -30 * s); c.lineTo(8 * s, -18 * s); c.lineTo(-8 * s, -18 * s); c.closePath(); c.fill();
+    } else if (type === "straight") {
+      c.beginPath(); c.moveTo(0, 22 * s); c.lineTo(0, -14 * s); c.stroke();
+      c.beginPath(); c.moveTo(0, -24 * s); c.lineTo(12 * s, -6 * s); c.lineTo(-12 * s, -6 * s); c.closePath(); c.fill();
+    } else {
+      c.beginPath(); c.moveTo(-6 * s, 22 * s); c.lineTo(-6 * s, -4 * s); c.lineTo(14 * s, -12 * s); c.stroke();
+      c.beginPath(); c.moveTo(22 * s, -16 * s); c.lineTo(6 * s, -22 * s); c.lineTo(10 * s, -2 * s); c.closePath(); c.fill();
+    }
+    c.restore();
+  }
+
+  function createDrawCtx(bus) {
+    const c = g2d;
+
+    function fmtItemVal(k) {
+      if (bus.ready) {
+        if ((k === "oil" && !bus.ready.oil) ||
+            (k === "gearbox" && !bus.ready.gearbox) ||
+            (k === "alt" && !bus.ready.alt) ||
+            ((k === "tpfl" || k === "tpfr" || k === "tprl" || k === "tprr") && !bus.ready.tires)) {
+          return "--";
+        }
+      }
+      const rawKey = k + "Raw";
+      const v = bus[rawKey] !== undefined ? bus[rawKey] : bus[k];
+      if (k === "t100") return (bus.ready && !bus.ready.t100) ? "-" : (bus.t100 > 0 ? bus.t100.toFixed(1) : "-");
+      if (k === "pmax") return String(Math.round(bus.pmax));
+      if (k === "tqmax") return String(Math.round(bus.tqmax));
+      if (k === "gmax") return bus.gmax.toFixed(2);
+      if (typeof v === "string") return v;
+      if (k === "g" || k === "glong" || k === "glat") return (v >= 0 ? "+" : "") + Number(v).toFixed(2);
+      if (["pitch", "roll", "cons", "brake", "trip", "refuel", "total", "tripkm", "tpfl", "tpfr", "tprl", "tprr"].indexOf(k) >= 0) {
+        return Number(v || 0).toFixed(1);
+      }
+      return String(Math.round(Number(v) || 0));
+    }
+
+    const api = {
+      clear(r, g, b, a) {
+        c.save();
+        c.fillStyle = "rgba(" + (r | 0) + "," + (g | 0) + "," + (b | 0) + "," + (a === undefined ? 1 : a) + ")";
+        c.fillRect(0, 0, W, H);
+        c.restore();
+      },
+
+      drawMap(x, y, w, h, opts) {
+        opts = opts || {};
+        c.save();
+        const rad = opts.radius || 0;
+        c.beginPath();
+        if (opts.shape === "circle") {
+          c.arc(x + w / 2, y + h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+        } else if (rad > 0) {
+          c.roundRect(x, y, w, h, rad);
+        } else {
+          c.rect(x, y, w, h);
+        }
+        c.clip();
+        c.globalAlpha = opts.alpha === undefined ? 1.0 : opts.alpha;
+        // 按目标窗比例裁剪地图中央（保持高德车标始终居中！）
+        const aspect = w / h;
+        const srcAspect = W / H;
+        let sx = 0, sy = 0, sw = W, sh = H;
+        if (aspect < srcAspect) {
+          sw = H * aspect;
+          sx = (W - sw) / 2;
+        } else {
+          sh = W / aspect;
+          sy = (H - sh) / 2;
+        }
+        c.drawImage(mapCanvas, sx, sy, sw, sh, x, y, w, h);
+        if (opts.vignette > 0) {
+          const vg = c.createRadialGradient(x + w / 2, y + h / 2, Math.min(w, h) * 0.25, x + w / 2, y + h / 2, Math.max(w, h) * 0.65);
+          vg.addColorStop(0, "rgba(6,9,15,0)");
+          vg.addColorStop(1, "rgba(6,9,15," + Math.min(0.95, opts.vignette) + ")");
+          c.globalAlpha = 1;
+          c.fillStyle = vg;
+          c.fillRect(x, y, w, h);
+        }
+        c.restore();
+        if (opts.borderColor && opts.borderWidth) {
+          c.save();
+          c.strokeStyle = opts.borderColor;
+          c.lineWidth = opts.borderWidth;
+          c.beginPath();
+          if (opts.shape === "circle") c.arc(x + w / 2, y + h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+          else c.roundRect(x, y, w, h, rad);
+          c.stroke();
+          c.restore();
+        }
+      },
+
+      drawShader(opts) {
+        opts = opts || {};
+        if (!renderWebGLShader(bus)) return;
+        c.save();
+        c.globalAlpha = opts.alpha === undefined ? 1.0 : opts.alpha;
+        if (opts.blend === "add") c.globalCompositeOperation = "lighter";
+        c.drawImage(glCanvas, 0, 0, W, H);
+        c.restore();
+      },
+
+      rect(x, y, w, h, opts) {
+        opts = opts || {};
+        c.save();
+        if (opts.glow > 0) { c.shadowBlur = opts.glow; c.shadowColor = opts.glowColor || opts.fill || "#38bdf8"; }
+        c.beginPath();
+        if (opts.radius > 0) c.roundRect(x, y, w, h, opts.radius);
+        else c.rect(x, y, w, h);
+        if (opts.fill) {
+          if (opts.fill2) {
+            const grd = opts.gradDir === "h" ? c.createLinearGradient(x, y, x + w, y) : c.createLinearGradient(x, y, x, y + h);
+            grd.addColorStop(0, opts.fill); grd.addColorStop(1, opts.fill2);
+            c.fillStyle = grd;
+          } else {
+            c.fillStyle = opts.fill;
+          }
+          c.fill();
+        }
+        if (opts.stroke) {
+          c.shadowBlur = 0;
+          c.strokeStyle = opts.stroke;
+          c.lineWidth = opts.lineWidth || 1.5;
+          c.stroke();
+        }
+        c.restore();
+      },
+
+      circle(cx, cy, r, opts) {
+        opts = opts || {};
+        c.save();
+        if (opts.glow > 0) { c.shadowBlur = opts.glow; c.shadowColor = opts.glowColor || opts.fill || opts.stroke || "#38bdf8"; }
+        c.beginPath();
+        c.arc(cx, cy, Math.max(0.5, r), 0, Math.PI * 2);
+        if (opts.fill) { c.fillStyle = opts.fill; c.fill(); }
+        if (opts.stroke) { c.strokeStyle = opts.stroke; c.lineWidth = opts.lineWidth || 2; c.stroke(); }
+        c.restore();
+      },
+
+      line(x1, y1, x2, y2, opts) {
+        opts = opts || {};
+        c.save();
+        if (opts.glow > 0) { c.shadowBlur = opts.glow; c.shadowColor = opts.glowColor || opts.color || "#fff"; }
+        c.strokeStyle = opts.color || "#ffffff";
+        c.lineWidth = opts.lineWidth || 2;
+        c.lineCap = opts.cap || "round";
+        c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+        c.restore();
+      },
+
+      poly(pts, opts) {
+        if (!pts || pts.length < 2) return;
+        opts = opts || {};
+        c.save();
+        if (opts.glow > 0) { c.shadowBlur = opts.glow; c.shadowColor = opts.glowColor || opts.fill || "#fff"; }
+        c.beginPath();
+        c.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+        c.closePath();
+        if (opts.fill) { c.fillStyle = opts.fill; c.fill(); }
+        if (opts.stroke) { c.strokeStyle = opts.stroke; c.lineWidth = opts.lineWidth || 2; c.stroke(); }
+        c.restore();
+      },
+
+      arc(cx, cy, r, startDeg, endDeg, opts) {
+        opts = opts || {};
+        if (Math.abs(endDeg - startDeg) < 0.05) return;
+        c.save();
+        if (opts.glow > 0) { c.shadowBlur = opts.glow; c.shadowColor = opts.glowColor || opts.color || "#38bdf8"; }
+        c.strokeStyle = opts.color || "#22d3ee";
+        c.lineWidth = opts.lineWidth || 12;
+        c.lineCap = opts.cap || "butt";
+        c.beginPath();
+        c.arc(cx, cy, Math.max(1, r), startDeg * Math.PI / 180, endDeg * Math.PI / 180);
+        c.stroke();
+        c.restore();
+      },
+
+      ticks(cx, cy, rIn, rOut, startDeg, endDeg, count, opts) {
+        opts = opts || {};
+        const n = Math.max(1, Math.min(180, count | 0));
+        const majorEvery = opts.majorEvery || 5;
+        const majorLen = opts.majorLen || 8;
+        c.save();
+        c.lineCap = "round";
+        for (let i = 0; i <= n; i++) {
+          const f = i / n;
+          const ang = (startDeg + (endDeg - startDeg) * f) * Math.PI / 180;
+          const isMaj = (i % majorEvery) === 0;
+          const isRed = opts.redFromFrac !== undefined && f >= opts.redFromFrac;
+          const r0 = isMaj ? (rIn - majorLen) : rIn;
+          c.strokeStyle = isRed ? (opts.redColor || "#ef4444") : (opts.color || "rgba(255,255,255,0.45)");
+          c.lineWidth = isMaj ? (opts.majorWidth || 3) : (opts.lineWidth || 1.5);
+          c.beginPath();
+          c.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+          c.lineTo(cx + Math.cos(ang) * rOut, cy + Math.sin(ang) * rOut);
+          c.stroke();
+        }
+        c.restore();
+      },
+
+      needle(cx, cy, len, tail, angleDeg, opts) {
+        opts = opts || {};
+        const ang = angleDeg * Math.PI / 180;
+        const w = opts.width || 6;
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(ang);
+        if (opts.glow > 0) { c.shadowBlur = opts.glow; c.shadowColor = opts.tipColor || opts.color || "#ff3b4e"; }
+        const grd = c.createLinearGradient(-tail, 0, len, 0);
+        grd.addColorStop(0, opts.color || "#ffffff");
+        grd.addColorStop(0.7, opts.color || "#ffffff");
+        grd.addColorStop(1, opts.tipColor || opts.color || "#ff3b4e");
+        c.fillStyle = grd;
+        c.beginPath();
+        c.moveTo(len, 0);
+        c.lineTo(0, -w * 0.55);
+        c.lineTo(-tail, -w * 0.32);
+        c.lineTo(-tail, w * 0.32);
+        c.lineTo(0, w * 0.55);
+        c.closePath();
+        c.fill();
+        if (opts.hubRadius) {
+          c.shadowBlur = 0;
+          c.fillStyle = opts.hubColor || "#111827";
+          c.strokeStyle = "rgba(255,255,255,0.28)";
+          c.lineWidth = 2;
+          c.beginPath(); c.arc(0, 0, opts.hubRadius, 0, Math.PI * 2); c.fill(); c.stroke();
+        }
+        c.restore();
+      },
+
+      segBar(x, y, w, h, frac, opts) {
+        opts = opts || {};
+        const nseg = Math.max(4, Math.min(48, opts.segs || 18));
+        const redSegs = opts.redSegs === undefined ? 4 : opts.redSegs;
+        const f = Math.max(0, Math.min(1, Number(frac) || 0));
+        const slant = h * 0.42;
+        const gap = 3;
+        const sw = (w - slant - gap * (nseg - 1)) / nseg;
+        const litPos = f * nseg;
+        const pulse = opts.pulse ? (0.72 + 0.28 * Math.sin(bus.sys.time * 20)) : 1.0;
+
+        c.save();
+        for (let s = 0; s < nseg; s++) {
+          const isRed = s >= nseg - redSegs;
+          const isWarn = !isRed && redSegs >= 3 && s >= nseg - redSegs - 2;
+          const fillAmt = Math.max(0, Math.min(1, litPos - s));
+          const sx = x + s * (sw + gap);
+          c.beginPath();
+          c.moveTo(sx + slant, y);
+          c.lineTo(sx + slant + sw, y);
+          c.lineTo(sx + sw, y + h);
+          c.lineTo(sx, y + h);
+          c.closePath();
+          // 未点亮槽
+          c.fillStyle = isRed ? "rgba(138,32,48,0.75)" : "rgba(42,56,70,0.62)";
+          c.fill();
+          if (fillAmt > 0.02) {
+            c.fillStyle = isRed ? (opts.redColor || "#ff3848") : (isWarn ? (opts.warnColor || "#ffbc34") : (opts.color || "#2ae8c4"));
+            c.globalAlpha = fillAmt * pulse;
+            c.fill();
+            c.globalAlpha = 1;
+          }
+        }
+        c.restore();
+      },
+
+      biBar(x, y, w, h, signedFrac, opts) {
+        opts = opts || {};
+        const f = Math.max(-1, Math.min(1, Number(signedFrac) || 0));
+        const mid = x + w / 2;
+        c.save();
+        c.fillStyle = "rgba(42,56,70,0.65)";
+        c.fillRect(x, y + 1, w, h - 2);
+        const cur = mid + f * (w / 2 - 4);
+        c.fillStyle = f >= 0 ? (opts.posColor || "#40c4ff") : (opts.negColor || "#fb923c");
+        c.fillRect(Math.min(mid, cur), y + 1, Math.abs(cur - mid), h - 2);
+        c.fillStyle = "#eaf6ff";
+        c.fillRect(cur - 2, y - 1, 4, h + 2);
+        c.fillStyle = "rgba(220,232,245,0.85)";
+        c.fillRect(mid - 1, y - 2, 2, h + 4);
+        c.restore();
+      },
+
+      rangeBar(x, y, w, h, frac, opts) {
+        opts = opts || {};
+        const f = Math.max(0, Math.min(1, Number(frac) || 0));
+        c.save();
+        c.fillStyle = "rgba(42,56,70,0.65)";
+        c.fillRect(x, y + 1, w, h - 2);
+        c.fillStyle = opts.color || "#44e498";
+        c.fillRect(x, y + 1, w * f, h - 2);
+        if (opts.tickLo > 0 && opts.tickLo < 1) {
+          c.fillStyle = "rgba(195,210,225,0.75)";
+          c.fillRect(x + w * opts.tickLo, y - 1, 2, h + 2);
+        }
+        if (opts.tickHi > 0 && opts.tickHi < 1) {
+          c.fillStyle = "rgba(255,110,110,0.8)";
+          c.fillRect(x + w * opts.tickHi, y - 1, 2, h + 2);
+        }
+        c.restore();
+      },
+
+      text(str, x, y, opts) {
+        opts = opts || {};
+        c.save();
+        const weight = opts.bold ? "800" : "600";
+        const style = opts.italic ? "italic " : "";
+        c.font = style + weight + " " + (opts.size || 24) + "px -apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif";
+        c.fillStyle = opts.color || "#ffffff";
+        c.textAlign = opts.align || "left";
+        c.textBaseline = opts.baseline || "alphabetic";
+        if (opts.glow > 0) { c.shadowBlur = opts.glow; c.shadowColor = opts.glowColor || opts.color || "#38bdf8"; }
+        if (opts.maxWidth) c.fillText(String(str), x, y, opts.maxWidth);
+        else c.fillText(String(str), x, y);
+        c.restore();
+      },
+
+      drawTurnArrow(x, y, size, type, opts) {
+        drawTurnArrowInternal(c, x, y, size, type, (opts && opts.color) || "#ffffff");
+      },
+
+      drawNavCard(x, y, w, h, opts) {
+        opts = opts || {};
+        const alpha = ((opts.alpha !== undefined ? opts.alpha : dashConf.alpha) / 255).toFixed(3);
+        c.save();
+        c.fillStyle = "rgba(14,18,24," + alpha + ")";
+        c.strokeStyle = "rgba(180,210,240,0.22)";
+        c.lineWidth = 1.5;
+        c.beginPath(); c.roundRect(x, y, w, h, 12); c.fill(); c.stroke();
+
+        // 顶部高光边
+        c.fillStyle = "rgba(210,225,240,0.24)";
+        c.fillRect(x + 12, y, w - 24, 1.5);
+
+        // 转向图标块
+        c.fillStyle = "rgba(56,189,248,0.16)";
+        c.beginPath(); c.roundRect(x + 14, y + 14, 58, 58, 12); c.fill();
+        drawTurnArrowInternal(c, x + 19, y + 19, 48, bus.nav.turnType, "#ffffff");
+
+        // 距离 + 动作
+        c.fillStyle = "#ffffff";
+        c.font = "800 36px -apple-system,PingFang SC,sans-serif";
+        c.textAlign = "left";
+        c.fillText(bus.nav.distM + " m", x + 84, y + 48);
+        c.fillStyle = "#6cd6ff";
+        c.font = "700 19px -apple-system,PingFang SC,sans-serif";
+        c.fillText(bus.nav.action, x + 84, y + 72);
+
+        // 路名
+        c.fillStyle = "#f8fafc";
+        c.font = "700 25px -apple-system,PingFang SC,sans-serif";
+        c.fillText(bus.nav.road, x + 14, y + 122, w - 28);
+
+        // 车道指引模拟
+        const lanes = bus.nav.lanes || [];
+        if (lanes.length) {
+          const lx0 = x + (w - lanes.length * 36) / 2;
+          for (let i = 0; i < lanes.length; i++) {
+            const rec = lanes[i].rec;
+            c.fillStyle = rec ? "rgba(56,189,248,0.25)" : "rgba(255,255,255,0.06)";
+            c.beginPath(); c.roundRect(lx0 + i * 36, y + 136, 30, 32, 6); c.fill();
+            c.fillStyle = rec ? "#38bdf8" : "#64748b";
+            c.font = "700 18px -apple-system,sans-serif";
+            c.textAlign = "center";
+            c.fillText(lanes[i].dir, lx0 + i * 36 + 15, y + 158);
+          }
+        }
+
+        // 分割线 + 底部三行
+        const divY = y + h - 134;
+        c.strokeStyle = "rgba(255,255,255,0.14)";
+        c.beginPath(); c.moveTo(x + 14, divY); c.lineTo(x + w - 14, divY); c.stroke();
+
+        const rows = [
+          ["剩余路程", bus.nav.remDistKm.toFixed(1) + " km"],
+          ["剩余时间", bus.nav.remMin + " 分钟"],
+          ["预计到达", bus.nav.eta]
+        ];
+        rows.forEach((r, idx) => {
+          const ry = divY + 34 + idx * 41;
+          c.textAlign = "left";
+          c.fillStyle = "#cbd5e1";
+          c.font = "600 19px -apple-system,PingFang SC,sans-serif";
+          c.fillText(r[0], x + 14, ry);
+          c.textAlign = "right";
+          c.fillStyle = "#ffffff";
+          c.font = "800 25px -apple-system,PingFang SC,sans-serif";
+          c.fillText(r[1], x + w - 14, ry);
+        });
+        c.restore();
+      },
+
+      drawDashBox(x, y, w, side) {
+        const items = side === "right" ? dashConf.r_items : dashConf.items;
+        if (!items || !items.length) return;
+        const n = items.length;
+        const tier = n <= 5 ? { row: 66, val: 42, lab: 21, unit: 15, bh: 9 } :
+                     n === 6 ? { row: 55, val: 36, lab: 19, unit: 14, bh: 8 } :
+                     n <= 8 ? { row: 42, val: 28, lab: 17, unit: 13, bh: 6 } :
+                              { row: 34, val: 23, lab: 15, unit: 12, bh: 0 };
+        const padY = 8, boxH = padY * 2 + tier.row * n;
+
+        c.save();
+        c.fillStyle = "rgba(14,18,24," + (dashConf.alpha / 255).toFixed(3) + ")";
+        c.strokeStyle = "rgba(180,210,240,0.18)";
+        c.lineWidth = 1.5;
+        c.beginPath(); c.roundRect(x, y, w, boxH, 12); c.fill(); c.stroke();
+
+        items.forEach((k, idx) => {
+          const it = ITEMS[k]; if (!it) return;
+          const ry = y + padY + idx * tier.row;
+          if (idx > 0) {
+            c.strokeStyle = "rgba(185,205,225,0.13)";
+            c.beginPath(); c.moveTo(x + 13, ry); c.lineTo(x + w - 13, ry); c.stroke();
+          }
+          const showBar = dashConf.bars && tier.bh > 0 && it[2];
+          const baseY = ry + (showBar ? tier.row - 19 : tier.row - 11);
+
+          c.textAlign = "left";
+          c.fillStyle = "#dce3ec";
+          c.font = "700 " + tier.lab + "px -apple-system,PingFang SC,sans-serif";
+          c.fillText(it[0], x + 13, baseY);
+
+          const unit = (k === "fuel" && !dashConf.tank_l) ? "%" : it[1];
+          let rx = x + w - 13;
+          if (unit) {
+            c.textAlign = "right";
+            c.fillStyle = "#9ca8b8";
+            c.font = "600 " + tier.unit + "px -apple-system,sans-serif";
+            c.fillText(unit, rx, baseY);
+            rx -= c.measureText(unit).width + 5;
+          }
+          c.textAlign = "right";
+          c.fillStyle = "#ffffff";
+          c.font = "800 " + tier.val + "px -apple-system,sans-serif";
+          c.fillText(fmtItemVal(k), rx, baseY);
+
+          if (showBar) {
+            const bx = x + 13, by = ry + tier.row - tier.bh - 4, bw = w - 26;
+            const smVal = Number(bus[k]) || 0;
+            if (it[2] === "seg") {
+              const col = k === "rpm" ? "#2ae8c4" : (k === "brake" ? "#ff9438" : "#38d4ff");
+              api.segBar(bx, by, bw, tier.bh, smVal / it[3], { segs: 18, redSegs: k === "rpm" ? 4 : 3, color: col });
+            } else if (it[2] === "bi") {
+              api.biBar(bx, by, bw, tier.bh, smVal / it[3], {});
+            } else if (it[2] === "rng") {
+              let f = smVal / it[3], col = "#44e498";
+              if (k === "oil") { f = (smVal - 50) / 80; col = smVal < 76 ? "#48c0ff" : (smVal >= 115 ? "#ff4448" : "#44e498"); }
+              else if (k === "gearbox") { f = (smVal - 40) / 80; col = smVal < 60 ? "#48c0ff" : (smVal >= 106 ? "#ff4448" : "#44e498"); }
+              else if (k === "tires") { f = (bus.tpfl - 1.5) / 1.7; col = bus.tpfl < 2.0 ? "#ff4448" : "#44e498"; }
+              api.rangeBar(bx, by, bw, tier.bh, f, { color: col, tickLo: 0.35, tickHi: 0.82 });
+            }
+          }
+        });
+        c.restore();
+      }
+    };
+    return api;
+  }
+
+  // ==================== 7. 途锐 3.0T ZF 8AT 物理试驾引擎 ====================
+  function stepPhysics(dt) {
+    if (env.driveMode === "csv" && csvFrames.length > 0) {
+      const dur = csvFrames[csvFrames.length - 1].t || 1;
+      csvTime = (csvTime + dt) % dur;
+      let lo = 0, hi = csvFrames.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (csvFrames[m].t < csvTime) lo = m + 1; else hi = m; }
+      const f = csvFrames[lo];
+      Object.assign(phys, f);
+      phys.roadOffset += (phys.speed / 3.6) * dt * 16;
+      return;
+    }
+
+    let tgtGas = 0, tgtBrake = 0, tgtSteer = 0;
+
+    if (env.driveMode === "manual") {
+      if (launchActive) {
+        launchT += dt;
+        if (launchPhase === 0) { // 1s 弹射蓄力
+          tgtGas = 85; tgtBrake = 100; phys.speed = 0;
+          if (launchT > 0.7) { launchPhase = 1; launchT = 0; phys.t100Armed = true; phys.t100Running = false; }
+        } else if (launchPhase === 1) { // 全油门冲刺到 125 km/h
+          tgtGas = 100; tgtBrake = 0;
+          if (phys.speed >= 122) { launchPhase = 2; launchT = 0; }
+        } else { // 制动减速
+          tgtGas = 0; tgtBrake = 75;
+          if (phys.speed <= 18 || launchT > 3.5) launchActive = false;
+        }
+      } else {
+        tgtGas = (input.gas || input.boost) ? 100 : 0;
+        tgtBrake = input.brake ? 100 : 0;
+        tgtSteer = (input.right ? 260 : 0) - (input.left ? 260 : 0);
+      }
+    } else if (env.driveMode === "auto_city") {
+      const t = simClock;
+      tgtGas = Math.max(0, 28 + 26 * Math.sin(t * 0.45));
+      tgtBrake = tgtGas < 8 ? 35 : 0;
+      tgtSteer = 95 * Math.sin(t * 0.52);
+    } else if (env.driveMode === "auto_pull") {
+      const ph = simClock % 12;
+      if (ph < 1.0) { tgtGas = 0; tgtBrake = 60; }
+      else if (ph < 7.8) { tgtGas = 100; tgtBrake = 0; }
+      else { tgtGas = 0; tgtBrake = 78; }
+      tgtSteer = 25 * Math.sin(simClock * 0.9);
+    } else if (env.driveMode === "auto_offroad") {
+      tgtGas = 38 + 18 * Math.sin(simClock * 0.6);
+      tgtBrake = 0;
+      tgtSteer = 220 * Math.sin(simClock * 0.7);
+      phys.pitch = 8.5 * Math.sin(simClock * 0.42) + 3.2;
+      phys.roll = 9.5 * Math.sin(simClock * 0.68);
+      phys.alt = 320 + 45 * Math.sin(simClock * 0.15) + simClock * 1.4;
+    }
+
+    // 油门/制动/转向平滑响应
+    phys.pedal += (tgtGas - phys.pedal) * Math.min(1, dt * 11);
+    const tgtBrkBar = tgtBrake * 0.82;
+    phys.brake += (tgtBrkBar - phys.brake) * Math.min(1, dt * 14);
+    phys.steer += (tgtSteer - phys.steer) * Math.min(1, dt * 6.5);
+
+    // 换挡逻辑（ZF 8AT）
+    if (phys.shiftTimer > 0) phys.shiftTimer = Math.max(0, phys.shiftTimer - dt);
+    const ratio = GEAR_RATIOS[phys.gear - 1];
+    let targetRpm = Math.max(680, phys.speed * ratio + (phys.pedal > 5 && phys.speed < 8 ? phys.pedal * 18 : 0));
+    if (launchActive && launchPhase === 0) targetRpm = 2900; // 弹射憋转速！
+    if (phys.shiftTimer > 0) targetRpm *= 0.86;
+    phys.rpm += (targetRpm - phys.rpm) * Math.min(1, dt * 14);
+    if (phys.rpm > 6650) phys.rpm = 6650 - Math.random() * 110;
+
+    // 自动升/降挡
+    const upshiftRpm = phys.pedal > 70 ? 6250 : (phys.pedal > 35 ? 3600 : 2100);
+    const downshiftRpm = phys.pedal > 70 ? 3100 : 1250;
+    if (phys.shiftTimer <= 0) {
+      if (phys.rpm >= upshiftRpm && phys.gear < 8 && phys.speed > 18) {
+        phys.gear++;
+        phys.shiftTimer = 0.13;
+      } else if (phys.rpm <= downshiftRpm && phys.gear > 1) {
+        phys.gear--;
+        phys.shiftTimer = 0.10;
+      }
+      if (phys.speed < 4) phys.gear = 1;
+    }
+
+    // 3.0T V6 扭矩曲线（1340-5300 rpm 满 450 Nm 高原）
+    let maxTqAtRpm = 450;
+    if (phys.rpm < 1350) maxTqAtRpm = 140 + (phys.rpm - 680) * 0.45;
+    else if (phys.rpm > 5400) maxTqAtRpm = 450 - (phys.rpm - 5400) * 0.085;
+    const reqTq = Math.max(22, maxTqAtRpm * (phys.pedal / 100) * (phys.shiftTimer > 0 ? 0.45 : 1.0));
+    phys.torque += (reqTq - phys.torque) * Math.min(1, dt * 12);
+    phys.power = Math.min(265, (phys.torque * phys.rpm) / 9549);
+
+    // 纵向加速度（m/s^2 -> g）
+    const drag = 0.00018 * phys.speed * phys.speed + 0.14;
+    const driveAcc = (phys.pedal > 1 && !(launchActive && launchPhase === 0))
+      ? ((phys.power * 3.1) / Math.max(24, phys.speed + 16)) * (phys.shiftTimer > 0 ? 0.3 : 1.0)
+      : 0;
+    const brakeDec = (phys.brake / 80) * 8.6;
+    const ax = (phys.speed <= 0.1 && driveAcc <= drag) ? 0 : (driveAcc - brakeDec - drag);
+    phys.speed = Math.max(0, Math.min(255, phys.speed + ax * 3.6 * dt));
+    phys.glong += ((ax / 9.81) - phys.glong) * Math.min(1, dt * 10);
+
+    // 横向 G 与车身姿态
+    const latTgt = Math.max(-0.82, Math.min(0.82, (phys.steer / 450) * Math.min(1, phys.speed / 55) * 0.72));
+    phys.glat += (latTgt - phys.glat) * Math.min(1, dt * 9);
+    if (env.driveMode !== "auto_offroad") {
+      phys.pitch += ((phys.glong * 5.2) - phys.pitch) * Math.min(1, dt * 6);
+      phys.roll += ((phys.glat * 6.8) - phys.roll) * Math.min(1, dt * 6);
+    }
+
+    // 0-100 真实计时状态机
+    if (phys.speed < 0.8) { phys.t100Armed = true; phys.t100Running = false; }
+    else if (phys.t100Armed && phys.speed >= 1.2 && !phys.t100Running && phys.pedal > 40) {
+      phys.t100Running = true; phys.t100Armed = false; phys.t100Start = simClock;
+    }
+    if (phys.t100Running) {
+      const el = simClock - phys.t100Start;
+      phys.t100 = el;
+      if (phys.speed >= 100) { phys.t100Running = false; }
+      else if (el > 25 || phys.brake > 10) { phys.t100Running = false; }
+    }
+
+    // 极值与油温油耗
+    if (phys.power > phys.pmax) phys.pmax = phys.power;
+    if (phys.torque > phys.tqmax) phys.tqmax = phys.torque;
+    const gMag = Math.hypot(phys.glong, phys.glat);
+    if (gMag > phys.gmax) phys.gmax = gMag;
+
+    const tgtOil = 92 + (phys.power / 265) * 20;
+    phys.oil += (tgtOil - phys.oil) * dt * 0.12;
+    phys.gearbox += ((76 + (phys.power / 265) * 18) - phys.gearbox) * dt * 0.08;
+    phys.cons = phys.speed < 3 ? 1.4 : Math.max(0, 5.2 + (phys.pedal * 0.34));
+    phys.roadOffset += (phys.speed / 3.6) * dt * 16;
+
+    // 导航距离递减循环
+    if (env.navLive && phys.speed > 1) {
+      phys.navDistM -= (phys.speed / 3.6) * dt;
+      if (phys.navDistM < 15) {
+        phys.navDistM = 280 + Math.round(Math.random() * 240);
+        phys.navRoadIdx = (phys.navRoadIdx + 1) % NAV_ROADS.length;
+      }
+    }
+  }
+
+  function snapshotFromPhys() {
+    const gMag = Math.hypot(phys.glong, phys.glat);
+    const signedG = phys.glong < -0.02 ? -gMag : gMag;
+    const gearStr = phys.speed < 0.2 && phys.brake > 10 && phys.pedal < 2 ? "D1" : ((phys.pedal > 78 ? "S" : "D") + phys.gear);
+    return {
+      rpm: Math.round(phys.rpm), speed: +phys.speed.toFixed(1),
+      power: +phys.power.toFixed(1), torque: Math.round(phys.torque),
+      pedal: Math.round(phys.pedal), brake: +phys.brake.toFixed(1),
+      steer: Math.round(phys.steer), gear: gearStr, gearNum: phys.gear,
+      g: +signedG.toFixed(2), glong: +phys.glong.toFixed(2), glat: +phys.glat.toFixed(2),
+      oil: Math.round(phys.oil), gearbox: Math.round(phys.gearbox),
+      coolant: Math.round(phys.coolant), outside: phys.outside,
+      cons: +phys.cons.toFixed(1), fuel: Math.round(phys.fuel), range: Math.round(phys.range),
+      pitch: +phys.pitch.toFixed(1), roll: +phys.roll.toFixed(1), alt: Math.round(phys.alt),
+      tpfl: phys.tpfl, tpfr: phys.tpfr, tprl: phys.tprl, tprr: phys.tprr,
+      tires: ((phys.tpfl + phys.tpfr) / 2).toFixed(1) + "·" + ((phys.tprl + phys.tprr) / 2).toFixed(1),
+      t100: phys.t100, t100Running: phys.t100Running,
+      pmax: phys.pmax, tqmax: phys.tqmax, gmax: phys.gmax,
+      trip: 9.8, tripdist: 34, tripspeed: 48, triptime: "0:42",
+      refuel: 10.6, refueldist: 268, refuelspeed: 51, refueltime: "5:12",
+      total: 11.2, totaldist: 2410, totalspeed: 49, totaltime: "49:10", tripkm: 518.4
+    };
+  }
+
+  function buildBus(dt) {
+    // 10Hz 更新 rawSnap（100% 模拟车机 Dash.java 真实 10Hz 输出）
+    canAccum += dt;
+    if (canAccum >= 0.10) {
+      canAccum -= 0.10;
+      if (canAccum > 0.2) canAccum = 0;
+      rawSnap = snapshotFromPhys();
+    }
+
+    // 60fps 阻尼插值（开启对比关闭可肉眼看 60fps 丝滑 vs 10Hz 阶跃！）
+    const alpha = env.smooth60 ? (1 - Math.exp(-15 * dt)) : 1.0;
+    const smoothKeys = ["rpm", "speed", "power", "torque", "pedal", "brake", "steer", "g", "glong", "glat", "pitch", "roll", "oil", "gearbox", "alt"];
+    for (const k of Object.keys(rawSnap)) {
+      if (smoothKeys.indexOf(k) >= 0) {
+        smoothBus[k] = (smoothBus[k] === undefined) ? rawSnap[k] : (smoothBus[k] + (rawSnap[k] - smoothBus[k]) * alpha);
+        smoothBus[k + "Raw"] = rawSnap[k];
+      } else {
+        smoothBus[k] = rawSnap[k];
+      }
+    }
+
+    // 转速峰值滞留游标
+    if (smoothBus.rpm >= smoothBus.rpmPeak) {
+      smoothBus.rpmPeak = smoothBus.rpm;
+      rpmPeakHold = 0.45;
+    } else if (rpmPeakHold > 0) {
+      rpmPeakHold -= dt;
+    } else {
+      smoothBus.rpmPeak += (smoothBus.rpm - smoothBus.rpmPeak) * Math.min(1, dt * 4.5);
+    }
+
+    const r = NAV_ROADS[phys.navRoadIdx];
+    const nowDate = new Date(Date.now() + 14 * 60000);
+    const etaStr = String(nowDate.getHours()).padStart(2, "0") + ":" + String(nowDate.getMinutes()).padStart(2, "0");
+
+    smoothBus.nav = {
+      live: env.navLive,
+      distM: Math.max(10, Math.round(phys.navDistM / 10) * 10),
+      remDistKm: 8.6,
+      remMin: 14,
+      eta: etaStr,
+      road: r.road,
+      nextRoad: r.next,
+      action: r.action,
+      turnType: r.type,
+      lanes: [
+        { dir: "↑", rec: false },
+        { dir: "↑", rec: false },
+        { dir: r.type === "left" ? "↰" : "↱", rec: true },
+        { dir: "↱", rec: r.type !== "left" }
+      ]
+    };
+    smoothBus.ready = {
+      oil: !env.coldStart,
+      gearbox: !env.coldStart,
+      tires: !env.coldStart,
+      t100: phys.t100 > 0 && !env.coldStart,
+      alt: !env.coldStart
+    };
+    if (env.coldStart) {
+      // 模拟实车刚通电未就绪：C 端保证全为有限数字 0（绝不传 null/NaN 导致 .toFixed 崩溃）
+      smoothBus.oil = 0; smoothBus.oilRaw = 0;
+      smoothBus.gearbox = 0; smoothBus.gearboxRaw = 0;
+      smoothBus.tpfl = 0; smoothBus.tpfr = 0; smoothBus.tprl = 0; smoothBus.tprr = 0;
+      smoothBus.tires = "--·--";
+      smoothBus.alt = 0; smoothBus.altRaw = 0;
+      smoothBus.t100 = 0;
+    }
+
+    smoothBus.sys = {
+      mapLive: env.carplayConnected && !env.userNativeMap,
+      night: env.night,
+      acc: env.acc,
+      time: simClock,
+      dt: dt,
+      fps: renderFpsMeasured,
+      mapFps: mapFpsMeasured,
+      width: W,
+      height: H
+    };
+    smoothBus.conf = dashConf;
+    return smoothBus;
+  }
+
+  // ==================== 8. 原车遮挡参考线 + 长按 OK 进度环 + 报错安全横幅 ====================
+  function drawOemGuides(bus) {
+    const c = g2d;
+    c.save();
+    // 顶部原车信息栏（y=0..156 边缘线，实测 y=156，时钟中心 x=965）
+    c.fillStyle = "rgba(0,0,0,0.48)";
+    c.fillRect(0, 0, W, 56);
+    c.strokeStyle = "rgba(56,189,248,0.28)";
+    c.setLineDash([8, 6]);
+    c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(0, 156); c.lineTo(W, 156); c.stroke();
+    c.setLineDash([]);
+
+    const now = new Date();
+    const hm = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+    c.fillStyle = "#e2e8f0";
+    c.font = "700 22px -apple-system,sans-serif";
+    c.textAlign = "center";
+    c.fillText(hm + "   " + bus.outside + "°C   途锐 3.0T · 运动", 965, 36);
+    c.fillStyle = "rgba(148,163,184,0.65)";
+    c.font = "600 13px -apple-system,sans-serif";
+    c.fillText("▲ 原车顶部导航条底边参考线 (y=156, 时钟中心 x=965)", 965, 148);
+
+    // 左下原车挡位梯形 & 右下车速梯形（实测 y=509, x=300）
+    c.fillStyle = "rgba(2,6,14,0.62)";
+    c.strokeStyle = "rgba(56,189,248,0.45)";
+    c.lineWidth = 2;
+    c.beginPath(); c.moveTo(0, 509); c.lineTo(295, 509); c.lineTo(355, H); c.lineTo(0, H); c.closePath(); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(W, 509); c.lineTo(1625, 509); c.lineTo(1565, H); c.lineTo(W, H); c.closePath(); c.fill(); c.stroke();
+
+    c.fillStyle = "#e2e8f0";
+    c.font = "800 44px -apple-system,sans-serif";
+    c.textAlign = "left"; c.fillText(bus.gear, 36, 594);
+    c.textAlign = "right"; c.fillText(Math.round(bus.speed) + " km/h", W - 36, 594);
+
+    // 底部正中 ACC 自适应巡航原车遮挡区（实测开启 ACC 时原车在底部居中绘制跟车图标，约 x=760..1160, y=495..639）
+    if (env.acc) {
+      c.fillStyle = "rgba(10, 18, 30, 0.78)";
+      c.strokeStyle = "rgba(251, 191, 36, 0.85)";
+      c.lineWidth = 2;
+      c.setLineDash([7, 5]);
+      c.beginPath(); c.roundRect(760, 495, 400, 140, 14); c.fill(); c.stroke();
+      c.setLineDash([]);
+
+      // 模拟大众原车 ACC 跟车车道与跟车距横条
+      c.strokeStyle = "rgba(56,189,248,0.8)";
+      c.lineWidth = 3;
+      c.beginPath(); c.moveTo(855, 622); c.lineTo(902, 526); c.moveTo(1065, 622); c.lineTo(1018, 526); c.stroke();
+      c.fillStyle = "#38bdf8";
+      c.fillRect(928, 558, 64, 5);
+      c.fillRect(920, 574, 80, 5);
+      c.fillRect(910, 592, 100, 6);
+      c.fillStyle = "#fbbf24";
+      c.font = "700 15px -apple-system,PingFang SC,sans-serif";
+      c.textAlign = "center";
+      c.fillText("▲ 原车 ACC 巡航遮挡区 (x=760..1160, y=495..639)", 960, 518);
+      c.fillStyle = "#e2e8f0";
+      c.font = "800 18px -apple-system,sans-serif";
+      c.fillText("ACC 巡航 110 km/h", 960, 624);
+    }
+    c.restore();
+  }
+
+  function drawOkHoldRing(nowMs) {
+    if (!okKey.down || okKey.firedLong) return;
+    const held = (nowMs - okKey.downAt) / 1000;
+    if (held < 0.22) return;
+    const frac = Math.min(1, (held - 0.22) / 1.78);
+    const c = g2d;
+    c.save();
+    const cx = 960, cy = 285, r = 56;
+    c.fillStyle = "rgba(8,14,26,0.86)";
+    c.beginPath(); c.arc(cx, cy, r + 14, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "rgba(255,255,255,0.16)";
+    c.lineWidth = 9;
+    c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = "#22d3ee";
+    c.shadowBlur = 16; c.shadowColor = "#22d3ee";
+    c.lineCap = "round";
+    c.beginPath(); c.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); c.stroke();
+    c.shadowBlur = 0;
+    c.fillStyle = "#ffffff";
+    c.font = "800 22px -apple-system,PingFang SC,sans-serif";
+    c.textAlign = "center";
+    c.fillText("切换风格", cx, cy + 8);
+    c.fillStyle = "#94a3b8";
+    c.font = "600 16px -apple-system,sans-serif";
+    c.fillText("长按 OK 2秒 (" + (2 - held).toFixed(1) + "s)", cx, cy + r + 38);
+    c.restore();
+  }
+
+  function drawTopBanner(nowMs) {
+    if (!bannerMsg || nowMs > bannerMsg.until) return;
+    const c = g2d;
+    c.save();
+    const isErr = bannerMsg.level === "err";
+    const isWarn = bannerMsg.level === "warn";
+    const bg = isErr ? "rgba(185, 28, 28, 0.94)" : (isWarn ? "rgba(180, 83, 9, 0.94)" : "rgba(14, 116, 144, 0.92)");
+    const bd = isErr ? "#fca5a5" : (isWarn ? "#fcd34d" : "#67e8f9");
+    c.fillStyle = bg;
+    c.strokeStyle = bd;
+    c.lineWidth = 2;
+    c.beginPath(); c.roundRect(280, 66, 1360, 56, 14); c.fill(); c.stroke();
+    c.fillStyle = "#ffffff";
+    c.font = "700 22px -apple-system,PingFang SC,sans-serif";
+    c.textAlign = "center";
+    c.fillText(bannerMsg.text, 960, 102, 1320);
+    c.restore();
+  }
+
+  // ==================== 9. 主 60fps 渲染循环 ====================
+  let lastFrameTs = performance.now();
+
+  function tick(now) {
+    const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameTs) / 1000));
+    lastFrameTs = now;
+    simClock += dt;
+
+    // 方向盘长按 OK 2 秒检测
+    if (okKey.down && !okKey.firedLong && (now - okKey.downAt) >= 2000) {
+      okKey.firedLong = true;
+      cycleNextTheme();
+    }
+
+    // 1. 推进物理或轨迹
+    stepPhysics(dt);
+    const bus = buildBus(dt);
+
+    // 2. 更新底图（CarPlay 锁定 20fps 或原车地图）
+    mapAccum += dt;
+    const mapInterval = env.lockMap20fps ? 0.05 : 0.016;
+    if (mapAccum >= mapInterval) {
+      mapAccum -= mapInterval;
+      if (mapAccum > 0.1) mapAccum = 0;
+      if (env.carplayConnected && !env.userNativeMap) {
+        drawSimulatedCarPlayMap();
+        mapFrameCount++;
+      } else {
+        drawStockVWMap();
+      }
+    }
+
+    // 3. 决定是否显示大众原车地图 [33]
+    const showStockMap = env.userNativeMap || (!env.carplayConnected && !env.idleFullscreen);
+
+    if (showStockMap) {
+      g2d.drawImage(stockCanvas, 0, 0);
+    } else if (env.forceLegacy22) {
+      // 保险丝第 2 层：手动退回 v22.1 经典通道（仅显示默认经典皮肤）
+      const drawCtx = createDrawCtx(bus);
+      if (compiledFallback && compiledFallback.run) compiledFallback.run(drawCtx, bus, {});
+      g2d.save();
+      g2d.fillStyle = "rgba(15,23,42,0.82)";
+      g2d.beginPath(); g2d.roundRect(740, 68, 440, 38, 10); g2d.fill();
+      g2d.fillStyle = "#fde047"; g2d.font = "700 18px -apple-system,sans-serif"; g2d.textAlign = "center";
+      g2d.fillText("保险丝第 2 层：已手动退回 v22.1 经典稳定通道", 960, 93);
+      g2d.restore();
+    } else {
+      // 正常 60fps .js 皮肤沙盒执行（带异常 & 超时自动回退！）
+      const drawCtx = createDrawCtx(bus);
+      const runner = (!fallbackActive && compiledCurrent && compiledCurrent.run) ? compiledCurrent : compiledFallback;
+      const tRun0 = performance.now();
+      try {
+        if (!runner || !runner.run) throw new Error("默认皮肤引擎未初始化");
+        runner.run(drawCtx, bus, themeState);
+        const runMs = performance.now() - tRun0;
+        if (!fallbackActive && runMs > 12) {
+          slowFrames++;
+          if (slowFrames >= 30) {
+            throw new Error("连续 30 帧单帧耗时 " + runMs.toFixed(1) + "ms（掉帧看门狗熔断）");
+          }
+        } else {
+          slowFrames = 0;
+        }
+      } catch (e) {
+        if (!fallbackActive) {
+          const ln = extractLineNum(e, 5);
+          const lnTxt = ln ? ("第 " + ln + " 行：") : "";
+          const errText = "AI 皮肤运行异常（" + lnTxt + (e.message || e) + "）";
+          fallbackActive = true;
+          themeStatus.ok = false;
+          themeStatus.fallback = true;
+          themeStatus.error = errText;
+          showBanner("⚠️ " + errText + " · 已自动回退官方默认 60fps 皮肤", "err", 7.0);
+          updateStatusUI();
+        }
+        // 当帧立刻用默认皮肤补画，0 黑屏！
+        if (compiledFallback && compiledFallback.run) compiledFallback.run(drawCtx, bus, {});
+      }
+    }
+
+    // 4. 叠画原车硬件遮挡参考线、长按 OK 环与顶部安全横幅
+    if (env.oemGuides) drawOemGuides(bus);
+    drawOkHoldRing(now);
+    drawTopBanner(now);
+
+    // 5. FPS 统计与顶部实时读数刷新
+    renderFrames++;
+    if (now - fpsLastTs >= 500) {
+      const sec = (now - fpsLastTs) / 1000;
+      renderFpsMeasured = Math.round(renderFrames / sec);
+      mapFpsMeasured = env.carplayConnected && !env.userNativeMap ? Math.round(mapFrameCount / sec) : 0;
+      renderFrames = 0; mapFrameCount = 0; fpsLastTs = now;
+      themeStatus.fps = renderFpsMeasured;
+      themeStatus.map_fps = mapFpsMeasured;
+      updateLiveHudBar(bus);
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // ==================== 10. UI 交互绑定 ====================
+  function updateLiveHudBar(bus) {
+    const elFps = document.getElementById("fpsBadge");
+    if (elFps) {
+      elFps.textContent = "仪表 " + renderFpsMeasured + " fps · 地图底图 " + (bus.sys.mapLive ? mapFpsMeasured + " fps" : "已断开");
+    }
+    const elSpd = document.getElementById("liveTele");
+    if (elSpd) {
+      const parkTag = bus.speed <= 3 ? "🟢 停车(可改配置)" : "🔴 行驶中(8080停车锁)";
+      elSpd.textContent = Math.round(bus.speed) + " km/h · " + Math.round(bus.rpmRaw) + " rpm · " + bus.gear + " · " + parkTag;
+    }
+  }
+
+  function updateStatusUI() {
+    const box = document.getElementById("statusJson");
+    if (box) box.textContent = JSON.stringify(themeStatus, null, 2);
+    const pill = document.getElementById("healthPill");
+    if (pill) {
+      if (themeStatus.fallback) {
+        pill.textContent = "保险丝已触发 · 默认皮肤保底中";
+        pill.className = "pill err";
+      } else if (themeStatus.shader_error) {
+        pill.textContent = "光效已降级关闭 · 主皮肤正常";
+        pill.className = "pill warn";
+      } else {
+        pill.textContent = "运行正常 · " + (themeStatus.theme_name || activeThemeId);
+        pill.className = "pill ok";
+      }
+    }
+  }
+
+  function checkParkingLock(actionName) {
+    if (!env.parkingBypass && phys.speed > 3.0) {
+      showBanner("🔒 车辆行驶中（" + Math.round(phys.speed) + " km/h > 3 km/h），8080 禁止" + actionName + "！请先踩刹车停车，或长按 OK 2秒切已存风格", "warn", 4.5);
+      return false;
+    }
+    return true;
+  }
+
+  function renderThemeButtons() {
+    const wrap = document.getElementById("themeList");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    themeOrder.forEach((id) => {
+      const t = themeStore[id];
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn" + (id === activeThemeId ? " on" : "");
+      b.textContent = t.meta.name || id;
+      b.onclick = () => {
+        if (!checkParkingLock("在 8080 切换皮肤")) return;
+        selectThemeById(id, false);
+      };
+      wrap.appendChild(b);
+    });
+  }
+
+  function bindHoldButton(id, onDown, onUp) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const down = (e) => { e.preventDefault(); env.driveMode = "manual"; document.getElementById("selDriveMode").value = "manual"; el.classList.add("pressed"); onDown(); };
+    const up = () => { el.classList.remove("pressed"); onUp(); };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointerleave", up);
+    el.addEventListener("pointercancel", up);
+  }
+
+  function triggerOkDown() {
+    if (okKey.down) return;
+    okKey.down = true;
+    okKey.downAt = performance.now();
+    okKey.firedLong = false;
+  }
+  function triggerOkUp() {
+    if (!okKey.down) return;
+    const held = performance.now() - okKey.downAt;
+    okKey.down = false;
+    if (!okKey.firedLong && held < 600) {
+      const now = performance.now();
+      if (now - okKey.lastTapAt < 650) {
+        okKey.lastTapAt = 0;
+        env.userNativeMap = !env.userNativeMap;
+        showBanner(env.userNativeMap ? "方向盘双击 OK → 已切回大众原车地图 [33]" : "方向盘双击 OK → 已切回 60fps CarPlay 仪表", "info", 2.5);
+      } else {
+        okKey.lastTapAt = now;
+      }
+    }
+  }
+
+  // 解析真实行车 CSV（兼容 v21/v22 drive_logs/*.csv）
+  function loadCSVText(text, name) {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
+    if (lines.length < 2) return showBanner("CSV 为空或格式不对", "err", 4);
+    const hdr = lines[0].split(",").map((s) => s.trim());
+    const idx = (k) => hdr.indexOf(k);
+    const cT = idx("t_ms"), cSpd = idx("real_spd_kmh") >= 0 ? idx("real_spd_kmh") : idx("spd_kmh");
+    const num = (cols, k, def) => { const i = idx(k); if (i < 0 || !cols[i]) return def; const v = parseFloat(cols[i]); return isNaN(v) ? def : v; };
+    let t0 = null;
+    const arr = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",");
+      if (cols.length < 4) continue;
+      const tms = cT >= 0 ? parseFloat(cols[cT]) : i * 100;
+      if (isNaN(tms)) continue;
+      if (t0 === null) t0 = tms;
+      const spd = Math.min(300, Math.max(0, cSpd >= 0 ? (parseFloat(cols[cSpd]) || 0) : 0));
+      const ax = num(cols, "ax_ms2", 0), ay = num(cols, "ay_g", 0);
+      arr.push({
+        t: (tms - t0) / 1000, speed: spd, rpm: num(cols, "rpm", 800), power: num(cols, "power_kw", 0),
+        torque: num(cols, "torque_nm", 0), pedal: num(cols, "pedal_pct", 0), brake: num(cols, "brake_bar", 0),
+        steer: num(cols, "steer_deg", 0), glong: ax / 9.81, glat: ay, gear: Math.max(1, Math.round(num(cols, "gear", 3))),
+        oil: num(cols, "oil_c", 92), gearbox: Math.max(0, num(cols, "gearbox_c", 78)),
+        coolant: num(cols, "coolant_c", 90), outside: num(cols, "outside_c", 20),
+        cons: num(cols, "cons", 9.5), fuel: num(cols, "tank_pct", 55) * dashConf.tank_l / 100,
+        range: num(cols, "range_km", 420), pitch: num(cols, "pitch_deg", 0), roll: num(cols, "roll_deg", 0),
+        alt: num(cols, "alt_m", 60),
+        tpfl: num(cols, "tp_fl", 2.4), tpfr: num(cols, "tp_fr", 2.4), tprl: num(cols, "tp_rl", 2.3), tprr: num(cols, "tp_rr", 2.3)
+      });
+    }
+    if (!arr.length) return showBanner("未在 CSV 中解析到有效行", "err", 4);
+    csvFrames = arr; csvTime = 0;
+    env.driveMode = "csv";
+    document.getElementById("selDriveMode").value = "csv";
+    showBanner("✓ 已加载真实行车 CSV：" + name + "（" + arr.length + " 帧）", "info", 3.5);
+  }
+
+  function wireUI() {
+    // 踏板按钮
+    bindHoldButton("btnGas", () => { input.gas = true; launchActive = false; }, () => { input.gas = false; });
+    bindHoldButton("btnBrake", () => { input.brake = true; launchActive = false; }, () => { input.brake = false; });
+    bindHoldButton("btnLeft", () => { input.left = true; }, () => { input.left = false; });
+    bindHoldButton("btnRight", () => { input.right = true; }, () => { input.right = false; });
+
+    document.getElementById("btnLaunch").onclick = () => {
+      env.driveMode = "manual";
+      document.getElementById("selDriveMode").value = "manual";
+      launchActive = true; launchPhase = 0; launchT = 0;
+      showBanner("⚡ 途锐 3.0T 弹射起步中（憋转速 → 地板油 0-100 冲刺 → 急刹）", "info", 3.0);
+    };
+
+    // 方向盘长按 OK 2 秒 / 双击 OK
+    const btnOk = document.getElementById("btnOk");
+    btnOk.addEventListener("pointerdown", (e) => { e.preventDefault(); btnOk.classList.add("pressed"); triggerOkDown(); });
+    const okRel = () => { btnOk.classList.remove("pressed"); triggerOkUp(); };
+    btnOk.addEventListener("pointerup", okRel);
+    btnOk.addEventListener("pointerleave", okRel);
+    btnOk.addEventListener("pointercancel", okRel);
+
+    document.getElementById("btnOkDouble").onclick = () => {
+      env.userNativeMap = !env.userNativeMap;
+      showBanner(env.userNativeMap ? "方向盘双击 OK → 切回大众原车地图 [33]" : "方向盘双击 OK → 切回 60fps 仪表", "info", 2.5);
+    };
+
+    // 键盘试驾（在代码框打字时不拦截）
+    window.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
+      const k = e.key.toLowerCase();
+      if (k === "w" || e.key === "ArrowUp") { e.preventDefault(); env.driveMode = "manual"; document.getElementById("selDriveMode").value = "manual"; input.gas = true; launchActive = false; document.getElementById("btnGas").classList.add("pressed"); }
+      else if (k === "s" || e.key === "ArrowDown") { e.preventDefault(); env.driveMode = "manual"; document.getElementById("selDriveMode").value = "manual"; input.brake = true; launchActive = false; document.getElementById("btnBrake").classList.add("pressed"); }
+      else if (k === "a" || e.key === "ArrowLeft") { e.preventDefault(); input.left = true; document.getElementById("btnLeft").classList.add("pressed"); }
+      else if (k === "d" || e.key === "ArrowRight") { e.preventDefault(); input.right = true; document.getElementById("btnRight").classList.add("pressed"); }
+      else if (k === "o") { e.preventDefault(); document.getElementById("btnOk").classList.add("pressed"); triggerOkDown(); }
+      else if (k === " ") { e.preventDefault(); document.getElementById("btnLaunch").click(); }
+    });
+    window.addEventListener("keyup", (e) => {
+      const k = e.key.toLowerCase();
+      if (k === "w" || e.key === "ArrowUp") { input.gas = false; document.getElementById("btnGas").classList.remove("pressed"); }
+      else if (k === "s" || e.key === "ArrowDown") { input.brake = false; document.getElementById("btnBrake").classList.remove("pressed"); }
+      else if (k === "a" || e.key === "ArrowLeft") { input.left = false; document.getElementById("btnLeft").classList.remove("pressed"); }
+      else if (k === "d" || e.key === "ArrowRight") { input.right = false; document.getElementById("btnRight").classList.remove("pressed"); }
+      else if (k === "o") { document.getElementById("btnOk").classList.remove("pressed"); triggerOkUp(); }
+    });
+
+    // 驾驶模式和环境开关
+    document.getElementById("selDriveMode").onchange = (e) => { env.driveMode = e.target.value; launchActive = false; };
+    document.getElementById("cbCarplay").onchange = (e) => { env.carplayConnected = e.target.checked; if (env.carplayConnected) env.userNativeMap = false; };
+    document.getElementById("cbIdleFull").onchange = (e) => { env.idleFullscreen = e.target.checked; };
+    document.getElementById("cbNav").onchange = (e) => { env.navLive = e.target.checked; };
+    document.getElementById("cbNight").onchange = (e) => { env.night = e.target.checked; drawSimulatedCarPlayMap(); };
+    document.getElementById("cbAcc").onchange = (e) => { env.acc = e.target.checked; drawSimulatedCarPlayMap(); showBanner(env.acc ? "已模拟开启 ACC 巡航：底部正中出现原车遮挡区，地图车标自动上移 80px" : "已关闭 ACC 巡航模拟", "info", 3.0); };
+    document.getElementById("cbColdStart").onchange = (e) => { env.coldStart = e.target.checked; showBanner(env.coldStart ? "已模拟冷车刚通电（油温/胎压/海拔未就绪，bus.ready.*=false，数值兜底 0 防崩溃）" : "已恢复热车全传感器就绪", "info", 3.2); };
+    document.getElementById("cbOem").onchange = (e) => { env.oemGuides = e.target.checked; };
+    document.getElementById("cbSmooth").onchange = (e) => { env.smooth60 = e.target.checked; };
+    document.getElementById("cbLock20").onchange = (e) => { env.lockMap20fps = e.target.checked; };
+    document.getElementById("cbLegacy").onchange = (e) => { env.forceLegacy22 = e.target.checked; themeStatus.mode = env.forceLegacy22 ? "legacy_v22" : "gles60_js"; updateStatusUI(); };
+    document.getElementById("cbBypass").onchange = (e) => { env.parkingBypass = e.target.checked; };
+
+    // 热试跑（内存盘热重载模拟，0 闪存写入）
+    document.getElementById("btnApplyLive").onclick = () => {
+      if (!checkParkingLock("内存热试跑皮肤")) return;
+      const code = document.getElementById("codeEditor").value;
+      activateThemeCode(code, activeThemeId + "_live", { silent: false });
+    };
+
+    // 固化保存到车机皮肤库（支持一次保存多套皮肤）
+    document.getElementById("btnSaveTheme").onclick = () => {
+      if (!checkParkingLock("固化保存皮肤到车机闪存")) return;
+      const code = document.getElementById("codeEditor").value;
+      const ok = activateThemeCode(code, activeThemeId, { silent: true, registerIntoStore: true });
+      if (!ok) return;
+      showBanner("💾 已校验通过并固化保存「" + themeStatus.theme_name + "」（方向盘长按 OK 2秒可切出）", "info", 3.5);
+    };
+
+    // 导出当前 .js 单文件（直接发 Discussions 或留存）
+    document.getElementById("btnExportJs").onclick = () => {
+      const code = document.getElementById("codeEditor").value;
+      const blob = new Blob([code], { type: "text/javascript;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = (themeStatus.theme_id || "my_theme") + ".js";
+      a.click();
+    };
+
+    // 下载/载入自带 AI 说明注释的空白模板 my_theme.js
+    const btnTpl = document.getElementById("btnLoadTemplate");
+    if (btnTpl) {
+      btnTpl.onclick = () => {
+        const tpl = window.MY_THEME_TEMPLATE || "";
+        document.getElementById("codeEditor").value = tpl;
+        const blob = new Blob([tpl], { type: "text/javascript;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "my_theme.js";
+        a.click();
+        showBanner("📄 已下载空白模板 my_theme.js（内含给 AI 的完整说明书），直接发给 AI 写完拖回本页！", "info", 4.5);
+      };
+    }
+
+    // 统一处理载入的 .js 皮肤文件（点击导入或全页拖拽共用）
+    function handleLoadedJsFile(name, txt) {
+      if (!checkParkingLock("导入 .js 皮肤")) return;
+      document.getElementById("codeEditor").value = txt;
+      activateThemeCode(txt, name.replace(/\.js$/i, ""), { silent: false, registerIntoStore: true });
+    }
+
+    // 导入外部 .js 皮肤文件
+    const jsInput = document.getElementById("fileJs");
+    document.getElementById("btnImportJs").onclick = () => jsInput.click();
+    jsInput.onchange = (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      f.text().then((txt) => handleLoadedJsFile(f.name, txt));
+      jsInput.value = "";
+    };
+
+    // 全页拖放支持（直接把 AI 写好的 my_theme.js / 行车 CSV / 地图截图拖到页面任意位置即生效）
+    const dropOverlay = document.getElementById("dropOverlay");
+    let dragDepth = 0;
+    window.addEventListener("dragenter", (e) => { e.preventDefault(); dragDepth++; if (dropOverlay) dropOverlay.style.display = "flex"; });
+    window.addEventListener("dragover", (e) => { e.preventDefault(); });
+    window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; if (dropOverlay) dropOverlay.style.display = "none"; } });
+    window.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dragDepth = 0;
+      if (dropOverlay) dropOverlay.style.display = "none";
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      const lower = f.name.toLowerCase();
+      if (lower.endsWith(".js") || lower.endsWith(".txt")) {
+        f.text().then((txt) => handleLoadedJsFile(f.name, txt));
+      } else if (lower.endsWith(".csv")) {
+        f.text().then((txt) => loadCSVText(txt, f.name));
+      } else if (f.type.startsWith("image/")) {
+        const img = new Image();
+        img.onload = () => { customMapImg = img; drawSimulatedCarPlayMap(); showBanner("✓ 已替换实车地图截图底图：" + f.name, "info", 3); };
+        img.src = URL.createObjectURL(f);
+      }
+    });
+
+    // 导入真实行车 CSV / 自定义地图底图
+    const csvInput = document.getElementById("fileCsv");
+    document.getElementById("btnImportCsv").onclick = () => csvInput.click();
+    csvInput.onchange = (e) => { const f = e.target.files[0]; if (f) f.text().then((t) => loadCSVText(t, f.name)); };
+
+    const imgInput = document.getElementById("fileMapImg");
+    document.getElementById("btnImportMap").onclick = () => imgInput.click();
+    imgInput.onchange = (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const img = new Image();
+      img.onload = () => { customMapImg = img; drawSimulatedCarPlayMap(); showBanner("✓ 已加载自定义实车地图底图：" + f.name, "info", 3); };
+      img.src = URL.createObjectURL(f);
+    };
+
+    // 截图保存
+    document.getElementById("btnSnap").onclick = () => {
+      const a = document.createElement("a");
+      a.href = mainCanvas.toDataURL("image/png");
+      a.download = "touareg-v23-" + activeThemeId + ".png";
+      a.click();
+    };
+
+    // 三种破坏测试按钮（亲眼检验三层保险丝！）
+    document.getElementById("btnFaultSyntax").onclick = () => {
+      const bad = "const THEME = { id: 'bad_syntax', name: '语法写错测试' };\nfunction render(ctx, bus) {\n  ctx.clear(0,0,0,1);\n  const x = ((123 + ; // 故意漏括号\n}\n";
+      document.getElementById("codeEditor").value = bad;
+      activateThemeCode(bad, "bad_syntax", { silent: false });
+    };
+    document.getElementById("btnFaultLoop").onclick = () => {
+      const bad = "const THEME = { id: 'bad_loop', name: '死循环测试' };\nfunction render(ctx, bus) {\n  ctx.clear(0,0,0,1);\n  while (true) { /* AI 不小心写了个死循环 */ }\n}\n";
+      document.getElementById("codeEditor").value = bad;
+      activateThemeCode(bad, "bad_loop", { silent: false });
+    };
+    document.getElementById("btnFaultShader").onclick = () => {
+      const bad = [
+        "const THEME = {",
+        "  id: 'bad_shader', name: '坏光效降级测试',",
+        "  shader: 'precision mediump float; void main() { gl_FragColor = vec4(1.0, BAD_VAR_NOT_EXIST, 0.0, 1.0); }'",
+        "};",
+        "function render(ctx, bus) {",
+        "  ctx.clear(8,13,22,1);",
+        "  if (bus.sys.mapLive) ctx.drawMap(0,0,1920,639);",
+        "  ctx.drawShader({ alpha: 1.0 });",
+        "  ctx.drawDashBox(5,164,295,'left');",
+        "  if (bus.nav.live) ctx.drawNavCard(1620,164,295,344);",
+        "}"
+      ].join("\n");
+      document.getElementById("codeEditor").value = bad;
+      activateThemeCode(bad, "bad_shader", { silent: false });
+    };
+
+    // 复制给手机 AI（DSH Go / DeepSeek / ChatGPT）用的极简创作提示词
+    document.getElementById("btnCopyPrompt").onclick = () => {
+      const prompt = [
+        "请直接往 my_theme.js 的 THEMES 数组里帮我写 1~3 套途锐 MH2p 60fps 仪表皮肤（遵循文件头里的注释规范：分辨率 1920x639，避开顶栏 y<156、左下/右下挡位车速角 y>509，以及开启 ACC 时底部正中 x=760..1160 y>495 的原车遮挡区）。",
+        "写完后请提示我：直接双击打开单文件 preview.html 并把 my_theme.js 拖进浏览器预览试驾（W/S 油门刹车，可勾 ACC/冷车测试，长按 O 两秒切换风格）。",
+        "我想要的风格是：______"
+      ].join("\n");
+      navigator.clipboard?.writeText(prompt).then(() => showBanner("✓ 已复制极简提示词，连同 my_theme.js 一起发给 AI 即可！", "info", 4));
+    };
+
+    // 老用户 dash.conf 快捷预设联动
+    document.querySelectorAll("[data-dash-preset]").forEach((btn) => {
+      btn.onclick = () => {
+        const [l, r] = btn.dataset.dashPreset.split("|");
+        dashConf.items = l.split(",");
+        dashConf.r_items = r.split(",");
+        showBanner("✓ 已更新老用户 dash.conf 勾选（1 号默认皮肤实时生效）", "info", 2.5);
+      };
+    });
+  }
+
+  // ==================== 11. 启动初始化 ====================
+  compiledFallback = compileThemeCode(window.BUILTIN_THEMES.default_classic, "default_classic");
+  drawSimulatedCarPlayMap();
+  drawStockVWMap();
+  wireUI();
+  renderThemeButtons();
+  selectThemeById(activeThemeId, true);
+  requestAnimationFrame(tick);
+})();
+
+</script>
+</body>
+</html>

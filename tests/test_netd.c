@@ -36,25 +36,39 @@ static void *reader_thread(void *arg) {
     return NULL;
 }
 
+typedef struct {
+    int         fd;
+    const char *buf;
+    size_t      len;
+} writer_arg_t;
+
+static void *writer_thread(void *arg) {
+    writer_arg_t *wa = (writer_arg_t *)arg;
+    size_t off = 0;
+    while (off < wa->len) {
+        ssize_t w = write(wa->fd, wa->buf + off, wa->len - off);
+        if (w <= 0) break;
+        off += (size_t)w;
+    }
+    shutdown(wa->fd, SHUT_WR);
+    return NULL;
+}
+
 static void run_http_req(const char *raw_req, size_t req_len, uint32_t peer_ip, char *resp, size_t rcap) {
     int fds[2];
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
-    size_t off = 0;
-    while (off < req_len) {
-        ssize_t w = write(fds[0], raw_req + off, req_len - off);
-        assert(w > 0);
-        off += (size_t)w;
-    }
-    shutdown(fds[0], SHUT_WR);
 
+    writer_arg_t wa = { fds[0], raw_req, req_len };
     reader_arg_t ra = { fds[0], resp, rcap, 0 };
-    pthread_t th;
-    assert(pthread_create(&th, NULL, reader_thread, &ra) == 0);
+    pthread_t th_w, th_r;
+    assert(pthread_create(&th_w, NULL, writer_thread, &wa) == 0);
+    assert(pthread_create(&th_r, NULL, reader_thread, &ra) == 0);
 
     handle_http_client(fds[1], htonl(0xC0A82B01u), peer_ip);
     close(fds[1]);
 
-    pthread_join(th, NULL);
+    pthread_join(th_w, NULL);
+    pthread_join(th_r, NULL);
     close(fds[0]);
 }
 
@@ -265,6 +279,39 @@ static void test_http_security_and_routing(void) {
         "X-Requested-With: touareg-webui\r\nContent-Length: 16\r\n\r\nNOT_A_VALID_TAR!";
     run_http_req(req_ota_bad, strlen(req_ota_bad), ip_owner, resp, sizeof(resp));
     assert(strstr(resp, "HTTP/1.1 400") != NULL);
+
+    /* 10) v23 streaming theme upload (32 KB > old 4 KB limit) + 140 KB oversize 413 reject + status */
+    {
+        char live_path[320];
+        snprintf(live_path, sizeof(live_path), "%s/theme_live.js", tmpdir);
+        setenv("NETD_THEME_LIVE_PATH", live_path, 1);
+
+        size_t body_len = 32768;
+        char *big_req = (char *)malloc(body_len + 512);
+        assert(big_req != NULL);
+        int hlen = snprintf(big_req, 512,
+            "POST /api/theme/live HTTP/1.1\r\nHost: touareg.local\r\nX-Pin: 839201\r\n"
+            "X-Requested-With: touareg-webui\r\nContent-Length: %lu\r\n\r\n",
+            (unsigned long)body_len);
+        memset(big_req + hlen, 'A', body_len);
+        run_http_req(big_req, (size_t)hlen + body_len, ip_owner, resp, sizeof(resp));
+        free(big_req);
+        assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
+        struct stat st_live;
+        assert(stat(live_path, &st_live) == 0 && (size_t)st_live.st_size == body_len);
+
+        const char *req_over =
+            "POST /api/theme/live HTTP/1.1\r\nHost: touareg.local\r\nX-Pin: 839201\r\n"
+            "X-Requested-With: touareg-webui\r\nContent-Length: 140000\r\n\r\n";
+        run_http_req(req_over, strlen(req_over), ip_owner, resp, sizeof(resp));
+        assert(strstr(resp, "HTTP/1.1 413") != NULL);
+
+        const char *req_tst =
+            "GET /api/theme/status HTTP/1.1\r\nHost: touareg.local\r\nX-Pin: 839201\r\n\r\n";
+        run_http_req(req_tst, strlen(req_tst), ip_owner, resp, sizeof(resp));
+        assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
+        unsetenv("NETD_THEME_LIVE_PATH");
+    }
 
     /* Cleanup */
     char rmcmd[384];
