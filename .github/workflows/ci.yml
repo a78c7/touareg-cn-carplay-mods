@@ -38,7 +38,7 @@ jobs:
               diag_sanitize_line("psk=\"MySecretPass123\" pin=889900\n", san, sizeof(san));
               assert(strstr(san, "MySecretPass123") == NULL);
               assert(strstr(san, "889900") == NULL);
-              char msg[128];
+              char msg[256];
               assert(ota_apply_tar("/tmp/nonexistent_ota_root", "/tmp/no_such.tar", msg, sizeof(msg)) != 0);
               assert(ota_rollback_backup("/tmp/nonexistent_ota_root", msg, sizeof(msg)) != 0);
               puts("test_ota_ci: ALL PASSED");
