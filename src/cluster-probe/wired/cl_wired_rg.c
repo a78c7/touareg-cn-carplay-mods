@@ -87,7 +87,7 @@ void w_rg_log(const char *fmt, ...) {
             size_t tot = (size_t)n + (size_t)m;
             if (tot > sizeof(line) - 2) tot = sizeof(line) - 2;
             line[tot++] = '\n';
-            (void)write(fd, line, tot);
+            if (write(fd, line, tot) < 0) {}
         }
         close(fd);
     }
@@ -412,7 +412,7 @@ static void publish_snapshot_locked(void) {
     int fd = open(g_state_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (fd >= 0) {
         fchmod(fd, 0666);
-        (void)write(fd, sb.buf, sb.len);
+        if (write(fd, sb.buf, sb.len) < 0) {}
         close(fd);
     } else {
         w_rg_log("state open %s failed errno=%d", g_state_path, errno);

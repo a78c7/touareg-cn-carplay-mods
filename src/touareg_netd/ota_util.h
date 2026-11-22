@@ -390,7 +390,7 @@ static int ota_apply_tar(const char *app_root, const char *tar_path, char *msg, 
         char vp[512];
         snprintf(vp, sizeof(vp), "%s/eso/bin/apps/wifi_dev/ota_version", app_root);
         int vfd = open(vp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (vfd >= 0) { (void)write(vfd, ver_txt, strlen(ver_txt)); fsync(vfd); close(vfd); }
+        if (vfd >= 0) { if (write(vfd, ver_txt, strlen(ver_txt)) < 0) {} fsync(vfd); close(vfd); }
     }
 
     /* Cleanup staged files */
