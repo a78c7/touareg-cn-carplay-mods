@@ -1,5 +1,24 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v23.0-beta.3
+> **Pre-release 实车崩溃关键修复版（强烈建议所有 `v23` 尝鲜车主升级）**：基于首台途锐实车运行日志（`/tmp/v23_fallback_v22` 触发第 2 层保险丝 0 黑屏退回 `v22.1`），定位并一次性修复了 `v23.0-beta.1/.2` 在途锐 Tegra K1 真机上启动即退出的 **2 个必崩 Bug + 2 处并发/兼容隐患**。已装 `v22.1+` 与 `8080` 无线控制台的车主直接传 `touareg-ota-v23.0-beta.3.tar` 10 秒无线升级即可（升级后需在 8080 点一次「刷新仪表渲染」或重启车机生效）。
+
+- **修复实车必崩 Bug #1：`v23` 模式下传入空指针给 NVIDIA `SiblingCreate`（`cluster.c`）**：
+  - `g_v23_mode` 下 `post_win` 仅分配 2 个 EGL 缓冲（`post_bufs[2..15]` 为 `NULL`），但旧版 `setup_screen()` 仍循环 `MAX_SURFACES` 次调用 `nv.SiblingCreate(device, post_bufs[i], ...)`，导致 Tegra K1 上启动瞬间空指针段错误；现已在 `v23` 模式下跳过无用的 `scr_siblings` / `canim_pixmap` / `boot_pixmap`，并同步放行 `cb_display_picture()` 解码帧投递。
+- **修复实车必崩 Bug #2：QNX 子线程默认小栈上分配 ~150 KB 局部变量（`v23_gles.c`）**：
+  - 将 `v23_run_gl_loop()` 中的 `v23_gl_ctx_t` 与双 QuickJS 沙盒（`fb_sb` + `user_sb`，合计 ~150 KB）全部改为堆分配（`calloc`），同时 `pthread_create` 显式设置 **1 MB** 栈大小，彻底根治 QNX ARMv7 子线程栈溢出。
+- **消除 `post_win` 多线程启动竞态 + 默认稳走 `glTexSubImage2D` 紧致上传（`cluster.c` + `v23_gles.c`）**：
+  - 将 `v23_map_setup()` 延后至 `setup_screen()` 全部主线程配置完成后再拉起 EGL 线程，并改为**首帧 `eglSwapBuffers()` 成功后才写 `/tmp/cl_render_ready`**（杜绝抢先切屏）；退出时正常 `pthread_join` 回收 GL 线程；`load_gl()` 增加 `dlsym` / `dlopen("libGLESv2.so.2")` 符号兜底；
+  - 默认走 100% 稳妥的 `glTexSubImage2D` 路径（支持非紧致 `stride` 行拷贝，规避未实测过的 `EGL_NATIVE_PIXMAP_KHR` 驱动差异风险；仅在手动创建 `v23_zerocopy` 标志时尝试零拷贝）。
+- **新增 `/tmp/v23_diag.log` 逐步落盘诊断（`v23_gles.c` + `touareg_netd` + `Persist/install.sh`）**：
+  - `v23` 初始化的每一步（EGL 初始化、Shader 编译、字形图集、地图纹理、QuickJS 加载、首帧送显）均实时落盘到 `/tmp/v23_diag.log`，并自动纳入 `8080` 脱敏诊断包与 U 盘 `cluster_logs/` 采集。
+- **车机 QNX 6.6 ARMv7 二进制校验和（`src/build.sh`，已通过真实车机 `carlibs` 符号审计：0 缺失非弱符号）**：
+  - `cl_render`：`93b4fbfbc032497ef285413e710ea94d79b18f84c2c2adb821d3cc3d0baf1734`
+  - `touareg_netd`：`0c32cb18f532b85164ab512799c72cfe626b14ad72248ba63388792a4ed8a8bd`
+  - `clusterd`（与 `v23.0-beta.1` 一致）：`096a71c1b37bdcf9ebba3b1d3e66428af38488177c585ed0e3d7f4db695d4f64`
+  - `cl_probe.so`（与 `v22.1` 一致）：`e260013df86291611225856c6f1c3c05a1d12857bfeaaa0514d1494192cbfa24`
+- 包含 `v23.0-beta.2` 与 `v23.0-beta.1` 的全部内容。
+
 ## v23.0-beta.2
 > **Pre-release 尝鲜防呆升级版**：在 `v23.0-beta.1` 基础上专项强化了 **U 盘安全弹出、刷机脚本自动开 `v23_mode` 兜底，以及本地 AI 助手（Claude Code / Cursor / Codex / Antigravity 等）零踩坑命令行部署能力**。车机 QNX 二进制与 `v23.0-beta.1` 完全一致，**已装 `v23.0-beta.1` 的车机无需重刷 OTA**；新制作刷机 U 盘或用 AI 写自定义皮肤的车主推荐直接下载本版 `.zip`。
 

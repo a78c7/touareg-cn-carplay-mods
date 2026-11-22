@@ -73,9 +73,31 @@ static struct {
 } v23gl;
 
 static void *v23_sym(const char *name) {
-    void *p = (void *)eglGetProcAddress(name);
-    if (!p) p = dlsym(RTLD_DEFAULT, name);
-    return p;
+    return cl_gl_sym(name);
+}
+
+/* 直写 /tmp/v23_diag.log（每步立刻落盘，不依赖 stderr 重定向，方便实车排障） */
+static void v23_diag_reset(void) {
+    int fd = open("/tmp/v23_diag.log", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd >= 0) close(fd);
+}
+
+static void v23_diag(const char *fmt, ...) {
+    char buf[384];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof(buf) - 2, fmt, ap);
+    va_end(ap);
+    if (n < 0) return;
+    if (n >= (int)sizeof(buf) - 2) n = (int)sizeof(buf) - 2;
+    buf[n++] = '\n';
+    buf[n] = '\0';
+    int fd = open("/tmp/v23_diag.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd >= 0) {
+        (void)write(fd, buf, (size_t)n);
+        close(fd);
+    }
+    LOG("%s", buf);
 }
 
 static int v23_load_extra_gl(void) {
@@ -131,9 +153,10 @@ static v23_map_bridge_t g_v23_map = {
 
 static void *v23_render_thread_entry(void *arg);
 
-/* 由 setup_screen() 在 g_v23_mode==1 时调用：创建 3 个离屏 RGBX8888 pixmap 并启动 60fps GL 线程 */
+/* 由 setup_screen() 在 g_v23_mode==1 末尾调用：创建 3 个离屏 RGBX8888 pixmap 并以 1MB 栈启动 60fps GL 线程 */
 static int v23_map_setup(int w, int h) {
     if (g_v23_map.initialized) return 0;
+    v23_diag_reset();
     if (w <= 0) w = V23_CANVAS_W;
     if (h <= 0) h = V23_CANVAS_H;
     g_v23_map.width = w;
@@ -144,14 +167,18 @@ static int v23_map_setup(int w, int h) {
     g_v23_map.seq = 0;
     g_v23_map.frames_in = 0;
     g_v23_map.auto_night = 1;
+    g_v23_stop = 0;
 
+    int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_zerocopy", F_OK) == 0);
     int fmt = SCREEN_FORMAT_RGBX8888;
-    int usage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ | SCREEN_USAGE_OPENGL_ES2;
+    int usage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ |
+                (want_zc ? SCREEN_USAGE_OPENGL_ES2 : 0);
     int sz[2] = { w, h };
+    v23_diag("v23_map_setup start %dx%d want_zc=%d", w, h, want_zc);
 
     for (int i = 0; i < 3; i++) {
         if (screen_create_pixmap(&g_v23_map.pix[i], g_dec.scr_ctx) != 0) {
-            LOG("v23: screen_create_pixmap[%d] failed errno=%d\n", i, errno);
+            v23_diag("v23: screen_create_pixmap[%d] failed errno=%d", i, errno);
             return -1;
         }
         screen_set_pixmap_property_iv(g_v23_map.pix[i], SCREEN_PROPERTY_FORMAT, &fmt);
@@ -159,15 +186,14 @@ static int v23_map_setup(int w, int h) {
         screen_set_pixmap_property_iv(g_v23_map.pix[i], SCREEN_PROPERTY_BUFFER_SIZE, sz);
         int rc;
         do { rc = screen_create_pixmap_buffer(g_v23_map.pix[i]); } while (rc < 0 && errno == EINTR);
-        if (rc != 0) {
-            /* 若带 OPENGL_ES2 标志分配失败，自动降级为纯 CPU 可读 NATIVE|WRITE|READ 走 glTexSubImage2D */
+        if (rc != 0 && want_zc) {
             int fb_usage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ;
             screen_set_pixmap_property_iv(g_v23_map.pix[i], SCREEN_PROPERTY_USAGE, &fb_usage);
             do { rc = screen_create_pixmap_buffer(g_v23_map.pix[i]); } while (rc < 0 && errno == EINTR);
-            if (rc != 0) {
-                LOG("v23: pixmap_buffer[%d] failed rc=%d errno=%d\n", i, rc, errno);
-                return -1;
-            }
+        }
+        if (rc != 0) {
+            v23_diag("v23: pixmap_buffer[%d] failed rc=%d errno=%d", i, rc, errno);
+            return -1;
         }
         g_v23_map.buf[i] = NULL;
         screen_get_pixmap_property_pv(g_v23_map.pix[i], SCREEN_PROPERTY_RENDER_BUFFERS, (void **)&g_v23_map.buf[i]);
@@ -178,15 +204,29 @@ static int v23_map_setup(int w, int h) {
         g_v23_map.stride[i] = st;
         if (p && st > 0) memset(p, 0, (size_t)st * (size_t)h);
     }
+    v23_diag("v23: 3 pixmaps ready ptr0=%p stride0=%d", (void *)g_v23_map.ptr[0], g_v23_map.stride[0]);
 
     g_v23_map.initialized = 1;
-    if (pthread_create(&g_v23_map.gl_tid, NULL, v23_render_thread_entry, (void *)(intptr_t)1) != 0) {
-        LOG("v23: pthread_create render thread failed\n");
+    pthread_attr_t pattr;
+    pthread_attr_init(&pattr);
+    pthread_attr_setstacksize(&pattr, 1024u * 1024u); /* 显式 1 MB 栈，防 QNX 默认子线程小栈溢出 */
+    int pt_rc = pthread_create(&g_v23_map.gl_tid, &pattr, v23_render_thread_entry, (void *)(intptr_t)1);
+    pthread_attr_destroy(&pattr);
+    if (pt_rc != 0) {
+        v23_diag("v23: pthread_create render thread failed rc=%d", pt_rc);
         return -1;
     }
     g_v23_map.gl_started = 1;
-    LOG("v23: triple-buffer map bridge %dx%d ready, 60fps GL thread started\n", w, h);
+    v23_diag("v23: gl render thread spawned (stack=1MB)");
     return 0;
+}
+
+static void v23_map_shutdown(void) {
+    g_v23_stop = 1;
+    if (g_v23_map.gl_started) {
+        pthread_join(g_v23_map.gl_tid, NULL);
+        g_v23_map.gl_started = 0;
+    }
 }
 
 /* 由 cb_display_picture() 在 g_v23_mode==1 时调用：把解码帧 screen_blit 到离屏槽并更新自动昼夜 */
@@ -511,15 +551,16 @@ typedef struct {
     int    user_shader_ok;
     char   shader_err[256];
 
-    /* CarPlay 地图纹理（Tier 1: 3 个 EGLImage 零拷贝纹理; Tier 2: 单张 glTexSubImage2D 纹理） */
-    int    map_has_stream;
-    int    map_zero_copy;
-    GLuint map_tex[3];
-    void  *map_egl_img[3];
-    GLuint map_tex_fb;
+    /* CarPlay 地图纹理（默认 glTexSubImage2D 紧致上传；v23_zerocopy 开关启用时尝试 EGLImage 零拷贝） */
+    int      map_has_stream;
+    int      map_zero_copy;
+    GLuint   map_tex[3];
+    void    *map_egl_img[3];
+    GLuint   map_tex_fb;
+    uint8_t *map_tight_buf;
     uint32_t map_last_seq;
-    int    map_active_slot;
-    int    map_w, map_h;
+    int      map_active_slot;
+    int      map_w, map_h;
 
     /* dash.c 信息框纹理[0..1] + navbox.c 导航卡纹理 */
     GLuint dash_tex[2];
@@ -1296,10 +1337,11 @@ static int v23_run_gl_loop(int with_carplay_map) {
         if (g_post_w > 0) ww = g_post_w;
         if (g_post_h > 0) wh = g_post_h;
     } else {
+        v23_diag_reset();
         signal(SIGTERM, v23_on_sig);
         signal(SIGINT,  v23_on_sig);
-        if (screen_create_context(&own_ctx, SCREEN_APPLICATION_CONTEXT) != 0) return 10;
-        if (screen_create_window(&own_win, own_ctx) != 0) return 11;
+        if (screen_create_context(&own_ctx, SCREEN_APPLICATION_CONTEXT) != 0) { v23_diag("v23: screen_create_context failed"); return 10; }
+        if (screen_create_window(&own_win, own_ctx) != 0) { v23_diag("v23: screen_create_window failed"); return 11; }
         const char *did = cl_disp_id();
         screen_set_window_property_cv(own_win, SCREEN_PROPERTY_ID_STRING, (int)strlen(did), did);
         int sz[2] = { DISP_W, DISP_H };
@@ -1314,14 +1356,15 @@ static int v23_run_gl_loop(int with_carplay_map) {
         screen_set_window_property_iv(own_win, SCREEN_PROPERTY_TRANSPARENCY, &transp);
         screen_set_window_property_iv(own_win, SCREEN_PROPERTY_VISIBLE, &vis);
         screen_flush_context(own_ctx, 0);
-        if (screen_create_window_buffers(own_win, 2) != 0) return 12;
+        if (screen_create_window_buffers(own_win, 2) != 0) { v23_diag("v23: screen_create_window_buffers failed"); return 12; }
         target_win = own_win;
         ww = DISP_W; wh = DISP_H;
     }
 
+    v23_diag("[1] eglInit start win=%p %dx%d map=%d", (void *)target_win, ww, wh, with_carplay_map);
     EGLDisplay edpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (edpy == EGL_NO_DISPLAY || !eglInitialize(edpy, NULL, NULL)) {
-        LOG("v23: eglInitialize failed\n");
+        v23_diag("[1] eglInitialize failed err=0x%x", eglGetError());
         return 13;
     }
     eglBindAPI(EGL_OPENGL_ES_API);
@@ -1333,95 +1376,117 @@ static int v23_run_gl_loop(int with_carplay_map) {
     };
     EGLConfig ecfg; EGLint ncfg = 0;
     if (!eglChooseConfig(edpy, cfg_attr, &ecfg, 1, &ncfg) || ncfg < 1) {
-        LOG("v23: eglChooseConfig failed\n");
+        v23_diag("[2] eglChooseConfig failed ncfg=%d err=0x%x", (int)ncfg, eglGetError());
         return 14;
     }
+    v23_diag("[2] eglChooseConfig ok ncfg=%d", (int)ncfg);
     EGLSurface esurf = eglCreateWindowSurface(edpy, ecfg, (EGLNativeWindowType)target_win, NULL);
     if (esurf == EGL_NO_SURFACE) {
-        LOG("v23: eglCreateWindowSurface failed err=0x%x\n", eglGetError());
+        v23_diag("[3] eglCreateWindowSurface failed err=0x%x", eglGetError());
         return 15;
     }
+    v23_diag("[3] eglCreateWindowSurface ok");
     EGLint ctx_attr[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
     EGLContext ectx = eglCreateContext(edpy, ecfg, EGL_NO_CONTEXT, ctx_attr);
     if (ectx == EGL_NO_CONTEXT || !eglMakeCurrent(edpy, esurf, esurf, ectx)) {
-        LOG("v23: eglMakeCurrent failed\n");
+        v23_diag("[4] eglMakeCurrent failed ctx=%p err=0x%x", (void *)ectx, eglGetError());
         return 16;
     }
     eglSwapInterval(edpy, 1); /* 锁 60fps 垂直同步 */
     while (eglGetError() != EGL_SUCCESS) {}
+    v23_diag("[4] eglMakeCurrent + swapInterval=1 ok");
 
     load_gl();
     if (v23_load_extra_gl() != 0) {
-        LOG("v23: missing GLES2 symbols\n");
+        v23_diag("[5] missing GLES2 symbols (CreateShader=%p DrawArrays=%p U1f=%p U2f=%p U4f=%p)",
+                 (void *)gl_CreateShader, (void *)gl_DrawArrays,
+                 (void *)v23gl.Uniform1f, (void *)v23gl.Uniform2f, (void *)v23gl.Uniform4f);
         return 18;
     }
+    v23_diag("[5] load_gl + extra_gl ok");
 
-    v23_gl_ctx_t gc;
-    memset(&gc, 0, sizeof(gc));
-    gc.edpy = edpy;
-    gc.win_w = ww;
-    gc.win_h = wh;
-    gc.map_has_stream = with_carplay_map;
-    gc.map_w = with_carplay_map ? g_v23_map.width : ww;
-    gc.map_h = with_carplay_map ? g_v23_map.height : wh;
+    /* 堆分配渲染上下文与双 QuickJS 沙盒（合计 ~150 KB），严禁压在 QNX 子线程栈上 */
+    v23_gl_ctx_t  *gc      = (v23_gl_ctx_t *)calloc(1, sizeof(v23_gl_ctx_t));
+    v23_sandbox_t *fb_sb   = (v23_sandbox_t *)calloc(1, sizeof(v23_sandbox_t));
+    v23_sandbox_t *user_sb = (v23_sandbox_t *)calloc(1, sizeof(v23_sandbox_t));
+    if (!gc || !fb_sb || !user_sb) {
+        v23_diag("[5] heap alloc failed");
+        free(user_sb); free(fb_sb); free(gc);
+        return 17;
+    }
+    gc->edpy = edpy;
+    gc->win_w = ww;
+    gc->win_h = wh;
+    gc->map_has_stream = with_carplay_map;
+    gc->map_w = with_carplay_map ? g_v23_map.width : ww;
+    gc->map_h = with_carplay_map ? g_v23_map.height : wh;
 
     char sh_err[256];
-    gc.prog_solid  = v23_compile_prog(v23_vs_solid, v23_fs_solid, sh_err, sizeof(sh_err));
-    gc.prog_rrect  = v23_compile_prog(v23_vs_quad,  v23_fs_rrect, sh_err, sizeof(sh_err));
-    gc.prog_circle = v23_compile_prog(v23_vs_quad,  v23_fs_circle, sh_err, sizeof(sh_err));
-    gc.prog_map    = v23_compile_prog(v23_vs_quad,  v23_fs_map, sh_err, sizeof(sh_err));
-    gc.prog_bgra   = v23_compile_prog(v23_vs_quad,  v23_fs_bgra, sh_err, sizeof(sh_err));
-    gc.prog_text   = v23_compile_prog(v23_vs_quad,  v23_fs_alpha_text, sh_err, sizeof(sh_err));
-    if (!gc.prog_solid || !gc.prog_rrect || !gc.prog_map || !gc.prog_bgra || !gc.prog_text) {
-        LOG("v23: core shader compile failed: %s\n", sh_err);
+    gc->prog_solid  = v23_compile_prog(v23_vs_solid, v23_fs_solid, sh_err, sizeof(sh_err));
+    gc->prog_rrect  = v23_compile_prog(v23_vs_quad,  v23_fs_rrect, sh_err, sizeof(sh_err));
+    gc->prog_circle = v23_compile_prog(v23_vs_quad,  v23_fs_circle, sh_err, sizeof(sh_err));
+    gc->prog_map    = v23_compile_prog(v23_vs_quad,  v23_fs_map, sh_err, sizeof(sh_err));
+    gc->prog_bgra   = v23_compile_prog(v23_vs_quad,  v23_fs_bgra, sh_err, sizeof(sh_err));
+    gc->prog_text   = v23_compile_prog(v23_vs_quad,  v23_fs_alpha_text, sh_err, sizeof(sh_err));
+    if (!gc->prog_solid || !gc->prog_rrect || !gc->prog_map || !gc->prog_bgra || !gc->prog_text) {
+        v23_diag("[6] core shader compile failed: %s", sh_err);
+        free(user_sb); free(fb_sb); free(gc);
         return 19;
     }
+    v23_diag("[6] core shaders ok (solid=%u rrect=%u circle=%u map=%u bgra=%u text=%u)",
+             gc->prog_solid, gc->prog_rrect, gc->prog_circle, gc->prog_map, gc->prog_bgra, gc->prog_text);
 
     /* 初始化共享 TTF 字形图集 */
-    v23_atlas_init(&gc.atlas);
+    v23_atlas_init(&gc->atlas);
+    v23_diag("[7] atlas ok tex=%u", gc->atlas.tex);
 
-    /* 初始化 CarPlay 地图纹理：优先尝试零拷贝 EGL_KHR_image_pixmap，失败自动退回 glTexSubImage2D */
+    /* 初始化 CarPlay 地图纹理：默认稳走 glTexSubImage2D（含 stride 紧致拷贝）；仅手动建 v23_zerocopy 时尝鲜 EGLImage */
     if (with_carplay_map && g_v23_map.initialized) {
         int zc_ok = 0;
-        if (v23gl.EglCreateImageKHR && v23gl.GlEGLImageTargetTex2D) {
+        int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_zerocopy", F_OK) == 0);
+        if (want_zc && v23gl.EglCreateImageKHR && v23gl.GlEGLImageTargetTex2D) {
             zc_ok = 1;
-            gl_GenTextures(3, gc.map_tex);
+            gl_GenTextures(3, gc->map_tex);
             for (int i = 0; i < 3; i++) {
-                gc.map_egl_img[i] = v23gl.EglCreateImageKHR(edpy, EGL_NO_CONTEXT, EGL_NATIVE_PIXMAP_KHR,
-                                                            (EGLClientBuffer)g_v23_map.pix[i], NULL);
-                if (!gc.map_egl_img[i]) { zc_ok = 0; break; }
-                gl_BindTexture(GL_TEXTURE_2D, gc.map_tex[i]);
+                gc->map_egl_img[i] = v23gl.EglCreateImageKHR(edpy, EGL_NO_CONTEXT, EGL_NATIVE_PIXMAP_KHR,
+                                                             (EGLClientBuffer)g_v23_map.pix[i], NULL);
+                if (!gc->map_egl_img[i]) { zc_ok = 0; break; }
+                gl_BindTexture(GL_TEXTURE_2D, gc->map_tex[i]);
                 gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                 gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                 gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                v23gl.GlEGLImageTargetTex2D(GL_TEXTURE_2D, gc.map_egl_img[i]);
+                v23gl.GlEGLImageTargetTex2D(GL_TEXTURE_2D, gc->map_egl_img[i]);
             }
         }
         if (zc_ok) {
-            gc.map_zero_copy = 1;
-            LOG("v23: CarPlay map EGL_KHR_image_pixmap ZERO-COPY active!\n");
+            gc->map_zero_copy = 1;
+            v23_diag("[8] map_tex EGL_KHR_image_pixmap ZERO-COPY active");
         } else {
-            gc.map_zero_copy = 0;
+            gc->map_zero_copy = 0;
             for (int i = 0; i < 3; i++) {
-                if (gc.map_egl_img[i] && v23gl.EglDestroyImageKHR) {
-                    v23gl.EglDestroyImageKHR(edpy, gc.map_egl_img[i]);
-                    gc.map_egl_img[i] = NULL;
+                if (gc->map_egl_img[i] && v23gl.EglDestroyImageKHR) {
+                    v23gl.EglDestroyImageKHR(edpy, gc->map_egl_img[i]);
+                    gc->map_egl_img[i] = NULL;
                 }
             }
-            gl_GenTextures(1, &gc.map_tex_fb);
-            gl_BindTexture(GL_TEXTURE_2D, gc.map_tex_fb);
+            gl_GenTextures(1, &gc->map_tex_fb);
+            gl_BindTexture(GL_TEXTURE_2D, gc->map_tex_fb);
             gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             /* 安全零初始化，绝不传 NULL */
-            uint8_t *zbuf = (uint8_t *)calloc((size_t)gc.map_w * (size_t)gc.map_h, 4);
+            uint8_t *zbuf = (uint8_t *)calloc((size_t)gc->map_w * (size_t)gc->map_h, 4);
             if (zbuf) {
-                gl_TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gc.map_w, gc.map_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, zbuf);
+                gl_TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gc->map_w, gc->map_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, zbuf);
                 free(zbuf);
             }
-            LOG("v23: CarPlay map using glTexSubImage2D 20fps fallback path\n");
+            if (g_v23_map.stride[0] != gc->map_w * 4) {
+                gc->map_tight_buf = (uint8_t *)malloc((size_t)gc->map_w * (size_t)gc->map_h * 4u);
+            }
+            v23_diag("[8] map_tex glTexSubImage2D ready (%dx%d stride=%d tight=%d)",
+                     gc->map_w, gc->map_h, g_v23_map.stride[0], gc->map_tight_buf ? 1 : 0);
         }
     }
 
@@ -1433,12 +1498,12 @@ static int v23_run_gl_loop(int with_carplay_map) {
         dash_read_conf_file(dc);
         dash_layout_all();
     }
-    gl_GenTextures(2, gc.dash_tex);
+    gl_GenTextures(2, gc->dash_tex);
     for (int b = 0; b < 2; b++) {
         dash_use(b);
         if (g_dash_conf.enabled && g_nrows > 0 && g_dash_w > 0 && g_dash_h > 0) {
-            gc.dash_en[b] = 1; gc.dash_w[b] = g_dash_w; gc.dash_h[b] = g_dash_h;
-            gl_BindTexture(GL_TEXTURE_2D, gc.dash_tex[b]);
+            gc->dash_en[b] = 1; gc->dash_w[b] = g_dash_w; gc->dash_h[b] = g_dash_h;
+            gl_BindTexture(GL_TEXTURE_2D, gc->dash_tex[b]);
             gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1448,35 +1513,38 @@ static int v23_run_gl_loop(int with_carplay_map) {
     }
     dash_use(0);
 
-    gl_GenTextures(1, &gc.nav_tex);
-    gc.nav_w = g_nav_w > 0 ? g_nav_w : 295;
-    gc.nav_h = g_nav_h > 0 ? g_nav_h : 344;
-    gl_BindTexture(GL_TEXTURE_2D, gc.nav_tex);
+    gl_GenTextures(1, &gc->nav_tex);
+    gc->nav_w = g_nav_w > 0 ? g_nav_w : 295;
+    gc->nav_h = g_nav_h > 0 ? g_nav_h : 344;
+    gl_BindTexture(GL_TEXTURE_2D, gc->nav_tex);
     gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    gl_TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gc.nav_w, gc.nav_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_nav_px);
+    gl_TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gc->nav_w, gc->nav_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_nav_px);
+    v23_diag("[9] dash/nav tex ok (dash0=%dx%d nav=%dx%d)", gc->dash_w[0], gc->dash_h[0], gc->nav_w, gc->nav_h);
 
     /* 初始化双沙盒：fb_sb 永久持有官方默认皮肤保底；user_sb 运行用户/热重载皮肤 */
     v23_draw_ops_t ops = {
-        &gc, v23_op_clear, v23_op_draw_map, v23_op_draw_shader, v23_op_rect, v23_op_circle,
+        gc, v23_op_clear, v23_op_draw_map, v23_op_draw_shader, v23_op_rect, v23_op_circle,
         v23_op_line, v23_op_poly, v23_op_arc, v23_op_ticks, v23_op_needle, v23_op_seg_bar,
         v23_op_bi_bar, v23_op_range_bar, v23_op_text, v23_op_dash_box, v23_op_nav_card, v23_op_turn_arrow
     };
-    v23_sandbox_t fb_sb, user_sb;
-    if (v23_sandbox_init(&fb_sb, &ops) != 0 ||
-        v23_sandbox_load_code(&fb_sb, "default_classic.js", V23_DEFAULT_CLASSIC_JS, strlen(V23_DEFAULT_CLASSIC_JS)) != 0) {
-        LOG("v23: fallback sandbox init failed\n");
+    if (v23_sandbox_init(fb_sb, &ops) != 0 ||
+        v23_sandbox_load_code(fb_sb, "default_classic.js", V23_DEFAULT_CLASSIC_JS, strlen(V23_DEFAULT_CLASSIC_JS)) != 0) {
+        v23_diag("[10] fallback sandbox init failed: %s", fb_sb->last_err);
+        v23_sandbox_destroy(fb_sb);
+        free(gc->map_tight_buf); free(user_sb); free(fb_sb); free(gc);
         return 20;
     }
-    memset(&user_sb, 0, sizeof(user_sb));
+    v23_diag("[10] fb_sb default_classic ok");
 
     int using_user = 0;
     int fallback_active = 0;
     int slow_frames = 0;
     int clean_boot_frames = 0;
     int boot_sentinel_active = 0;
+    int ready_written = 0;
     char cur_source[32] = "builtin";
     char cur_err[512] = "";
     time_t last_live_mt = 0, last_saved_mt = 0, last_sel_mt = 0;
@@ -1487,23 +1555,11 @@ static int v23_run_gl_loop(int with_carplay_map) {
     if (skip_persisted_on_boot) {
         unlink("/tmp/v23_theme_loading");
         snprintf(cur_err, sizeof(cur_err), "检测到上次启动用户皮肤异常崩溃，已自动降级为官方默认经典版");
-        v23_set_banner(&gc, cur_err, 2, 8);
+        v23_set_banner(gc, cur_err, 2, 8);
         fallback_active = 1;
     }
 
-    /* 通知 clusterd：窗口 58 就绪 */
-    {
-        int rfd = open("/tmp/cl_render_ready", O_WRONLY | O_CREAT | O_TRUNC, 0666);
-        if (rfd >= 0) {
-            char rb[24];
-            int rl = snprintf(rb, sizeof(rb), "%d\n", (int)getpid());
-            (void)write(rfd, rb, (size_t)rl);
-            close(rfd);
-        }
-    }
-
-    LOG("v23: 60fps JS engine started (%dx%d, map=%d, zero_copy=%d)\n", ww, wh, with_carplay_map, gc.map_zero_copy);
-    v23_write_status_json(&fb_sb, &gc, cur_source, fallback_active, cur_err, 60, with_carplay_map ? 20 : 0);
+    v23_write_status_json(fb_sb, gc, cur_source, fallback_active, cur_err, 60, with_carplay_map ? 20 : 0);
 
     uint64_t t_start = v23_now_us(), t_prev = t_start;
     uint64_t last_hot_ms = 0, last_dash_ms = 0, last_fps_us = t_start, last_stat_ms = 0;
@@ -1548,7 +1604,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
             }
 
             if (need_reload) {
-                if (using_user) { v23_sandbox_destroy(&user_sb); using_user = 0; }
+                if (using_user) { v23_sandbox_destroy(user_sb); using_user = 0; }
                 fallback_active = 0; slow_frames = 0; cur_err[0] = '\0';
                 snprintf(cur_source, sizeof(cur_source), "%s", load_src);
                 if (load_path) {
@@ -1562,28 +1618,31 @@ static int v23_run_gl_loop(int with_carplay_map) {
                     if (!fcode) {
                         fallback_active = 1;
                         snprintf(cur_err, sizeof(cur_err), "读取皮肤失败或超过 128KB 上限");
-                        v23_set_banner(&gc, "皮肤读取失败或超 128KB，已自动回退官方默认经典版", 2, 7);
-                    } else if (v23_sandbox_init(&user_sb, &ops) != 0 ||
-                               v23_sandbox_load_code(&user_sb, load_path, fcode, flen) != 0) {
+                        v23_set_banner(gc, "皮肤读取失败或超 128KB，已自动回退官方默认经典版", 2, 7);
+                        v23_diag("theme load failed: read error (%s)", load_path);
+                    } else if (v23_sandbox_init(user_sb, &ops) != 0 ||
+                               v23_sandbox_load_code(user_sb, load_path, fcode, flen) != 0) {
                         fallback_active = 1;
-                        snprintf(cur_err, sizeof(cur_err), "%s", user_sb.last_err[0] ? user_sb.last_err : "皮肤加载失败");
-                        v23_sandbox_destroy(&user_sb);
+                        snprintf(cur_err, sizeof(cur_err), "%s", user_sb->last_err[0] ? user_sb->last_err : "皮肤加载失败");
+                        v23_sandbox_destroy(user_sb);
                         char bm[320];
                         snprintf(bm, sizeof(bm), "AI 皮肤加载报错（%.180s）· 已自动回退官方默认皮肤", cur_err);
-                        v23_set_banner(&gc, bm, 2, 8);
+                        v23_set_banner(gc, bm, 2, 8);
+                        v23_diag("theme load error: %s", cur_err);
                     } else {
                         using_user = 1;
-                        v23_compile_user_shader(&gc, &user_sb.metas[0]);
+                        v23_compile_user_shader(gc, &user_sb->metas[0]);
                         char bm[200];
-                        snprintf(bm, sizeof(bm), "已热加载 60fps 皮肤：%s（共 %d 套）", user_sb.metas[0].name, user_sb.entry_count);
-                        v23_set_banner(&gc, bm, 0, 3);
+                        snprintf(bm, sizeof(bm), "已热加载 60fps 皮肤：%s（共 %d 套）", user_sb->metas[0].name, user_sb->entry_count);
+                        v23_set_banner(gc, bm, 0, 3);
+                        v23_diag("theme loaded ok: %s (%d entries)", user_sb->metas[0].name, user_sb->entry_count);
                     }
                     if (fcode) free(fcode);
                 } else {
-                    v23_compile_user_shader(&gc, NULL);
-                    v23_set_banner(&gc, "已切回官方默认 60fps 经典版", 0, 3);
+                    v23_compile_user_shader(gc, NULL);
+                    v23_set_banner(gc, "已切回官方默认 60fps 经典版", 0, 3);
                 }
-                v23_write_status_json(using_user ? &user_sb : &fb_sb, &gc, cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
+                v23_write_status_json(using_user ? user_sb : fb_sb, gc, cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
             }
 
             /* 检查多皮肤切换索引 /tmp/v23_theme_select */
@@ -1597,16 +1656,16 @@ static int v23_run_gl_loop(int with_carplay_map) {
                         if (want < 0) {
                             /* -1 表示暂时切回默认经典 */
                             fallback_active = 1;
-                            v23_compile_user_shader(&gc, NULL);
-                        } else if (want < user_sb.entry_count) {
+                            v23_compile_user_shader(gc, NULL);
+                        } else if (want < user_sb->entry_count) {
                             fallback_active = 0; slow_frames = 0; cur_err[0] = '\0';
-                            user_sb.active_idx = want;
-                            v23_compile_user_shader(&gc, &user_sb.metas[want]);
+                            user_sb->active_idx = want;
+                            v23_compile_user_shader(gc, &user_sb->metas[want]);
                             char bm[200];
-                            snprintf(bm, sizeof(bm), "已切换风格：%s", user_sb.metas[want].name);
-                            v23_set_banner(&gc, bm, 0, 3);
+                            snprintf(bm, sizeof(bm), "已切换风格：%s", user_sb->metas[want].name);
+                            v23_set_banner(gc, bm, 0, 3);
                         }
-                        v23_write_status_json(fallback_active ? &fb_sb : &user_sb, &gc, cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
+                        v23_write_status_json(fallback_active ? fb_sb : user_sb, gc, cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
                     }
                     fclose(sf);
                 }
@@ -1619,20 +1678,31 @@ static int v23_run_gl_loop(int with_carplay_map) {
             pthread_mutex_lock(&g_v23_map.mx);
             uint32_t seq = g_v23_map.seq;
             cur_night = g_v23_map.auto_night;
-            if (seq != gc.map_last_seq) {
+            if (seq != gc->map_last_seq) {
                 int old_front = g_v23_map.front_idx;
                 g_v23_map.front_idx = g_v23_map.ready_idx;
                 g_v23_map.ready_idx = old_front;
-                gc.map_active_slot = g_v23_map.front_idx;
-                gc.map_last_seq = seq;
+                gc->map_active_slot = g_v23_map.front_idx;
+                gc->map_last_seq = seq;
                 fps_map_frames++;
                 pthread_mutex_unlock(&g_v23_map.mx);
 
-                if (!gc.map_zero_copy && g_v23_map.ptr[gc.map_active_slot]) {
-                    gl_BindTexture(GL_TEXTURE_2D, gc.map_tex_fb);
+                int sl = gc->map_active_slot;
+                if (!gc->map_zero_copy && g_v23_map.ptr[sl]) {
+                    const uint8_t *src_px = g_v23_map.ptr[sl];
+                    int st = g_v23_map.stride[sl];
+                    int row_bytes = gc->map_w * 4;
+                    if (st != row_bytes && gc->map_tight_buf && st > row_bytes) {
+                        for (int ry = 0; ry < gc->map_h; ry++) {
+                            memcpy(gc->map_tight_buf + (size_t)ry * (size_t)row_bytes,
+                                   src_px + (size_t)ry * (size_t)st, (size_t)row_bytes);
+                        }
+                        src_px = gc->map_tight_buf;
+                    }
+                    gl_BindTexture(GL_TEXTURE_2D, gc->map_tex_fb);
                     if (v23gl.PixelStorei) v23gl.PixelStorei(GL_UNPACK_ALIGNMENT, 4);
-                    gl_TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gc.map_w, gc.map_h,
-                                     GL_RGBA, GL_UNSIGNED_BYTE, g_v23_map.ptr[gc.map_active_slot]);
+                    gl_TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gc->map_w, gc->map_h,
+                                     GL_RGBA, GL_UNSIGNED_BYTE, src_px);
                 }
             } else {
                 pthread_mutex_unlock(&g_v23_map.mx);
@@ -1644,26 +1714,26 @@ static int v23_run_gl_loop(int with_carplay_map) {
             last_dash_ms = now_ms;
             if (dash_poll(now_ms) && g_dash_have) {
                 for (int b = 0; b < 2; b++) {
-                    if (gc.dash_en[b]) {
-                        gl_BindTexture(GL_TEXTURE_2D, gc.dash_tex[b]);
-                        gl_TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gc.dash_w[b], gc.dash_h[b],
+                    if (gc->dash_en[b]) {
+                        gl_BindTexture(GL_TEXTURE_2D, gc->dash_tex[b]);
+                        gl_TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gc->dash_w[b], gc->dash_h[b],
                                          GL_RGBA, GL_UNSIGNED_BYTE, g_dash_pxbuf[b]);
                     }
                 }
             }
             if (nav_poll() && g_nav_active && g_nav_dirty) {
-                gl_BindTexture(GL_TEXTURE_2D, gc.nav_tex);
-                if (g_nav_w != gc.nav_w || g_nav_h != gc.nav_h) {
-                    gc.nav_w = g_nav_w; gc.nav_h = g_nav_h;
-                    gl_TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gc.nav_w, gc.nav_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_nav_px);
+                gl_BindTexture(GL_TEXTURE_2D, gc->nav_tex);
+                if (g_nav_w != gc->nav_w || g_nav_h != gc->nav_h) {
+                    gc->nav_w = g_nav_w; gc->nav_h = g_nav_h;
+                    gl_TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gc->nav_w, gc->nav_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_nav_px);
                 } else {
-                    gl_TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gc.nav_w, gc.nav_h, GL_RGBA, GL_UNSIGNED_BYTE, g_nav_px);
+                    gl_TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gc->nav_w, gc->nav_h, GL_RGBA, GL_UNSIGNED_BYTE, g_nav_px);
                 }
             }
         }
 
         /* 4. 更新 60fps 平滑总线 */
-        v23_update_telemetry(&gc.cur_bus, dt, with_carplay_map, cur_night, meas_fps, meas_map_fps,
+        v23_update_telemetry(&gc->cur_bus, dt, with_carplay_map, cur_night, meas_fps, meas_map_fps,
                              (double)(t_now - t_start) * 1e-6);
 
         /* 5. 执行 60fps 皮肤渲染（带 10ms 强杀 / 掉帧看门狗 / 同帧零黑屏补画保底） */
@@ -1673,23 +1743,25 @@ static int v23_run_gl_loop(int with_carplay_map) {
 
         if (using_user && !fallback_active) {
             uint64_t js_us = 0;
-            int rrc = v23_sandbox_render_frame(&user_sb, &gc.cur_bus, &js_us, NULL);
+            int rrc = v23_sandbox_render_frame(user_sb, &gc->cur_bus, &js_us, NULL);
             if (rrc != 0) {
                 fallback_active = 1;
-                snprintf(cur_err, sizeof(cur_err), "%s", user_sb.last_err);
+                snprintf(cur_err, sizeof(cur_err), "%s", user_sb->last_err);
                 char bm[320];
                 snprintf(bm, sizeof(bm), "AI 皮肤运行异常（%.180s）· 已自动回退官方默认皮肤", cur_err);
-                v23_set_banner(&gc, bm, 2, 8);
-                v23_write_status_json(&user_sb, &gc, cur_source, 1, cur_err, meas_fps, meas_map_fps);
+                v23_set_banner(gc, bm, 2, 8);
+                v23_write_status_json(user_sb, gc, cur_source, 1, cur_err, meas_fps, meas_map_fps);
+                v23_diag("theme runtime error: %s", cur_err);
                 /* 同帧立即用官方默认经典版补画，0 黑帧！ */
-                v23_sandbox_render_frame(&fb_sb, &gc.cur_bus, NULL, NULL);
+                v23_sandbox_render_frame(fb_sb, &gc->cur_bus, NULL, NULL);
             } else {
                 if (js_us > 14000ULL) {
                     if (++slow_frames >= 30) {
                         fallback_active = 1;
                         snprintf(cur_err, sizeof(cur_err), "连续 30 帧 JS 耗时超 14ms，掉帧看门狗已熔断回退默认皮肤");
-                        v23_set_banner(&gc, cur_err, 2, 8);
-                        v23_write_status_json(&user_sb, &gc, cur_source, 1, cur_err, meas_fps, meas_map_fps);
+                        v23_set_banner(gc, cur_err, 2, 8);
+                        v23_write_status_json(user_sb, gc, cur_source, 1, cur_err, meas_fps, meas_map_fps);
+                        v23_diag("theme watchdog fallback (>14ms x 30)");
                     }
                 } else {
                     slow_frames = 0;
@@ -1700,12 +1772,25 @@ static int v23_run_gl_loop(int with_carplay_map) {
                 }
             }
         } else {
-            v23_sandbox_render_frame(&fb_sb, &gc.cur_bus, NULL, NULL);
+            v23_sandbox_render_frame(fb_sb, &gc->cur_bus, NULL, NULL);
         }
 
         /* 6. 叠画顶部安全提示横幅并 60fps VSync 送显 */
-        v23_draw_banner(&gc, t_now);
+        v23_draw_banner(gc, t_now);
         eglSwapBuffers(edpy, esurf);
+
+        if (!ready_written) {
+            ready_written = 1;
+            int rfd = open("/tmp/cl_render_ready", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            if (rfd >= 0) {
+                char rb[24];
+                int rl = snprintf(rb, sizeof(rb), "%d\n", (int)getpid());
+                (void)write(rfd, rb, (size_t)rl);
+                close(rfd);
+            }
+            v23_diag("[11] first eglSwapBuffers ok -> cl_render_ready written (%dx%d map=%d zc=%d)",
+                     ww, wh, with_carplay_map, gc->map_zero_copy);
+        }
 
         fps_frames++;
         if (t_now - last_fps_us >= 1000000ULL) {
@@ -1716,24 +1801,28 @@ static int v23_run_gl_loop(int with_carplay_map) {
         }
         if (now_ms - last_stat_ms >= 2000ULL) {
             last_stat_ms = now_ms;
-            v23_write_status_json((using_user && !fallback_active) ? &user_sb : &fb_sb, &gc,
+            v23_write_status_json((using_user && !fallback_active) ? user_sb : fb_sb, gc,
                                   cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
         }
     }
 
-    if (using_user) v23_sandbox_destroy(&user_sb);
-    v23_sandbox_destroy(&fb_sb);
+    if (using_user) v23_sandbox_destroy(user_sb);
+    v23_sandbox_destroy(fb_sb);
     if (boot_sentinel_active) unlink("/tmp/v23_theme_loading");
     for (int i = 0; i < 3; i++) {
-        if (gc.map_egl_img[i] && v23gl.EglDestroyImageKHR) v23gl.EglDestroyImageKHR(edpy, gc.map_egl_img[i]);
+        if (gc->map_egl_img[i] && v23gl.EglDestroyImageKHR) v23gl.EglDestroyImageKHR(edpy, gc->map_egl_img[i]);
     }
+    free(gc->map_tight_buf);
+    free(user_sb);
+    free(fb_sb);
+    free(gc);
     eglMakeCurrent(edpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglDestroyContext(edpy, ectx);
     eglDestroySurface(edpy, esurf);
     eglTerminate(edpy);
     if (own_win) screen_destroy_window(own_win);
     if (own_ctx) screen_destroy_context(own_ctx);
-    LOG("v23: 60fps JS engine exited cleanly\n");
+    v23_diag("v23: 60fps JS engine exited cleanly");
     return 0;
 }
 
@@ -1741,7 +1830,7 @@ static void *v23_render_thread_entry(void *arg) {
     int with_map = (int)(intptr_t)arg;
     int rc = v23_run_gl_loop(with_map);
     if (rc != 0 && !g_v23_stop) {
-        LOG("v23: render thread failed rc=%d -> exiting process to trigger clusterd Layer-2 fallback to v22.1\n", rc);
+        v23_diag("v23: render thread failed rc=%d -> exiting to trigger Layer-2 fallback", rc);
         _exit(rc);
     }
     return NULL;

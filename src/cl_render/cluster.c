@@ -210,8 +210,21 @@ static PFN_GetUniformLocation    gl_GetUniformLocation;
 static PFN_Uniform1i             gl_Uniform1i;
 static PFN_ActiveTexture         gl_ActiveTexture;
 
+static void *cl_gl_sym(const char *name) {
+    static void *h_gles = NULL;
+    static int tried_dl = 0;
+    void *p = (void *)eglGetProcAddress(name);
+    if (!p) p = dlsym(RTLD_DEFAULT, name);
+    if (!p && !tried_dl) {
+        tried_dl = 1;
+        h_gles = dlopen("libGLESv2.so.2", RTLD_LAZY | RTLD_GLOBAL);
+    }
+    if (!p && h_gles) p = dlsym(h_gles, name);
+    return p;
+}
+
 static void load_gl(void) {
-#define L(n) gl_##n = (PFN_##n)eglGetProcAddress("gl" #n)
+#define L(n) gl_##n = (PFN_##n)cl_gl_sym("gl" #n)
     L(Viewport); L(ClearColor); L(Clear);
     L(CreateShader); L(ShaderSource); L(CompileShader);
     L(CreateProgram); L(AttachShader); L(LinkProgram); L(UseProgram);
@@ -735,6 +748,7 @@ static int run_gles60_mode(int argc, char **argv);
 static volatile int g_v23_mode = 0;
 static int v23_map_setup(int w, int h);
 static void v23_map_on_decoded_frame(int didx, const int *blit_attribs);
+static void v23_map_shutdown(void);
 static int run_v23_idle_mode(int argc, char **argv);
 #endif
 
@@ -1772,7 +1786,11 @@ static int setup_screen(int width, int height) {
      * first PREPARE→RENDERING flip, VISIBLE stays 1 for the session — pause
      * just screen_blits canim into the next post_buf and posts it (single
      * window owns disp 33 throughout, no second-window competition). */
-    int vis = (g_render_stage == STAGE_PREPARE) ? 0 : 1;
+    int vis = (g_render_stage == STAGE_PREPARE
+#ifdef USE_DASH
+               && !g_v23_mode
+#endif
+    ) ? 0 : 1;
     int transp = SCREEN_TRANSPARENCY_NONE;
     screen_set_window_property_iv(g_dec.post_win, 0x28, win_size);   /* SIZE */
     screen_set_window_property_iv(g_dec.post_win, 0x05, win_size);   /* BUFFER_SIZE = same as SIZE for RGBA */
@@ -1813,13 +1831,7 @@ static int setup_screen(int width, int height) {
     screen_get_window_property_pv(g_dec.post_win, SCREEN_PROPERTY_RENDER_BUFFERS,
                                   (void**)g_dec.post_bufs);
 #ifdef USE_DASH
-    if (g_v23_mode) {
-        if (v23_map_setup(width, height) != 0) {
-            LOG("v23_map_setup failed\n");
-            sigprocmask(SIG_SETMASK, &old_sig_mask, NULL);
-            return -1;
-        }
-    } else {
+    if (!g_v23_mode) {
         dash_setup(width, height);
     }
 #endif
@@ -1840,7 +1852,11 @@ static int setup_screen(int width, int height) {
      * next post_buf — same screen API mechanism the mixer-output path uses
      * (USE_SCREEN_BLIT) every frame. Single window (post_win) owns disp 33
      * throughout; no second-window competition, no VISIBLE flip, no z-order. */
-    if (g_dec.canim_buf) {
+    if (
+#ifdef USE_DASH
+        !g_v23_mode &&
+#endif
+        g_dec.canim_buf) {
         int prc = screen_create_pixmap(&g_dec.canim_pixmap, g_dec.scr_ctx);
         if (prc) {
             LOG("  canim_pixmap create failed rc=%d errno=%d — splash disabled\n",
@@ -1906,6 +1922,9 @@ static int setup_screen(int width, int height) {
      * into post_win on first resume so the cluster shows the splash while
      * the decoder warms in background. Sized to post_win buffer dims so
      * the blit is identity (no scaling). */
+#ifdef USE_DASH
+    if (!g_v23_mode)
+#endif
     {
         int prc = screen_create_pixmap(&g_dec.boot_pixmap, g_dec.scr_ctx);
         if (prc) {
@@ -1958,10 +1977,14 @@ static int setup_screen(int width, int height) {
         }
     }
 
-    /* NvxScreen siblings for post buffers — these will be the decoder's
-     * write targets (gal0 pattern). Decoder writes YV12 directly into the
-     * post_buf's GPU memory; no mixer copy step needed. */
-    if (nv.SiblingCreate && g_dec.device) {
+    /* NvxScreen siblings for post buffers — skipped in v23 mode because post_win
+     * only allocates 2 EGL buffers (post_bufs[2..] are NULL -> would segfault SiblingCreate)
+     * and is owned exclusively by the 60fps EGL/GLES2 thread. */
+    if (
+#ifdef USE_DASH
+        !g_v23_mode &&
+#endif
+        nv.SiblingCreate && g_dec.device) {
         int i;
         for (i = 0; i < MAX_SURFACES; i++) {
             int sr = nv.SiblingCreate(g_dec.device, g_dec.post_bufs[i], &g_dec.scr_siblings[i]);
@@ -2099,10 +2122,24 @@ static int setup_screen(int width, int height) {
         g_dec.tex_y, g_dec.tex_v, g_dec.tex_u, width, height, uv_w, uv_h);
 #endif /* OPTION B */
 
+#ifdef USE_DASH
+    if (g_v23_mode) {
+        /* All main-thread setup on post_win is finished; now create offscreen pixmaps and spawn 60fps EGL thread. */
+        if (v23_map_setup(width, height) != 0) {
+            LOG("v23_map_setup failed\n");
+            sigprocmask(SIG_SETMASK, &old_sig_mask, NULL);
+            return -1;
+        }
+    }
+#endif
     g_dec.scr_ready = 1;
     LOG("screen setup complete (Option B: direct YV12 post to displayable 33)\n");
     /* v19.3: tell clusterd the window exists; it sets the cluster display list only after this (a list set
-     * before the window existed left the stock map showing) */
+     * before the window existed left the stock map showing).
+     * v23: /tmp/cl_render_ready is written by v23_run_gl_loop() only AFTER EGL+GLES2+first swap succeed. */
+#ifdef USE_DASH
+    if (!g_v23_mode)
+#endif
     {
         int rfd = open("/tmp/cl_render_ready", O_WRONLY | O_CREAT | O_TRUNC, 0666);
         if (rfd >= 0) { char rb[16]; int rl = snprintf(rb, sizeof rb, "%d\n", (int)getpid()); write(rfd, rb, rl); close(rfd); }
@@ -2868,7 +2905,11 @@ static int cb_display_picture(void* user, void* disp_info) {
     void* yuv_surface = (void*)di[2];
     if (!yuv_surface) return 1;
 
-    if (!g_dec.scr_siblings[0] || !g_dec.mixer || !nv.MixerRender) {
+    if (
+#ifdef USE_DASH
+        !g_v23_mode &&
+#endif
+        (!g_dec.scr_siblings[0] || !g_dec.mixer || !nv.MixerRender)) {
         if (nv.SurfaceWait) nv.SurfaceWait(yuv_surface, 0);
         if (g_dec.frames_displayed <= 3)
             LOG("DisplayPicture: frame=%d missing dst_sibling/mixer/MixerRender\n",
@@ -3340,7 +3381,11 @@ int run_h264_mode(int argc, char** argv) {
      * the session — no separate canim_splash process competing for the
      * displaymanager binding. RGBA byte order (no R/B swap) because post_buf
      * goes directly to screen_post_window without a shader. */
-    g_dec.canim_buf = (uint8_t*)malloc((size_t)DISP_W * DISP_H * 4);
+    g_dec.canim_buf =
+#ifdef USE_DASH
+        g_v23_mode ? NULL :
+#endif
+        (uint8_t*)malloc((size_t)DISP_W * DISP_H * 4);
     if (g_dec.canim_buf) {
         if (canim_load_into_buf(CANIM_DEFAULT_PATH, g_dec.canim_buf,
                                 DISP_W * 4, DISP_W, DISP_H, 0) != 0) {
@@ -3525,6 +3570,11 @@ int run_h264_mode(int argc, char** argv) {
         free(chunk);
     }
 
+#ifdef USE_DASH
+    if (g_v23_mode) {
+        v23_map_shutdown();
+    }
+#endif
     return 0;
 }
 

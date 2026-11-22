@@ -995,7 +995,8 @@ static const char *USB_MOUNTS[] = {
 static const char *SYS_LOG_ALLOW[] = {
     "cl_probe.log", "cl_wired.log", "clusterd.log", "cluster_fuse.log", "vwcn.log", "vwcn_persist.log",
     "dio_cluster.log", "dash.state", "cluster_cp.state", "cl_render_dbg", "cl_car_dbg",
-    "theme_status.json", "vw_popup_filter.log", "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log",
+    "v23_diag.log", "v23_fallback_v22", "theme_status.json",
+    "vw_popup_filter.log", "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log",
     "touareg_netd.log", "wifi_dev_persist.log", NULL
 };
 
@@ -1028,12 +1029,12 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], ota_ver[48];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.1");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.3");
 
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v23.0-beta.1 ota_version=%s bcm2_ip=%s\n"
+        "netd_version=v23.0-beta.3 ota_version=%s bcm2_ip=%s\n"
         "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d v23_fallback=%d\n"
         "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d v23_mode=%d\n\n",
         ota_ver, ipstr,
