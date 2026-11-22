@@ -6,7 +6,8 @@
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v22.1"></a>
-  <a href="docs/README.md"><img src="docs/img/badges/platform.svg" alt="MH2p QNX 6.6"></a>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://img.shields.io/github/downloads/a78c7/touareg-cn-carplay-mods/total?style=flat&label=Downloads&labelColor=24292f&color=0969da" alt="Downloads" height="22"></a>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://img.shields.io/github/stars/a78c7/touareg-cn-carplay-mods?style=flat&label=Stars&labelColor=24292f&color=d29922" alt="Stars" height="22"></a>
   <a href="#许可证"><img src="docs/img/badges/license.svg" alt="License PolyForm Noncommercial 1.0"></a>
 </p>
 
@@ -17,6 +18,8 @@
   <a href="#4-步免拆刷入安装"><b>⚡ 4 步安装</b></a> ·
   <a href="#11-大可选功能全景"><b>🧩 功能清单</b></a>
 </p>
+
+<p><sub>觉得有帮助欢迎点右上角 <b>⭐ Star</b> 支持；如需第一时间收到新版发版提醒，请点 <b>👀 Watch → Custom → 勾选 Releases</b>。</sub></p>
 
 </div>
 
