@@ -1576,9 +1576,10 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
                 if (fd_sel >= 0) {
                     char sb[24];
                     int sl = snprintf(sb, sizeof(sb), "%d\n", atoi(idx_s));
-                    (void)write(fd_sel, sb, (size_t)sl);
+                    ssize_t wr = (sl > 0) ? write(fd_sel, sb, (size_t)sl) : -1;
                     close(fd_sel);
-                    send_json(cfd, 200, 1, "已发送皮肤切换指令");
+                    if (wr == (ssize_t)sl) send_json(cfd, 200, 1, "已发送皮肤切换指令");
+                    else send_json(cfd, 500, 0, "写入切换指令失败");
                 } else {
                     send_json(cfd, 500, 0, "写入切换指令失败");
                 }

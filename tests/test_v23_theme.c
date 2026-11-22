@@ -57,11 +57,11 @@ static v23_bus_t make_bus(int map_live, int cold_start) {
     b.speed = 88; b.speed_raw = 88;
     b.power = 120; b.torque = 380; b.pedal = 45;
     snprintf(b.gear, sizeof(b.gear), "D5"); b.gear_num = 5;
-    b.oil = v23_sanitize_num(cold_start ? (0.0 / 0.0) : 95.0, &b.ready_oil);
+    b.oil = v23_sanitize_num(cold_start ? NAN : 95.0, &b.ready_oil);
     b.gearbox = v23_sanitize_num(cold_start ? -999.0 : 80.0, &b.ready_gearbox);
-    b.tpfl = v23_sanitize_num(cold_start ? (0.0 / 0.0) : 2.4, &b.ready_tires);
+    b.tpfl = v23_sanitize_num(cold_start ? NAN : 2.4, &b.ready_tires);
     b.alt = v23_sanitize_num(cold_start ? -999.0 : 120.0, &b.ready_alt);
-    b.t100 = v23_sanitize_num(cold_start ? (0.0 / 0.0) : 6.2, &b.ready_t100);
+    b.t100 = v23_sanitize_num(cold_start ? NAN : 6.2, &b.ready_t100);
     b.nav_live = 1; b.nav_dist_m = 200; b.nav_rem_dist_km = 5.4; b.nav_rem_min = 9;
     snprintf(b.nav_eta, sizeof(b.nav_eta), "12:15");
     snprintf(b.nav_road, sizeof(b.nav_road), "滨江大道");

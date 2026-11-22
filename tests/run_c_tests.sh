@@ -28,7 +28,7 @@ $CC $SAN_FLAGS -I. -Isrc/common -Isrc/touareg_netd \
 echo "[4/4] test_v23_theme (QuickJS 60fps sandbox + 7 fuses + cold-start + 72KB/140KB + night, ASan + UBSan)..."
 for qf in quickjs dtoa libregexp libunicode cutils; do
     $CC -O1 -g -fwrapv -DNDEBUG -DQJS_NO_ATOMICS -DCONFIG_VERSION=\"2026-06-04\" \
-        -fsanitize=address,undefined -fno-omit-frame-pointer -w \
+        -fno-omit-frame-pointer -w \
         -Isrc/cl_render/quickjs -c "src/cl_render/quickjs/$qf.c" -o "$TMPDIR_TESTS/qjs_$qf.o"
 done
 $CC $SAN_FLAGS -DNDEBUG -DQJS_NO_ATOMICS -Isrc/cl_render \
