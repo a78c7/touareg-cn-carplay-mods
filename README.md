@@ -27,6 +27,8 @@
   <a href="#vw-touareg--mh2p-open-cockpit-deutsch"><b>🇩🇪 DE</b></a>
 </p>
 
+<p><sub>觉得有帮助欢迎点右上角 <b>⭐ Star</b> 支持；如需第一时间收到新版发版邮件提醒，请点 <b>👀 Watch → Custom → 勾选 Releases</b>。</sub></p>
+
 </div>
 
 ---
