@@ -127,3 +127,16 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
 - 在 `cl.conf` 中取消 `wide=2688` 和 `view=85` 两行的注释。此设置默认关闭。手机按 2688 像素宽绘制仪表地图，显示时缩放到 85%，前方和两侧能多看到一截路，车标仍由显示程序平移到时钟下方。
 - 【途锐实测】2023 款途锐（P2878）使用高德导航，有线和无线 CarPlay 均已验证。
 - 刷机保留车机上已有的 `cl.conf`。已安装的车辆要启用这项设置，需在现有配置中手动加入这两行。
+
+## 17. `cl_render` 启动命令、字库重生成与 GLES2 60fps 通道（v22）
+
+- **默认模式（CarPlay H.264 地图 + 信息框/导航卡叠加）**：
+  ```sh
+  CL_DISPID=58 cl_render capture=h264 xres=1920 yres=639 mode=stretch
+  ```
+- **独立 60fps OpenGL ES 2.0 动画通道（试验，`gles60.c`，由 `8080` 控制台 `gles60_mode` 切换）**：
+  ```sh
+  CL_DISPID=58 cl_render capture=gles60 xres=1920 yres=639
+  ```
+  复用窗口 `58`（仍以 `[58, 33]` 覆盖在原车地图上方），通过 `eglGetProcAddress` 动态解析 `gl*` 符号（不直接链接 `-lGLESv2`），以 `eglSwapInterval(dpy, 1)` 锁死硬件 60fps VSync，并叠加 `dash.c` 预渲染的 `g_dash_pxbuf[0..1]` 文本与刻度纹理。
+- **预渲染字库与跨编译适配**：`src/cl_render/dash_font.h` 基于 Noto Sans CJK SC（SIL OFL 1.1）预生成，重新生成命令为 `python3 src/cl_render/gen_dash_font.py > src/cl_render/dash_font.h`；`glchar.h` / `shim.c` / `src/common/aeabi_shim.h` 用于适配 Clang + QNX 6.6 libc 交叉编译。版权署名与 CC BY-NC-SA 4.0 许可声明见 [`LICENSES/THIRD_PARTY_NOTICES.md`](../LICENSES/THIRD_PARTY_NOTICES.md)。

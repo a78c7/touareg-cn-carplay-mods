@@ -112,8 +112,9 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 4. **上车自动刷入**：安全弹出 U 盘 → **发动车辆** → 插入扶手箱 USB 口。约 10 秒后车机自动重启刷机（全程数分钟、会自动重启几次，**期间请勿操作车机**）→ 屏幕提示移除介质后拔出即生效。
 
 > [!TIP]
-> - **未签名提示与来源校验**：桌面配置器未购商业签名，Windows 点「更多信息 → 仍要运行」；Mac 在「系统设置 → 隐私与安全性」点「仍要打开」。程序由 GitHub Actions 从 [`tools/configurator`](tools/configurator) 源码交叉编译并随 Release 附带 `SHA256SUMS.txt`（仓库源码树不再囤积大体积 `.exe` / `.command` 产物），仅监听本机 `127.0.0.1` 修改当前 U 盘，**绝不联网**。
-> - **旧版升级、PIN 兼容与黑边**：**从 `v22.01` 及更早版本升级到 `v22.1` 必须使用 U 盘覆盖刷入一次**（旧版 OTA 尚未内置 Ed25519 公钥，会安全拒绝含 `manifest.sha256.sig` 的新版升级包，不会损坏车机；刷入 `v22.1` 之后即可继续使用 `8080` 无线 OTA）。U 盘覆盖刷入时车标校准 `cl.conf` 与已有管理口令 `web.pin` 自动保留（兼容旧版 4～8 位口令）；若早期旧版车机尚未配置过 `web.pin`，`v22.1` 首次启动会**自动生成 6 位随机口令并在仪表屏醒目显示**（手机首次登录 `8080` 后自动隐藏），既不放行裸奔也不锁死老用户（未装仪表模块的其他 MH2p 车型可通过 SSH 查看 `/mnt/app/eso/bin/apps/wifi_dev/web.pin` 或用「改装设置」重设）。首次刷完若 CarPlay 仍有黑边，在 iPhone 蓝牙/CarPlay 设置里「忘记此车辆」重连一次即可。
+> - **未签名提示与哈希核对**：桌面配置器未购商业签名，Windows 点「更多信息 → 仍要运行」；Mac 在「系统设置 → 隐私与安全性」点「仍要打开」。程序由 GitHub Actions 从 [`tools/configurator`](tools/configurator) 源码构建并随 Release 附 `SHA256SUMS.txt`，仅监听本机 `127.0.0.1`，**绝不联网**。
+> - **旧版升级与 PIN 兼容**：**`v22.01` 及更早版本升级到 `v22.1` 必须先走 U 盘覆盖刷入一次**（旧版 OTA 未内置 Ed25519 公钥，会安全拒绝新版签名包；刷入 `v22.1` 后即可继续无线 OTA）。U 盘覆盖刷入自动保留已有 `cl.conf` 与 `web.pin`（兼容旧版 4～8 位口令）；若早期旧版从未设过 `web.pin`，`v22.1` 首次启动自动生成 6 位随机口令并显示在途锐仪表屏，手机首次登录 `8080` 后永久隐藏（非途锐/无仪表模块车型见 [`docs/07`](docs/07-无线控制台与SSH开发.md)）。
+> - **CarPlay 黑边**：首次刷完若仍有黑边，在 iPhone 蓝牙/CarPlay 设置里「忘记此车辆」重连一次即可。
 
 <details>
 <summary><b>🖥️ 点击展开查看：电脑端「途锐改装设置 v22」离线可视化界面</b></summary>
@@ -135,24 +136,20 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
   <sub><i>手机连热点打开 <code>http://touareg.local:8080</code>：停车安全锁保护、43 项分类选配与大字预设、运动条/导航卡/车标调节、行车记录 CSV 无线下载。</i></sub>
 </div>
 
-### 1. 普通车主：零命令行，手机浏览器秒改配置、离线无线升级与一键脱敏诊断
-- 在「改装设置」里把 **「手机无线控制台」** 选为安装（无需勾选 SSH），填入 1～3 个常用手机热点（自动处理中文名十六进制编码与 iPhone 弯撇号 `’`）及 6～16 位管理口令。
-- 上车打开手机个人热点（**iPhone 首次请开启「最大兼容性」并在「设置 → 个人热点」页亮屏等 3～5 秒**；安卓选 WPA2），车机开机约 1 分钟后自动连入。
-- 手机浏览器访问 **`http://touareg.local:8080`**（首次输一次口令自动记住），停车时（车速 ≤ 3 km/h）直接改信息框、开关平滑动画/Siri 短按/独立 60fps 模式，支持：
-  - **离线无线升级（OTA）与一键回滚**：下载官方 Release 的 `touareg-ota-*.tar` 在网页一键上传，强制校验官方 **Ed25519 数字签名** 与逐文件 SHA-256（含 `version.txt`）、严格白名单落盘并自动备份旧版，以后升级核心程序免插拔 U 盘；
-  - **一键脱敏诊断包**：在「日志导出」页一键下载 `touareg_diag_sanitized.txt`（自动抹去 Wi-Fi 密码、口令、SSH 密钥、手机号与 VIN），发群/提 Issue 一步到位；
-  - **3 次崩溃安全模式可视管理**：异常触发熔断时顶部自动高亮提示，排除问题后可一键清除锁并刷新基线。
+### 1. 普通车主：零命令行，手机浏览器改配置、无线 OTA 与脱敏诊断
+- 在「改装设置」安装 **「手机无线控制台」**（无需勾选 SSH），填入 1～3 个热点与 6～16 位口令；上车开热点（iPhone 首次开「最大兼容性」并停留在热点页亮屏 3～5 秒；安卓选 WPA2），约 1 分钟后连入。
+- 手机访问 **`http://touareg.local:8080`**（口令仅走 `X-Pin` 请求头、停车 ≤ 3 km/h 生效）：可改信息框与车标、上传 **Ed25519 签名校验** 的 `touareg-ota-*.tar` 离线升级与一键回滚、一键下载脱敏诊断包 `touareg_diag_sanitized.txt`，以及查看/清除 3 次崩溃安全模式（详细机制见 [`docs/07-无线控制台与SSH开发.md`](docs/07-无线控制台与SSH开发.md)）。
 
-### 2. 傻瓜式无线 SSH + AI 自由开发（含车机硬件与渲染护栏）
+### 2. 无线 SSH + AI 自由开发（含车机硬件与渲染护栏）
 
-想用电脑上的 **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)**（或 Claude Code / Cursor），或者只带一部安卓手机用 **[DSH Go](https://github.com/ccch1mneyyy/dsh-go)**（DeepSeek Harness 安卓端，iPhone 暂无公开包）无线直连车机自定义仪表，只需 **3 步**：
+用电脑端 **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** / Claude Code / Cursor，或安卓端 **[DSH Go](https://github.com/ccch1mneyyy/dsh-go)**（iPhone 暂无公开包）无线连车自定义仪表只需 3 步：
 
-1. **拿本车专属私钥**：在「改装设置」里安装无线控制台时勾上 **「同时开启 SSH 无线开发终端（端口 2012）」** 并保存，桌面自动生成 `途锐无线SSH密钥/touareg_ed25519`（私钥不留在 U 盘里）。
-2. **开热点连车机**：发动车辆并打开手机个人热点等待约 1 分钟（若手机开了全局 VPN/代理，请先关闭或绕过局域网）。
-3. **把私钥和下面整段提示词直接发给 AI**（已内置车机资源与渲染硬护栏，防止 AI 写卡画面或写伤闪存）：
+1. **拿本车专属私钥**：安装无线控制台时勾上 **「同时开启 SSH 无线开发终端（端口 2012）」**，私钥自动保存到桌面 `途锐无线SSH密钥/touareg_ed25519`（不留在 U 盘）。
+2. **开热点连车机**：发动车辆并开热点等待约 1 分钟（若开了全局 VPN/代理请关闭或绕过局域网）。
+3. **把私钥和下面提示词直接发给 AI**（详细硬件边界见 [`docs/07`](docs/07-无线控制台与SSH开发.md#11-ai-无线开发边界与车机硬件护栏开发者与-ai-必读)）：
 
 <details>
-<summary><b>🤖 点击展开并一键复制：发给 AI 助手的无线连车安全指令（v22.0 含硬件与渲染护栏）</b></summary>
+<summary><b>🤖 点击展开并一键复制：发给 AI 助手的无线连车安全指令（v22.1 含硬件与渲染护栏）</b></summary>
 
 ```text
 这是我车机的 SSH 私钥文件 `touareg_ed25519`（电脑默认在桌面 `途锐无线SSH密钥/` 文件夹，安卓手机端请直接读取我上传或放在 Download 目录下的 `touareg_ed25519`）。
@@ -228,43 +225,40 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 - **[luanqibazao0123-bot](https://github.com/luanqibazao0123-bot)**（[#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)）：启发了 `v21` 大字运动刻度信息框视觉重构，并提供了老固件升 `P2878` 实测线索。
 - **海外社区引用**：已被德国途锐论坛 **Touareg-Freunde** 的 [欧版 MH2p P2869 仪表投屏项目帖](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)引用参考。
-- **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)**（[官网](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)）：免拆 U 盘刷机框架及可选 `AppleCarPlay` / `AndroidAuto` 模块（[CC BY-NC-SA 4.0](LICENSES/MH2p_SD_ModKit_LICENSE.md)，其中安卓修复引用了 [fifthBro/pcm5-androidauto-connect-fix](https://github.com/fifthBro/pcm5-androidauto-connect-fix)）。
-- **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)** & **[mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**：`dio_cluster.so`（v0034）与 `cl_render` 上游基础（[CC BY-NC-SA 4.0](LICENSES/fifthBro_mh2p-cluster_LICENSE.md)）。
+- **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)**（[官网](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)）：免拆 U 盘刷机框架及可选 `AppleCarPlay` / `AndroidAuto` 模块（[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)，其中安卓修复引用了 [fifthBro/pcm5-androidauto-connect-fix](https://github.com/fifthBro/pcm5-androidauto-connect-fix)）。
+- **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)** & **[mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**：`dio_cluster.so`（v0034）与 `cl_render` 上游基础（[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)）。
 - **[davecozens / touareg-carplay](https://github.com/davecozens/touareg-carplay)**：全屏几何数值参考；**[luka-dev](https://github.com/luka-dev)**：`jxe2jar`、`qnx65-armv7-toolchain` 编译与逆向工具链。
 
 ## 许可证
 
-- **本仓库原创代码**（`src/hud-java`、`src/popup-filter-java`、`src/cluster-probe/` 含自研有线 iAP2 解析器 `cl_wired_rg.c`、`src/clusterd`、`src/touareg_netd`、`src/vhpatch`、`src/common`、`tools/`、模块脚本）：采用 **[PolyForm Noncommercial 1.0.0](LICENSE) + [非商业附加条款](LICENSE.ADDITIONAL-TERMS.md)**。`docs/` 文档文字允许按 **CC BY-SA 4.0** 署名共享。
-- **第三方开源组件**：`src/cl_render`、`dio_cluster.so`、ModKit 及 LawPaul 模块遵循 **CC BY-NC-SA 4.0**（详见 [THIRD_PARTY_NOTICES.md](LICENSES/THIRD_PARTY_NOTICES.md)）；`dash_font.h` 预渲染字形基于 Noto Sans CJK SC（[SIL OFL 1.1](LICENSES/NotoSansCJK_OFL.md)）；`stb_truetype.h` 为公有领域（[Public Domain](LICENSES/stb_PUBLIC_DOMAIN.md)）；`vhpatch` 静态链接 `zlib 1.3.1`（[zlib License](LICENSES/zlib_LICENSE.md)）。
-- **非商业与反倒卖边界声明**：**整个 U 盘发布包与无线 OTA 包仅供个人非商业学习与使用，严禁任何形式的商用、售卖安装包、付费代刷或捆绑收费**；本程序在桌面配置器、车机 `8080` 控制台与刷机脚本中均内嵌免费开源声明。本仓库全部原创代码与自研 `VW_*` 模块不含任何大众或苹果受版权保护的原厂文件；可选的第三方 `AppleCarPlay` / `AndroidAuto` 模块原样引用自上游 LawPaul `MH2p_SD_ModKit`（默认未开启，按需选装）。
+- **原创代码**：采用 **[PolyForm Noncommercial 1.0.0](LICENSE) + [非商业附加条款](LICENSE.ADDITIONAL-TERMS.md)**（仅供个人非商业学习与使用，严禁转售、付费代刷或商业捆绑；不含大众/苹果原厂文件）。`docs/` 文档文字采用 **CC BY-SA 4.0**。
+- **第三方组件**：`src/cl_render`、`dio_cluster.so`、ModKit 及可选 LawPaul `AppleCarPlay`/`AndroidAuto` 模块遵循 **[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)**；`dash_font.h`（[SIL OFL 1.1](LICENSES/NotoSansCJK_OFL.md)）、`stb_truetype.h`（[Public Domain](LICENSES/stb_PUBLIC_DOMAIN.md)）、`zlib 1.3.1`（[zlib License](LICENSES/zlib_LICENSE.md)）及 TweetNaCl Ed25519 详见 **[THIRD_PARTY_NOTICES.md](LICENSES/THIRD_PARTY_NOTICES.md)**。
 
 ## 免责声明
 
 1. **非官方**：个人业余研究项目，与大众、奥迪、保时捷、宾利、兰博基尼、苹果、谷歌、高德等公司无任何关联或授权关系。
-2. **按现状公开**：代码、U 盘包和文档按“现状”提供，不作任何明示或暗示保证。
-3. **风险自负**：刷机改装可能导致车机/仪表异常、丧失原厂保修或不符合当地法规，**一切直接或间接后果均由使用者自行承担**。
-4. **行车安全**：严禁驾驶时操作手机控制台或车机设置；信息框数据仅供参考，车速与告警灯一律以原车仪表为准。
-5. **严禁商用与高价倒卖**：作者不提供付费刷机或远程协助；任何转售、打包收费行为均违反 [PolyForm Noncommercial 1.0.0](LICENSE) 与[附加条款](LICENSE.ADDITIONAL-TERMS.md)并与作者无关。
-6. **权利人联系**：如相关权利人认为内容涉及合法权益，请通过 [Issue](https://github.com/a78c7/touareg-cn-carplay-mods/issues) 联系，核实后及时处理。
+2. **按现状公开 / 风险自负**：代码、U 盘包和文档按“现状”提供，不作明示或暗示保证；刷机可能导致车机/仪表异常、丧失保修或不符合当地法规，**一切后果由使用者自负**。
+3. **行车安全**：严禁驾驶时操作手机控制台或车机设置；信息框数据仅供参考，车速与告警灯一律以原车仪表为准。
+4. **反倒卖与权利人联系**：作者不提供付费刷机或远程协助，任何倒卖均违反上述非商业许可并与作者无关；权利人如有异议请通过 [Issue](https://github.com/a78c7/touareg-cn-carplay-mods/issues) 联系。
 
 ---
 
 ## VW Touareg (CN) & MH2p Open Cockpit
 
-One zero-disassembly USB flash for China-market VW Touareg P-series units (`MH2p_CN_VWG36_P*` — full end-to-end verified on `P2878`, auto-probing & safe-skipping incompatible sub-patches on other CN `P*` builds, and skipping non-CN/other vehicles), plus an open wireless web console, offline OTA updater, and SSH development base for **MH2p (MIB2+ High)** units across **VW, Audi, Porsche PCM 5, Bentley, and Lamborghini**:
+One zero-disassembly USB flash for China-market VW Touareg P-series units (`MH2p_CN_VWG36_P*` — end-to-end verified on `P2878`, auto-probing & safe-skipping incompatible sub-patches on other CN `P*` builds, skipping non-CN/other vehicles), plus an open wireless web console, Ed25519-signed offline OTA updater, and SSH development base for **MH2p (MIB2+ High)** units across **VW, Audi, Porsche PCM 5, Bentley, and Lamborghini**:
 
 - **11 Opt-in Modules (all disabled by default under `USB/未选模块/`, independently installable & uninstallable)**: Full-screen CarPlay (38-byte in-place patch), wireless CarPlay & Android Auto (upstream LawPaul modules), HUD turn-by-turn (wireless `libesoiap2` & clean-room wired Cinemo iAP2), `1920×639` cluster map with vision-based AMap centering, `OK` double-tap stock-map toggle (`VW_HUD_4_OkMapSwitch`), steering-wheel voice short-press Siri (`VW_HUD_5_SiriShortPress`), symmetrical `295px` **46px bold telemetry boxes with 10 Hz damped sport gauge bars (`smooth=1`, 43 real DSI channels)**, **large-font navigation card** (`nav_box=1/2`), standalone **60 fps GLES2 animation engine** (`gles60.c`), `VW_Wireless5GHzFix`, and shared Bundle 98 popup filters (`VW_NoBtAuthPopup` / `VW_NoSimPopup`).
-- **Wireless Console, Offline OTA & Zero-Wear Safe Mode (`VW_WiFi_Dev`)**: Connects via idle `bcm2` STA (`dhcp.client -n -R`, preserving 5 GHz RSDB wireless CarPlay and `ecm0` telematics). Open `http://touareg.local:8080` (PIN-protected, parked-only lock) for live config, SHA-256 verified allowlisted `.tar` offline OTA & one-click rollback, one-click sanitized diagnostic bundle download, 3-crash zero-wear safe-mode management, or optional key-only **Wireless SSH (`:2012`)**. Preview layouts locally via [`tools/preview/index.html`](tools/preview/index.html).
-- **Install**: Format a ≤ 32 GB **FAT32** USB drive → extract the [latest release zip](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) to the USB root → **run `改装设置（Windows）.exe` or `改装设置（Mac）.command` to select modules & save (required, as all modules default to off)** → start engine, insert USB, wait for reboots, remove when prompted.
+- **Wireless Console, Signed Offline OTA & Zero-Wear Safe Mode (`VW_WiFi_Dev`)**: Connects via idle `bcm2` STA (`dhcp.client -n -R`, preserving 5 GHz RSDB wireless CarPlay and `ecm0` telematics). Open `http://touareg.local:8080` (fail-closed `X-Pin` auth with on-cluster auto-generated setup PIN, per-IP exponential backoff, parked-only lock) for live config, **Ed25519-signed & SHA-256 verified** allowlisted `.tar` offline OTA & one-click rollback (`v22.01` and earlier must upgrade to `v22.1` via USB once), one-click sanitized diagnostic bundle download, 3-crash zero-wear safe-mode management, or optional key-only **Wireless SSH (`:2012`)**. Preview layouts locally via [`tools/preview/index.html`](tools/preview/index.html).
+- **Install**: Format a ≤ 32 GB **FAT32** USB drive → extract the [latest release zip](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) (verify with `SHA256SUMS.txt`) to the USB root → **run `改装设置（Windows）.exe` or `改装设置（Mac）.command` to select modules & save (required, as all modules default to off)** → start engine, insert USB, wait for reboots, remove when prompted.
 - **Docs & License**: Full Chinese engineering docs (`01–07`) & platform reference (`R1–R5`) in [`docs/README.md`](docs/README.md). Original code licensed under **PolyForm Noncommercial 1.0.0** + [Additional Terms](LICENSE.ADDITIONAL-TERMS.md); third-party components per `LICENSES/`. **Personal, non-commercial use only; strict anti-resale; use entirely at your own risk.**
 
 ---
 
 ## VW Touareg & MH2p Open Cockpit (Deutsch)
 
-Ein-USB-Stick-Modifikationspaket ohne Ausbau für den **VW Touareg III (CR)** mit **MH2p-Steuergerät (MIB2+ High)** sowie offene drahtlose Web-Konsole, Offline-OTA & SSH-Entwicklungsbasis für **VW, Audi, Porsche (PCM 5), Bentley und Lamborghini (LIS III)**:
+Ein-USB-Stick-Modifikationspaket ohne Ausbau für den **VW Touareg III (CR)** mit **MH2p-Steuergerät (MIB2+ High)** sowie offene drahtlose Web-Konsole, Ed25519-signiertes Offline-OTA & SSH-Entwicklungsbasis für **VW, Audi, Porsche (PCM 5), Bentley und Lamborghini (LIS III)**:
 
 - **11 optionale Module (standardmäßig alle deaktiviert unter `USB/未选模块/`, einzeln installier- und deinstallierbar)**: Vollbild-CarPlay (38-Byte-In-Place-Patch), Wireless CarPlay & Android Auto (LawPaul), HUD-Abbiegehinweise (Wireless & Clean-Room Wired Cinemo), `1920×639` Kombiinstrument-Karte inkl. **OK-Doppelklick-Umschaltung (`VW_HUD_4_OkMapSwitch`)** & **Sprachtaste-Kurzdruck-Siri (`VW_HUD_5_SiriShortPress`)**, symmetrische `295px` **Großschrift-Sport-Infoboxen mit 10-Hz-gedämpften Balken (`smooth=1`, 43 echte DSI-Kanäle)**, **Großschrift-Navigationskarte** (`nav_box=1/2`), eigenständige **60-fps-GLES2-Engine (`gles60.c`)**, `VW_Wireless5GHzFix` sowie gemeinsame Bundle-98-Popup-Filter (`VW_NoBtAuthPopup` / `VW_NoSimPopup`).
-- **Drahtlose Web-Konsole, Offline-OTA & 3-Crash-Safe-Mode (`VW_WiFi_Dev`)**: Hintergrundverbindung über `bcm2` (`http://touareg.local:8080`, PIN-geschützt, Park-Sperre > 3 km/h) mit SHA-256-geprüftem Offline-OTA + Rollback, anonymisiertem Diagnosepaket, 3-Absturz-Schutzschaltung (ohne eMMC-Verschleiß) und optionalem Key-only **WLAN-SSH (`:2012`)**.
+- **Drahtlose Web-Konsole, signiertes Offline-OTA & 3-Crash-Safe-Mode (`VW_WiFi_Dev`)**: Hintergrundverbindung über `bcm2` (`http://touareg.local:8080`, Fail-Closed-`X-Pin`-Auth mit Auto-PIN im Kombiinstrument, Park-Sperre > 3 km/h) mit **Ed25519-signiertem & SHA-256-geprüftem** Offline-OTA + Rollback (`v22.01` und älter erfordern einmaliges USB-Upgrade auf `v22.1`), anonymisiertem Diagnosepaket, 3-Absturz-Schutzschaltung (ohne eMMC-Verschleiß) und optionalem Key-only **WLAN-SSH (`:2012`)**.
 - **Hinweis für EU-Fahrzeuge (z. B. `P2869`)**: Touareg-UI-Skripte prüfen auf chinesische P-Stände (`MH2p_CN_VWG36_P*`) und brechen auf EU-/anderen Ständen sicher ohne Änderungen ab; Architektur, `docs/` (`01–07`, `R1–R5`), Quellcode (`src/`), `tools/preview/index.html` und `VW_WiFi_Dev` dienen direkt als Basis (siehe auch [Touareg-Freunde-Thread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)).
 - **Lizenz & Haftungsausschluss**: Eigener Code unter **PolyForm Noncommercial 1.0.0** + [Zusatzbedingungen](LICENSE.ADDITIONAL-TERMS.md); Drittkomponenten gemäß `LICENSES/`. **Ausschließlich für den privaten, nicht-kommerziellen Gebrauch; Weiterverkauf streng untersagt; Nutzung auf eigene Gefahr.**
