@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v22.1"></a>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fa78c7%2Ftouareg-cn-carplay-mods%2Fbadges%2Fdownloads.json&style=flat" alt="Downloads" height="22"></a>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fa78c7%2Ftouareg-cn-carplay-mods%2Frefs%2Fheads%2Fbadges%2Fdownloads.json&style=flat" alt="Downloads" height="22"></a>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://img.shields.io/github/stars/a78c7/touareg-cn-carplay-mods?style=flat&label=Stars&labelColor=24292f&color=d29922" alt="Stars" height="22"></a>
   <a href="#许可证"><img src="docs/img/badges/license.svg" alt="License PolyForm Noncommercial 1.0"></a>
 </p>
