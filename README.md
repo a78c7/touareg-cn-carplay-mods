@@ -5,7 +5,7 @@
 # 途锐 MH2p CarPlay 改装全家桶 & 无线开发底座
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v22.01"></a>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v22.1"></a>
   <a href="docs/README.md"><img src="docs/img/badges/platform.svg" alt="MH2p QNX 6.6"></a>
   <a href="#手机无线控制台与-ai-自由开发"><img src="docs/img/badges/console.svg" alt="touareg.local:8080"></a>
   <a href="docs/07-无线控制台与SSH开发.md"><img src="docs/img/badges/ssh.svg" alt="Wireless SSH Ed25519"></a>
@@ -14,7 +14,7 @@
 
 **不拆一粒螺丝、无需专用网卡 —— 单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与大字运动信息框，支持手机 `8080` 离线无线升级（OTA）、一键脱敏诊断、3 次崩溃自动安全模式与 GLES2 60fps 独立仪表底座。**
 
-当前主线 **v22.01**（最新版见 **[Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)** · 皮肤与配置交流见 **[Discussions](https://github.com/a78c7/touareg-cn-carplay-mods/discussions)**）
+当前主线 **v22.1**（最新版见 **[Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)** · 皮肤与配置交流见 **[Discussions](https://github.com/a78c7/touareg-cn-carplay-mods/discussions)**）
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载最新版 U 盘包 &amp; OTA</b></a> ·
@@ -108,12 +108,12 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
    ```
 3. **【必做】运行「改装设置」勾选并保存**：双击 U 盘根目录的 **`改装设置（Windows）.exe`** 或 **`改装设置（Mac）.command`**（**不运行直接插车会空刷、不会安装任何模块**）：
    - 在本地离线网页里直接点快捷预设或逐项选 **「安装 / 卸载 / 不处理」**，点选拖拽左右信息框与大字导航卡；
-   - 若开启「手机无线控制台」，填好手机热点和 4～8 位管理口令 → 点击 **「保存到 U 盘」**（Mac 版自动清掉 `._*` 隐藏文件）。
+   - 若开启「手机无线控制台」，填好手机热点和 6～16 位管理口令 → 点击 **「保存到 U 盘」**（Mac 版自动清掉 `._*` 隐藏文件）。
 4. **上车自动刷入**：安全弹出 U 盘 → **发动车辆** → 插入扶手箱 USB 口。约 10 秒后车机自动重启刷机（全程数分钟、会自动重启几次，**期间请勿操作车机**）→ 屏幕提示移除介质后拔出即生效。
 
 > [!TIP]
-> - **未签名提示**：桌面配置器未购商业签名，Windows 点「更多信息 → 仍要运行」；Mac 在「系统设置 → 隐私与安全性」点「仍要打开」。程序仅监听本机 `127.0.0.1` 修改当前 U 盘，**绝不联网**，源码见 [`tools/configurator`](tools/configurator)。
-> - **旧版升级与黑边**：已刷过旧版直接覆盖刷入即可，原有的车标校准 `cl.conf` 自动保留；首次刷完若 CarPlay 仍有黑边，在 iPhone 蓝牙/CarPlay 设置里「忘记此车辆」重连一次即可。
+> - **未签名提示与来源校验**：桌面配置器未购商业签名，Windows 点「更多信息 → 仍要运行」；Mac 在「系统设置 → 隐私与安全性」点「仍要打开」。程序由 GitHub Actions 从 [`tools/configurator`](tools/configurator) 源码交叉编译并随 Release 附带 `SHA256SUMS.txt`（仓库源码树不再囤积大体积 `.exe` / `.command` 产物），仅监听本机 `127.0.0.1` 修改当前 U 盘，**绝不联网**。
+> - **旧版升级、PIN 兼容与黑边**：已刷过旧版直接覆盖刷入或用无线 OTA 升级即可，车标校准 `cl.conf` 与已有管理口令 `web.pin` 自动保留（兼容旧版 4～8 位口令）；若早期旧版车机尚未配置过 `web.pin`，`v22.1` 首次启动会**自动生成 6 位随机口令并在仪表屏醒目显示**（手机首次登录 `8080` 后自动隐藏），既不放行裸奔也不锁死老用户（未装仪表模块的其他 MH2p 车型可通过 SSH 查看 `/mnt/app/eso/bin/apps/wifi_dev/web.pin` 或用「改装设置」重设）。首次刷完若 CarPlay 仍有黑边，在 iPhone 蓝牙/CarPlay 设置里「忘记此车辆」重连一次即可。
 
 <details>
 <summary><b>🖥️ 点击展开查看：电脑端「途锐改装设置 v22」离线可视化界面</b></summary>
@@ -136,10 +136,10 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 </div>
 
 ### 1. 普通车主：零命令行，手机浏览器秒改配置、离线无线升级与一键脱敏诊断
-- 在「改装设置」里把 **「手机无线控制台」** 选为安装（无需勾选 SSH），填入 1～3 个常用手机热点（自动处理中文名十六进制编码与 iPhone 弯撇号 `’`）及 4～8 位管理口令。
+- 在「改装设置」里把 **「手机无线控制台」** 选为安装（无需勾选 SSH），填入 1～3 个常用手机热点（自动处理中文名十六进制编码与 iPhone 弯撇号 `’`）及 6～16 位管理口令。
 - 上车打开手机个人热点（**iPhone 首次请开启「最大兼容性」并在「设置 → 个人热点」页亮屏等 3～5 秒**；安卓选 WPA2），车机开机约 1 分钟后自动连入。
 - 手机浏览器访问 **`http://touareg.local:8080`**（首次输一次口令自动记住），停车时（车速 ≤ 3 km/h）直接改信息框、开关平滑动画/Siri 短按/独立 60fps 模式，支持：
-  - **离线无线升级（OTA）与一键回滚**：下载官方 Release 的 `touareg-ota-*.tar` 在网页一键上传，自动 SHA-256 校验、白名单落盘并备份旧版，以后升级核心程序免插拔 U 盘；
+  - **离线无线升级（OTA）与一键回滚**：下载官方 Release 的 `touareg-ota-*.tar` 在网页一键上传，强制校验官方 **Ed25519 数字签名** 与逐文件 SHA-256（含 `version.txt`）、严格白名单落盘并自动备份旧版，以后升级核心程序免插拔 U 盘；
   - **一键脱敏诊断包**：在「日志导出」页一键下载 `touareg_diag_sanitized.txt`（自动抹去 Wi-Fi 密码、口令、SSH 密钥、手机号与 VIN），发群/提 Issue 一步到位；
   - **3 次崩溃安全模式可视管理**：异常触发熔断时顶部自动高亮提示，排除问题后可一键清除锁并刷新基线。
 

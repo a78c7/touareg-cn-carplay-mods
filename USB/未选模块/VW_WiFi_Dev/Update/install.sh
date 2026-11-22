@@ -48,11 +48,14 @@ chmod 700 "$D"
 # 2) 安装 touareg_netd（同分区 .new -> mv 原子替换）
 cp -v "$MOD_PATH/touareg_netd" "$D/touareg_netd.new" && chmod 755 "$D/touareg_netd.new" && mv -f "$D/touareg_netd.new" "$D/touareg_netd"
 
-# 3) 安装管理口令 web.pin
+# 3) 安装管理口令 web.pin（兼容旧版平滑升级：U 盘提供则覆盖，否则保留车机既有口令；
+#    若旧版未配置过 web.pin，由 touareg_netd 首次启动自动生成 6 位随机口令并在仪表屏显示）
 if [ -s "$MOD_PATH/web.pin" ]; then
     cp -v "$MOD_PATH/web.pin" "$D/web.pin.new" && chmod 600 "$D/web.pin.new" && mv -f "$D/web.pin.new" "$D/web.pin"
+elif [ -s "$D/web.pin" ]; then
+    echo "info: keeping existing web.pin on head unit"
 else
-    rm -f "$D/web.pin"
+    echo "info: no web.pin found; touareg_netd will auto-generate a random 6-digit PIN on first boot"
 fi
 
 # 4) 安装 Wi-Fi 热点配置（如 U 盘有配置则覆盖并备份旧版）
@@ -101,7 +104,7 @@ else
 fi
 
 ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/iopkt_base_cores"
-echo "v22.01" > "$D/ota_version"
+echo "v22.1" > "$D/ota_version"
 rm -f "$D/disable"
 sync
 # 注意：绝不能在此执行 mount -ur /mnt/app，上游 modkit_install.sh 后续仍需写入 /mnt/app/eso/bin/servicemgrmibhigh

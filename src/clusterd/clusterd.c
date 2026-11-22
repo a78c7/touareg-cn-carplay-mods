@@ -84,7 +84,7 @@ static int pick_va(char *app, int appcap, int *nav) {
             if (strcmp(r, g_last_road)) {
                 char m[160]; snprintf(m, sizeof m, "resumed guidance: next maneuver now \"%s\" side %d", r, side);
                 if (g_last_road[0]) logs(m);
-                strcpy(g_last_road, r);
+                snprintf(g_last_road, sizeof g_last_road, "%s", r);
             }
         }
     }
@@ -284,7 +284,7 @@ int main(int argc, char **argv) {
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
     char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate10;st", did);   /* ours on top, native 33 kept underneath */
     const char *back_seq = getenv("CL_BACKSEQ") ? getenv("CL_BACKSEQ") : "unhold;33;vis1;rate10;st";
-    logm("clusterd v22.01 start", getpid());
+    logm("clusterd v22.1 start", getpid());
     for (;;) {
         int safe_mode = (access("/mnt/app/eso/bin/apps/cluster/safe_mode", F_OK) == 0 ||
                          access("/tmp/vw_cluster_safe_mode", F_OK) == 0 ||

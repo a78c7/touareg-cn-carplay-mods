@@ -1,17 +1,119 @@
 #!/bin/sh
-# Pack the USB folder + license notices into a release zip AND an offline 8080 wireless OTA .tar.
-# usage: sh tools/make_release.sh v22.0
-#   -> touareg-cn-carplay-mods-v22.0.zip
-#   -> touareg-ota-v22.0.tar
+# Pack the USB folder + license notices into a release zip, an Ed25519-signed offline OTA .tar,
+# and SHA256SUMS.txt.
+#
+# usage:
+#   OTA_SIGNING_KEY_FILE=~/.config/touareg-ota-signing/ota_signing_key.pem sh tools/make_release.sh v22.02
+#   OTA_SIGNING_KEY_PEM="..." sh tools/make_release.sh v22.02
+#   sh tools/make_release.sh v22.02 --unsigned-dev   (local dev testing only; rejected on head unit unless allow_unsigned_ota exists)
+#
+# outputs:
+#   -> touareg-cn-carplay-mods-<version>.zip
+#   -> touareg-ota-<version>.tar
+#   -> SHA256SUMS.txt
 set -e
 cd "$(dirname "$0")/.."
-V=${1:?usage: make_release.sh <version>}
-python3 - "$V" <<'PY'
-import hashlib, io, os, sys, tarfile, zipfile
+V=${1:?usage: make_release.sh <version> [--unsigned-dev]}
+MODE=${2:-}
+python3 - "$V" "$MODE" <<'PY'
+import hashlib, io, os, re, shutil, subprocess, sys, tarfile, tempfile, zipfile
 
 v = sys.argv[1]
+mode = sys.argv[2]
+allow_unsigned = (mode == '--unsigned-dev')
+if mode and not allow_unsigned:
+    sys.exit(f'unknown flag: {mode} (only --unsigned-dev is supported)')
+
 out = f'touareg-cn-carplay-mods-{v}.zip'
 ota_out = f'touareg-ota-{v}.tar'
+sums_out = 'SHA256SUMS.txt'
+
+# Ensure configurator binaries built from source (excluded from git) are present before zipping
+req_bins = [
+    'USB/改装设置（Mac）.command',
+    'USB/改装设置（Windows）.exe',
+]
+missing_bins = [p for p in req_bins if not os.path.isfile(p)]
+if missing_bins:
+    sys.exit(
+        'ERROR: missing configurator binaries: ' + ', '.join(missing_bins) +
+        f'\nRun `sh tools/configurator/build.sh {v}` first.'
+    )
+
+def find_openssl3():
+    cands = [
+        '/opt/homebrew/bin/openssl',
+        '/usr/local/bin/openssl',
+        shutil.which('openssl') or '',
+    ]
+    for c in cands:
+        if not c or not os.path.isfile(c):
+            continue
+        try:
+            ver = subprocess.check_output([c, 'version'], text=True, stderr=subprocess.STDOUT)
+            if ver.startswith('OpenSSL 3.') or ver.startswith('OpenSSL 1.1.1'):
+                return c
+        except Exception:
+            pass
+    return None
+
+def load_official_pubkey_hex():
+    txt = open('src/touareg_netd/ota_pubkey.h', encoding='utf-8').read()
+    m = re.search(r'OTA_OFFICIAL_PUBKEY\[32\]\s*=\s*\{(.*?)\};', txt, re.S)
+    if not m:
+        sys.exit('ERROR: failed to parse OTA_OFFICIAL_PUBKEY from src/touareg_netd/ota_pubkey.h')
+    bs = [int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', m.group(1))]
+    if len(bs) != 32:
+        sys.exit(f'ERROR: expected 32 bytes in OTA_OFFICIAL_PUBKEY, got {len(bs)}')
+    return bytes(bs)
+
+def sign_manifest_ed25519(man_bytes: bytes) -> bytes:
+    key_file = os.environ.get('OTA_SIGNING_KEY_FILE', '').strip()
+    key_pem = os.environ.get('OTA_SIGNING_KEY_PEM', '').strip()
+    if not key_file and not key_pem:
+        sys.exit(
+            'ERROR: OTA signing key required for release builds.\n'
+            'Set OTA_SIGNING_KEY_FILE=/path/to/ota_signing_key.pem or OTA_SIGNING_KEY_PEM (GitHub Secret: OTA_SIGNING_KEY),\n'
+            'or pass --unsigned-dev for local unsigned developer packages.'
+        )
+    ossl = find_openssl3()
+    if not ossl:
+        sys.exit('ERROR: OpenSSL 3.x (or 1.1.1+) with Ed25519 support is required to sign OTA packages.')
+
+    with tempfile.TemporaryDirectory() as td:
+        if key_file:
+            if not os.path.isfile(key_file):
+                sys.exit(f'ERROR: OTA_SIGNING_KEY_FILE does not exist: {key_file}')
+            kp = key_file
+        else:
+            kp = os.path.join(td, 'key.pem')
+            fd = os.open(kp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(key_pem if key_pem.endswith('\n') else key_pem + '\n')
+
+        # Verify signing key matches embedded OTA_OFFICIAL_PUBKEY to prevent mismatched release keys
+        pub_der = subprocess.check_output([ossl, 'pkey', '-in', kp, '-pubout', '-outform', 'DER'])
+        spki_prefix = bytes.fromhex('302a300506032b6570032100')
+        if len(pub_der) != 44 or not pub_der.startswith(spki_prefix):
+            sys.exit('ERROR: OTA signing key is not a valid Ed25519 private key')
+        pub_raw = pub_der[12:]
+        expected_pub = load_official_pubkey_hex()
+        if pub_raw != expected_pub:
+            sys.exit(
+                'ERROR: OTA signing key public half does NOT match src/touareg_netd/ota_pubkey.h!\n'
+                f'  key pubkey:      {pub_raw.hex()}\n'
+                f'  expected pubkey: {expected_pub.hex()}'
+            )
+
+        man_path = os.path.join(td, 'manifest.sha256')
+        sig_path = os.path.join(td, 'manifest.sha256.sig')
+        with open(man_path, 'wb') as f:
+            f.write(man_bytes)
+        subprocess.check_call([ossl, 'pkeyutl', '-sign', '-inkey', kp, '-rawin', '-in', man_path, '-out', sig_path])
+        sig_raw = open(sig_path, 'rb').read()
+        if len(sig_raw) != 64:
+            sys.exit(f'ERROR: unexpected Ed25519 signature length: {len(sig_raw)}')
+        return (sig_raw.hex() + '\n').encode('ascii')
 
 quick_guide = f"""途锐 MH2p CarPlay 改装包 {v} — 必看说明与免费开源声明
 ================================================================
@@ -30,9 +132,9 @@ quick_guide = f"""途锐 MH2p CarPlay 改装包 {v} — 必看说明与免费开
    - 不运行「改装设置」直接插车会空刷，不会安装任何模块。
 4. 安全弹出 U 盘 -> 发动车辆 -> 插入扶手箱 USB 口，等待自动刷机重启几次（期间切勿操作车机），提示移除介质后拔出即可。
 
-【v22.0+ 离线无线升级 (OTA)】
-若车机已安装 v22.0+「手机无线控制台（VW_WiFi_Dev）」，以后升级无需再插拔 U 盘：
-手机下载 Release 中的 touareg-ota-<版本>.tar，连接车机打开 http://touareg.local:8080 -> 开关运维 -> 离线无线升级，自动校验 SHA-256 并备份旧版（支持一键回滚）。
+【离线无线升级 (OTA)】
+若车机已安装无线控制台（VW_WiFi_Dev），以后升级无需再插拔 U 盘：
+手机下载 Release 中的 touareg-ota-<版本>.tar，连接车机打开 http://touareg.local:8080 -> 开关运维 -> 离线无线升级（强制校验官方 Ed25519 签名与 SHA-256，支持自动备份与一键回滚）。
 
 【许可证】
 本包内附 LICENSE、LICENSE.ADDITIONAL-TERMS.md 与 LICENSES/ 目录；详细适用边界与免责声明见仓库 README.md。
@@ -92,20 +194,23 @@ ota_specs = [
     ('VWPopupFilter.jar',   find_mod_file('VW_NoBtAuthPopup', 'Update/VWPopupFilter.jar'), 0o644),
 ]
 
+ver_bytes = (v + '\n').encode('utf-8')
 manifest_lines = []
 with tarfile.open(ota_out, 'w', format=tarfile.USTAR_FORMAT) as tf:
-    for arcname, srcpath, mode in ota_specs:
+    for arcname, srcpath, fmode in ota_specs:
         with open(srcpath, 'rb') as fh:
             data = fh.read()
         h = hashlib.sha256(data).hexdigest()
         manifest_lines.append(f'{h}  {arcname}\n')
         ti = tarfile.TarInfo(name=arcname)
         ti.size = len(data)
-        ti.mode = mode
+        ti.mode = fmode
         ti.uid = 0; ti.gid = 0; ti.uname = 'root'; ti.gname = 'root'
         ti.mtime = 1700000000
         tf.addfile(ti, io.BytesIO(data))
-    ver_bytes = (v + '\n').encode('utf-8')
+
+    ver_hash = hashlib.sha256(ver_bytes).hexdigest()
+    manifest_lines.append(f'{ver_hash}  version.txt\n')
     ti_v = tarfile.TarInfo(name='version.txt')
     ti_v.size = len(ver_bytes); ti_v.mode = 0o644
     ti_v.uid = 0; ti_v.gid = 0; ti_v.uname = 'root'; ti_v.gname = 'root'; ti_v.mtime = 1700000000
@@ -117,6 +222,20 @@ with tarfile.open(ota_out, 'w', format=tarfile.USTAR_FORMAT) as tf:
     ti_m.uid = 0; ti_m.gid = 0; ti_m.uname = 'root'; ti_m.gname = 'root'; ti_m.mtime = 1700000000
     tf.addfile(ti_m, io.BytesIO(man_bytes))
 
+    if not allow_unsigned:
+        sig_bytes = sign_manifest_ed25519(man_bytes)
+        ti_s = tarfile.TarInfo(name='manifest.sha256.sig')
+        ti_s.size = len(sig_bytes); ti_s.mode = 0o644
+        ti_s.uid = 0; ti_s.gid = 0; ti_s.uname = 'root'; ti_s.gname = 'root'; ti_s.mtime = 1700000000
+        tf.addfile(ti_s, io.BytesIO(sig_bytes))
+
+# Generate SHA256SUMS.txt for published Release artifacts
+with open(sums_out, 'w', encoding='utf-8') as sf:
+    for artifact in (out, ota_out):
+        digest = hashlib.sha256(open(artifact, 'rb').read()).hexdigest()
+        sf.write(f'{digest}  {artifact}\n')
+
 print(out, os.path.getsize(out))
-print(ota_out, os.path.getsize(ota_out))
+print(ota_out, os.path.getsize(ota_out), '(Ed25519 signed)' if not allow_unsigned else '(UNSIGNED DEV)')
+print(sums_out, os.path.getsize(sums_out))
 PY

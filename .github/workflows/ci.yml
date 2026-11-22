@@ -13,48 +13,25 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Go configurator unit tests
+      - name: Go configurator vet & unit tests
         working-directory: tools/configurator
-        run: go test -v ./...
-
-      - name: C host unit tests (clean-room iAP2 & OTA SHA-256)
         run: |
-          gcc -Wall -Wextra -Werror -O2 -Isrc/cluster-probe/wired \
-            src/cluster-probe/wired/cl_wired_rg.c src/cluster-probe/wired/test_wired_rg.c \
-            -lpthread -o /tmp/test_wired_rg && /tmp/test_wired_rg
-          cat <<'EOF' > /tmp/test_ota_ci.c
-          #define _GNU_SOURCE
-          #include <assert.h>
-          #include <stdio.h>
-          #include "src/touareg_netd/ota_util.h"
-          int main(void) {
-              FILE *f = fopen("/tmp/sha_abc.bin", "wb");
-              assert(f && fwrite("abc", 1, 3, f) == 3);
-              fclose(f);
-              char hex[65];
-              assert(t_sha256_file("/tmp/sha_abc.bin", hex) == 0);
-              assert(strcmp(hex, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") == 0);
-              char san[256];
-              diag_sanitize_line("psk=\"MySecretPass123\" pin=889900\n", san, sizeof(san));
-              assert(strstr(san, "MySecretPass123") == NULL && strstr(san, "889900") == NULL);
-              diag_sanitize_line("pin=123456\n", san, sizeof(san));
-              assert(strstr(san, "123456") == NULL);
-              diag_sanitize_line("-----BEGIN OPENSSH PRIVATE KEY-----\n", san, sizeof(san));
-              assert(strstr(san, "OPENSSH") == NULL);
-              diag_sanitize_line("vin=WVGZZZCRZPD012345\n", san, sizeof(san));
-              assert(strstr(san, "WVGZZZCRZPD012345") == NULL);
-              diag_sanitize_line("car WVGZZZCRZPD012345 tel 13812345678 ok\n", san, sizeof(san));
-              assert(strstr(san, "WVGZZZCRZPD012345") == NULL && strstr(san, "13812345678") == NULL);
-              diag_sanitize_line("t=1700000000 spd=86.5 rpm=2100\n", san, sizeof(san));
-              assert(strcmp(san, "t=1700000000 spd=86.5 rpm=2100\n") == 0);
-              char msg[256];
-              assert(ota_apply_tar("/tmp/nonexistent_ota_root", "/tmp/no_such.tar", msg, sizeof(msg)) != 0);
-              assert(ota_rollback_backup("/tmp/nonexistent_ota_root", msg, sizeof(msg)) != 0);
-              puts("test_ota_ci: ALL PASSED");
-              return 0;
-          }
-          EOF
-          gcc -Wall -Wextra -Werror -O2 -I. /tmp/test_ota_ci.c -o /tmp/test_ota_ci && /tmp/test_ota_ci
+          go vet ./...
+          go test -race -v ./...
+
+      - name: C host unit tests with ASan & UBSan
+        run: CC=gcc sh tests/run_c_tests.sh
+
+      - name: Static analysis (cppcheck)
+        run: |
+          sudo apt-get update && sudo apt-get install -y cppcheck
+          cppcheck --enable=warning,performance,portability \
+            --suppress=missingIncludeSystem --inline-suppr --error-exitcode=1 \
+            -I src/common -I src/touareg_netd -I src/cluster-probe/wired \
+            src/touareg_netd/touareg_netd.c \
+            src/clusterd/clusterd.c \
+            src/cluster-probe/wired/cl_wired_rg.c \
+            src/vhpatch/vhpatch.c
 
       - name: Catalogue alignment, HTML DOM & USB script safety checks
         run: |
@@ -107,8 +84,8 @@ jobs:
                           if re.search(r'\bmount\s+-ur\s+/mnt/app\b', s):
                               errors.append(f'{p}:{ln}: Update script must NOT remount /mnt/app read-only')
 
-          # 4) 禁止本机私有绝对路径残留
-          for folder in ['src', 'tools', 'docs']:
+          # 4) 禁止本机私有绝对路径残留 & 禁止大体积配置器二进制入库
+          for folder in ['src', 'tools', 'docs', 'tests']:
               for root, _, fs in os.walk(folder):
                   for f in fs:
                       if not f.endswith(('.sh', '.py', '.go', '.c', '.h', '.java', '.md', '.html')):
@@ -117,6 +94,9 @@ jobs:
                       txt = read(p)
                       if '/Users/' in txt or '.gemini/antigravity' in txt or '/home/admin/qnx-build' in txt:
                           errors.append(f'{p}: contains hardcoded personal machine path')
+          for forbidden in ['USB/改装设置（Mac）.command', 'USB/改装设置（Windows）.exe']:
+              if os.path.exists(forbidden):
+                  errors.append(f'{forbidden}: configurator release binary must NOT be committed to git')
 
           # 5) web_ui.html 与 web_ui_data.h 同步检查 + 许可附加条款检查
           h_txt = read('src/touareg_netd/web_ui_data.h')
@@ -135,11 +115,13 @@ jobs:
           print(f'ALL CHECKS PASSED ({len(c_items)} telemetry items, DOM IDs, USB Update scripts, web_ui sync)')
           PY
 
-      - name: POSIX shell syntax check on tools and build scripts
+      - name: POSIX shell syntax check on tools, tests and build scripts
         run: |
           sh -n src/build.sh
           sh -n src/hud-java/build.sh
           sh -n src/popup-filter-java/build.sh
           sh -n tools/configurator/build.sh
           sh -n tools/make_release.sh
+          sh -n tests/run_c_tests.sh
+          sh -n tests/pre_release_check.sh
           bash -n tools/deploy_eth.sh

@@ -183,7 +183,7 @@ static void init_once(void) {
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v22.01 loaded pid=%d uid=%d log=%d alt=%d safe=%d", getpid(), getuid(), g_log, g_alt, g_safe_mode);
+    plog("cl_alt v22.1 loaded pid=%d uid=%d log=%d alt=%d safe=%d", getpid(), getuid(), g_log, g_alt, g_safe_mode);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -353,7 +353,14 @@ static void write_status(const char *ev) {
 /* ---------- crypto (v21.1: dynamic HomeKit pairing capture across CN Touareg P-series firmwares) ---------- */
 typedef int (*fn_pderive_t)(void *, const void *, size_t, const void *, size_t, size_t, uint8_t *);
 typedef int (*fn_sethk_t)(void *, void *);
-static void hex16(char *o, const uint8_t *b) { for (int i = 0; i < 16; i++) sprintf(o + 2 * i, "%02x", b[i]); }
+static void hex16(char *o, const uint8_t *b) {
+    static const char hx[] = "0123456789abcdef";
+    for (int i = 0; i < 16; i++) {
+        o[2 * i]     = hx[(b[i] >> 4) & 0xFu];
+        o[2 * i + 1] = hx[b[i] & 0xFu];
+    }
+    o[32] = '\0';
+}
 static uint8_t g_ckey[32]; static int g_have_ckey;
 static void *volatile g_pairing_sess;
 static void *volatile g_pairing_obj;

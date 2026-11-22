@@ -47,12 +47,15 @@
 #define WIFI_DIR          "/mnt/app/eso/bin/apps/wifi_dev"
 #define WPA_CONF_PATH     "/mnt/app/eso/bin/apps/wifi_dev/wpa.conf"
 #define WEB_PIN_PATH      "/mnt/app/eso/bin/apps/wifi_dev/web.pin"
+#define SETUP_PIN_PATH    "/tmp/touareg_setup_pin"
 #define DASH_STATE_PATH   "/tmp/dash.state"
 
+static int g_dry_test = 0;
+
+#ifndef TOUAREG_NETD_NO_MAIN
 static volatile sig_atomic_t g_stop = 0;
 static const char *g_iface = IFACE_DEFAULT;
 static int g_http_port = HTTP_PORT_DEFAULT;
-static int g_dry_test = 0;
 
 static void on_sig(int sig) { (void)sig; g_stop = 1; }
 
@@ -85,6 +88,7 @@ static uint32_t get_iface_ipv4(const char *ifname) {
     close(fd);
     return ip;
 }
+#endif
 
 static void ip_to_str(uint32_t ip, char *buf, size_t sz) {
     struct in_addr a;
@@ -95,6 +99,7 @@ static void ip_to_str(uint32_t ip, char *buf, size_t sz) {
 
 /* ==================== mDNS Responder (touareg.local) ==================== */
 
+#ifndef TOUAREG_NETD_NO_MAIN
 static int open_mdns_sock(uint32_t if_ip) {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) return -1;
@@ -167,6 +172,7 @@ static void send_mdns_nodata(int fd, uint16_t txid, const struct sockaddr_in *un
     };
     sendto(fd, pkt, sizeof(pkt), 0, (const struct sockaddr *)unicast_to, sizeof(*unicast_to));
 }
+#endif
 
 static int dns_read_name(const unsigned char *buf, size_t len, size_t *pos, char *out, size_t out_sz) {
     size_t cur = *pos, o = 0;
@@ -194,6 +200,7 @@ static int dns_read_name(const unsigned char *buf, size_t len, size_t *pos, char
     return -1;
 }
 
+#ifndef TOUAREG_NETD_NO_MAIN
 static void handle_mdns_pkt(int fd, uint32_t ip_net) {
     unsigned char buf[1500];
     struct sockaddr_in from;
@@ -222,6 +229,7 @@ static void handle_mdns_pkt(int fd, uint32_t ip_net) {
         }
     }
 }
+#endif
 
 /* ==================== Auth, Safety & Config Helpers ==================== */
 
@@ -294,14 +302,19 @@ static int is_driving_now(void) {
     return (spd > 3.0);
 }
 
+/* All shell invocations in touareg_netd use compile-time string literals only (no user input). */
+static void run_const_cmd(const char *cmd) {
+    if (system(cmd) != 0) {}
+}
+
 static void mount_app_rw(void) {
-    if (!g_dry_test) (void)system("mount -uw /mnt/app >/dev/null 2>&1");
+    if (!g_dry_test) run_const_cmd("mount -uw /mnt/app >/dev/null 2>&1");
 }
 
 static void mount_app_ro(void) {
     if (!g_dry_test) {
         sync();
-        (void)system("mount -ur /mnt/app >/dev/null 2>&1");
+        run_const_cmd("mount -ur /mnt/app >/dev/null 2>&1");
     }
 }
 
@@ -383,47 +396,180 @@ static void header_get(const char *req, const char *hdr_end, const char *hname, 
     }
 }
 
-static int g_pin_fails = 0;
-static uint64_t g_pin_lock_until = 0;
+#define PIN_MAX_BUCKETS 8
+
+typedef struct {
+    uint32_t ip;
+    int      fails;
+    int      lock_level;
+    uint64_t lock_until;
+    uint64_t last_seen;
+    int      used;
+} pin_bucket_t;
+
+static pin_bucket_t g_pin_buckets[PIN_MAX_BUCKETS];
+static const uint64_t PIN_LOCK_SECS[4] = { 30, 120, 300, 900 };
+
+#ifdef TOUAREG_NETD_NO_MAIN
+static uint64_t g_test_now_offset = 0;
+static void pin_reset_rate_limit(void) {
+    memset(g_pin_buckets, 0, sizeof(g_pin_buckets));
+    g_test_now_offset = 0;
+}
+#endif
 
 static uint64_t monotonic_sec(void) {
     struct timespec ts;
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) return (uint64_t)ts.tv_sec;
-    return (uint64_t)time(NULL);
+    uint64_t base = (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) ? (uint64_t)ts.tv_sec : (uint64_t)time(NULL);
+#ifdef TOUAREG_NETD_NO_MAIN
+    return base + g_test_now_offset;
+#else
+    return base;
+#endif
 }
 
-/* 校验管理口令 web.pin（带防爆破限速：连续输错 5 次锁定 30 秒；返回 1=通过, 0=需口令/错误, -1=锁定中） */
-static int check_pin_auth(const char *req, const char *hdr_end, const char *query) {
-    const char *pin_path = getenv("NETD_PIN_FILE");
-    if (!pin_path || !pin_path[0]) pin_path = WEB_PIN_PATH;
+static pin_bucket_t *pin_bucket_get(uint32_t peer_ip, uint64_t now) {
+    for (int i = 0; i < PIN_MAX_BUCKETS; i++) {
+        if (g_pin_buckets[i].used && g_pin_buckets[i].ip == peer_ip) {
+            g_pin_buckets[i].last_seen = now;
+            return &g_pin_buckets[i];
+        }
+    }
+    int slot = -1;
+    for (int i = 0; i < PIN_MAX_BUCKETS; i++) {
+        if (!g_pin_buckets[i].used) { slot = i; break; }
+    }
+    if (slot < 0) {
+        /* 优先淘汰未锁定且最久未活跃的 IP 槽位，避免攻击者占满全部槽位后挤掉已锁定记录 */
+        for (int i = 0; i < PIN_MAX_BUCKETS; i++) {
+            if (g_pin_buckets[i].lock_until == 0 || now >= g_pin_buckets[i].lock_until) {
+                if (slot < 0 || g_pin_buckets[i].last_seen < g_pin_buckets[slot].last_seen) slot = i;
+            }
+        }
+    }
+    if (slot < 0) {
+        slot = 0;
+        for (int i = 1; i < PIN_MAX_BUCKETS; i++) {
+            if (g_pin_buckets[i].last_seen < g_pin_buckets[slot].last_seen) slot = i;
+        }
+    }
+    memset(&g_pin_buckets[slot], 0, sizeof(g_pin_buckets[slot]));
+    g_pin_buckets[slot].ip = peer_ip;
+    g_pin_buckets[slot].last_seen = now;
+    g_pin_buckets[slot].used = 1;
+    return &g_pin_buckets[slot];
+}
+
+static const char *get_pin_file_path(void) {
+    const char *p = getenv("NETD_PIN_FILE");
+    return (p && p[0]) ? p : WEB_PIN_PATH;
+}
+
+static const char *get_setup_pin_path(void) {
+    const char *p = getenv("NETD_SETUP_PIN_FILE");
+    return (p && p[0]) ? p : SETUP_PIN_PATH;
+}
+
+static int read_valid_pin_file(const char *pin_path, char *out, size_t osz) {
     FILE *fp = fopen(pin_path, "r");
-    if (!fp) return 1; /* 未配置 PIN 时兼容放行 */
-    char expected[64];
-    if (!fgets(expected, sizeof(expected), fp)) { fclose(fp); return 1; }
+    if (!fp) return 0;
+    if (!fgets(out, (int)osz, fp)) { fclose(fp); return 0; }
     fclose(fp);
-    char *nl = strpbrk(expected, "\r\n ");
+    char *nl = strpbrk(out, "\r\n \t");
     if (nl) *nl = '\0';
+    return out[0] != '\0';
+}
+
+/* 生成无偏 6 位随机数字初始口令（首位非 0：100000~999999），优先读取 /dev/urandom */
+static void gen_random_pin6(char out[7]) {
+    unsigned char buf[64];
+    int got = 0;
+    int ufd = open("/dev/urandom", O_RDONLY);
+    if (ufd >= 0) {
+        while (got < 6) {
+            ssize_t r = read(ufd, buf, sizeof(buf));
+            if (r <= 0) break;
+            for (ssize_t i = 0; i < r && got < 6; i++) {
+                if (buf[i] < 250) {
+                    out[got++] = (char)('0' + (buf[i] % 10));
+                }
+            }
+        }
+        close(ufd);
+    }
+    if (got < 6) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        uint32_t s = (uint32_t)ts.tv_nsec ^ (uint32_t)ts.tv_sec ^ ((uint32_t)getpid() << 16) ^ 0x9e3779b9u;
+        while (got < 6) {
+            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+            out[got++] = (char)('0' + (s % 10u));
+        }
+    }
+    if (out[0] == '0') out[0] = '8';
+    out[6] = '\0';
+}
+
+/* 首次启动或旧版无 web.pin 升级兼容：仅当 web.pin 不存在或为空时，自动生成 6 位随机口令落盘，
+ * 并写入内存盘 /tmp/touareg_setup_pin 供车机仪表屏幕弹出显示（首次登录 8080 成功后自动清除）。
+ * 已有 web.pin 时直接返回，零闪存写入。返回 1=新生成, 0=已存在, -1=落盘失败（将维持 fail-closed）。 */
+static int ensure_web_pin_boot(void) {
+    const char *pin_path = get_pin_file_path();
+    char existing[64];
+    if (read_valid_pin_file(pin_path, existing, sizeof(existing))) return 0;
+
+    char pin[7], line[16];
+    gen_random_pin6(pin);
+    int n = snprintf(line, sizeof(line), "%s\n", pin);
+    if (n <= 0) return -1;
+
+    mount_app_rw();
+    int rc = atomic_write_file(pin_path, line, (size_t)n, 0600);
+    mount_app_ro();
+    if (rc != 0) return -1;
+
+    const char *sp = get_setup_pin_path();
+    (void)atomic_write_file(sp, line, (size_t)n, 0644);
+    return 1;
+}
+
+/* 校验管理口令 web.pin（fail-closed：未配置或为空一律拒绝；仅接受 X-Pin 请求头，拒绝 URL query 传参；
+ * 按来源 IP 独立限速并阶梯退避 30s -> 120s -> 300s -> 900s；首次登录成功自动撤掉仪表初始口令提示；
+ * 返回：1=通过, 0=需口令/错误, -1=该来源 IP 锁定中, -2=车机未配置 web.pin） */
+static int check_pin_auth(const char *req, const char *hdr_end, uint32_t peer_ip, uint64_t *out_wait_sec) {
+    if (out_wait_sec) *out_wait_sec = 0;
+    const char *pin_path = get_pin_file_path();
+    char expected[64];
+    if (!read_valid_pin_file(pin_path, expected, sizeof(expected))) return -2; /* Fail-closed */
     size_t elen = strlen(expected);
-    if (elen == 0) return 1;
 
     uint64_t now = monotonic_sec();
-    if (g_pin_lock_until > 0 && now < g_pin_lock_until) return -1;
+    pin_bucket_t *b = pin_bucket_get(peer_ip, now);
+    if (b->lock_until > 0 && now < b->lock_until) {
+        if (out_wait_sec) *out_wait_sec = b->lock_until - now;
+        return -1;
+    }
 
     char got[64];
     header_get(req, hdr_end, "X-Pin", got, sizeof(got));
-    if (!got[0]) form_get(query, "pin", got, sizeof(got));
     if (!got[0]) return 0;
     size_t glen = strlen(got);
     unsigned char diff = (glen != elen) ? 1 : 0;
     for (size_t i = 0; i < elen && i < glen; i++) diff |= (unsigned char)(got[i] ^ expected[i]);
     if (diff == 0) {
-        g_pin_fails = 0;
-        g_pin_lock_until = 0;
+        b->fails = 0;
+        b->lock_level = 0;
+        b->lock_until = 0;
+        /* 首次用自动生成的初始口令登录成功后，立即撤下仪表屏幕上的明文提示 */
+        unlink(get_setup_pin_path());
         return 1;
     }
-    if (++g_pin_fails >= 5) {
-        g_pin_lock_until = now + 30;
-        g_pin_fails = 0;
+    if (++b->fails >= 5) {
+        uint64_t dur = PIN_LOCK_SECS[b->lock_level < 4 ? b->lock_level : 3];
+        if (b->lock_level < 3) b->lock_level++;
+        b->lock_until = now + dur;
+        b->fails = 0;
+        if (out_wait_sec) *out_wait_sec = dur;
         return -1;
     }
     return 0;
@@ -468,8 +614,8 @@ typedef struct {
 
 static void parse_dash_conf(dash_cfg_t *c) {
     memset(c, 0, sizeof(*c));
-    strcpy(c->items, "power,torque,g,rpm,oil,gearbox");
-    strcpy(c->nav_side, "right");
+    snprintf(c->items, sizeof(c->items), "%s", "power,torque,g,rpm,oil,gearbox");
+    snprintf(c->nav_side, sizeof(c->nav_side), "%s", "right");
     c->show = 1; c->r_show = 0; c->bars = 1; c->smooth = 1; c->car_up = 35; c->acc_up = 80;
     c->amap_turn = 3; c->alpha = 200; c->tank_l = 90; c->lat_flip = 0;
     c->nav_box = 1; c->nav_tz = 8;
@@ -503,7 +649,7 @@ static void parse_dash_conf(dash_cfg_t *c) {
         else if (strcmp(k, "tank_l") == 0) c->tank_l = atoi(v);
         else if (strcmp(k, "lat_flip") == 0) c->lat_flip = atoi(v);
         else if (strcmp(k, "nav_box") == 0) c->nav_box = atoi(v);
-        else if (strcmp(k, "nav_side") == 0) strcpy(c->nav_side, (v[0] == 'l' || v[0] == 'L' || v[0] == '0') ? "left" : "right");
+        else if (strcmp(k, "nav_side") == 0) snprintf(c->nav_side, sizeof(c->nav_side), "%s", (v[0] == 'l' || v[0] == 'L' || v[0] == '0') ? "left" : "right");
         else if (strcmp(k, "nav_tz") == 0) c->nav_tz = atoi(v);
         else if (strcmp(k, "trip_base") == 0) c->trip_base = strtod(v, NULL);
     }
@@ -635,7 +781,7 @@ static int save_dash_conf(const char *body) {
     mount_app_ro();
     free(out);
     if (rc == 0 && !g_dry_test) {
-        (void)system("slay -f cl_render >/dev/null 2>&1");
+        run_const_cmd("slay -f cl_render >/dev/null 2>&1");
     }
     return rc;
 }
@@ -823,12 +969,12 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], ota_ver[48];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.01");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.1");
 
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v22.01 ota_version=%s bcm2_ip=%s\n"
+        "netd_version=v22.1 ota_version=%s bcm2_ip=%s\n"
         "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d\n"
         "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d\n\n",
         ota_ver, ipstr,
@@ -911,7 +1057,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], esc1[320], esc2[320], ota_ver[48], esc_ov[64];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.01");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.1");
     json_escape(ota_ver, esc_ov, sizeof(esc_ov));
     double spd = -1.0, odo = -1.0;
     read_dash_state(&spd, &odo);
@@ -929,7 +1075,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     refresh_proc_flags(&p_cld, &p_ren, &p_dio);
 
     l += (size_t)snprintf(j + l, 32768 - l,
-        "{\"ok\":true,\"version\":\"v22.01\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
+        "{\"ok\":true,\"version\":\"v22.1\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
         "\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
@@ -1072,7 +1218,7 @@ static void handle_download(int fd, const char *query) {
     close(ffd);
 }
 
-static void handle_http_client(int cfd, uint32_t bcm2_ip) {
+static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
     struct timeval tv;
     tv.tv_sec = 5; tv.tv_usec = 0;
     setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
@@ -1110,7 +1256,7 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
     const char *query = "";
     if (q) { *q = '\0'; query = q + 1; }
 
-    /* 首页外壳免口令下发，其余全部 /api/ 接口强制校验 web.pin */
+    /* 首页外壳免口令下发，其余全部 /api/ 接口强制校验 web.pin（fail-closed） */
     if ((strcmp(method, "GET") == 0 || strcmp(method, "HEAD") == 0) &&
         (strcmp(target, "/") == 0 || strcmp(target, "/index.html") == 0)) {
         if (method[0] == 'H') {
@@ -1126,9 +1272,17 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
         return;
     }
 
-    int auth = check_pin_auth(req, hdr_end, query);
+    uint64_t wait_sec = 0;
+    int auth = check_pin_auth(req, hdr_end, peer_ip, &wait_sec);
+    if (auth == -2) {
+        const char *ubody = "{\"ok\":false,\"pin_unconfigured\":true,\"msg\":\"车机未配置管理口令 web.pin，控制台已拒绝访问。请用「改装设置」重刷或通过 SSH 写入 web.pin\"}";
+        send_resp(cfd, 503, "Service Unavailable", "application/json; charset=utf-8", ubody, strlen(ubody));
+        return;
+    }
     if (auth == -1) {
-        send_json(cfd, 429, 0, "口令连续输错次数过多，请等待 30 秒后再试");
+        char lmsg[128];
+        snprintf(lmsg, sizeof(lmsg), "口令连续输错次数过多，请等待 %lu 秒后再试", (unsigned long)(wait_sec > 0 ? wait_sec : 30));
+        send_json(cfd, 429, 0, lmsg);
         return;
     }
     if (auth != 1) {
@@ -1271,11 +1425,11 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
             } else if (strcmp(act, "restart_render") == 0) {
                 if (!g_dry_test) {
                     unlink("/tmp/cl_render_fused");
-                    (void)system("slay -f cl_render >/dev/null 2>&1");
+                    run_const_cmd("slay -f cl_render >/dev/null 2>&1");
                 }
                 send_json(cfd, 200, 1, "已刷新仪表渲染进程");
             } else if (strcmp(act, "restart_carplay") == 0) {
-                if (!g_dry_test) (void)system("slay -f dio_manager >/dev/null 2>&1");
+                if (!g_dry_test) run_const_cmd("slay -f dio_manager >/dev/null 2>&1");
                 send_json(cfd, 200, 1, "已重启 CarPlay 进程，几秒后自动重连");
             } else if (strcmp(act, "clear_safe_mode") == 0) {
                 if (!g_dry_test) {
@@ -1285,10 +1439,10 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
                     unlink("/tmp/cl_render_fused");
                     mount_app_rw();
                     unlink(CLUSTER_DIR "/safe_mode");
-                    (void)system("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/j9_base_crashes");
-                    (void)system("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/dio_base_cores");
-                    (void)system("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/render_base_cores");
-                    (void)system("[ -d " WIFI_DIR " ] && ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " WIFI_DIR "/iopkt_base_cores");
+                    run_const_cmd("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/j9_base_crashes");
+                    run_const_cmd("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/dio_base_cores");
+                    run_const_cmd("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/render_base_cores");
+                    run_const_cmd("[ -d " WIFI_DIR " ] && ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " WIFI_DIR "/iopkt_base_cores");
                     mount_app_ro();
                 }
                 send_json(cfd, 200, 1, "已清除安全模式锁并刷新崩溃基线，建议重启车机生效");
@@ -1297,7 +1451,7 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
                 if (!g_dry_test) {
                     sync();
                     int ofd = open("/dev/ooc/system", O_WRONLY);
-                    if (ofd >= 0) { (void)write(ofd, "gem-reset\n", 10); close(ofd); }
+                    if (ofd >= 0) { if (write(ofd, "gem-reset\n", 10) < 0) {} close(ofd); }
                 }
             } else send_json(cfd, 400, 0, "未知操作");
         } else if (strcmp(target, "/api/wifi") == 0) {
@@ -1311,6 +1465,7 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
     send_json(cfd, 405, 0, "Method Not Allowed");
 }
 
+#ifndef TOUAREG_NETD_NO_MAIN
 static int open_http_sock(uint32_t bind_ip, int port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return -1;
@@ -1344,7 +1499,14 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v22.01 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
+    nlog("touareg_netd v22.1 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
+
+    int pin_init_rc = ensure_web_pin_boot();
+    if (pin_init_rc == 1) {
+        nlog("web.pin missing on boot: generated random 6-digit setup PIN (displayed on cluster screen until first login)");
+    } else if (pin_init_rc < 0) {
+        nlog("WARNING: web.pin missing and could not be created; HTTP /api/ remains fail-closed (503)");
+    }
 
     uint32_t cur_ip = 0;
     int http_fd = -1, mdns_fd = -1;
@@ -1394,7 +1556,7 @@ int main(void) {
             socklen_t plen = sizeof(peer);
             int cfd = accept(http_fd, (struct sockaddr *)&peer, &plen);
             if (cfd >= 0) {
-                handle_http_client(cfd, cur_ip);
+                handle_http_client(cfd, cur_ip, peer.sin_addr.s_addr);
                 close(cfd);
             }
         }
@@ -1404,3 +1566,4 @@ int main(void) {
     if (mdns_fd >= 0) close(mdns_fd);
     return 0;
 }
+#endif /* TOUAREG_NETD_NO_MAIN */

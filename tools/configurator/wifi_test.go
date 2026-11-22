@@ -55,3 +55,22 @@ func TestOpenSSHKeyGenAndWpaConf(t *testing.T) {
 		t.Fatalf("unexpected readWifi state: %+v", st)
 	}
 }
+
+func TestValidateWifiPinPolicy(t *testing.T) {
+	baseNet := []wifiNet{{SSID: "MyHotspot", PSK: "12345678"}}
+
+	for _, bad := range []string{"", "1234", "12345", "12345678901234567", "1234 56", "abc-123"} {
+		if err := validateWifi(wifiReq{Networks: baseNet, Pin: bad}); err == nil {
+			t.Fatalf("expected pin %q to be rejected", bad)
+		}
+	}
+	for _, good := range []string{"654321", "Touareg2026", "Ab12Cd34Ef56Gh78"} {
+		if err := validateWifi(wifiReq{Networks: baseNet, Pin: good}); err != nil {
+			t.Fatalf("expected pin %q to pass, got error: %v", good, err)
+		}
+	}
+	rp := randomPin6()
+	if len(rp) != 6 || rp[0] == '0' {
+		t.Fatalf("unexpected randomPin6: %q", rp)
+	}
+}

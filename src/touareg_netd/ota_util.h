@@ -20,6 +20,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "ed25519_verify.h"
+#include "ota_pubkey.h"
+
 /* ==================== Minimal Pure-C SHA-256 (FIPS 180-4) ==================== */
 
 typedef struct {
@@ -220,11 +223,38 @@ static int ota_manifest_lookup(const char *manifest, const char *name, char want
     return 0;
 }
 
-/* Verify and atomically install an allowlisted OTA .tar package staged at tar_path.
+static int ota_hex_nibble(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static int ota_parse_sig_hex(const char *txt, size_t len, uint8_t sig[64]) {
+    size_t i = 0;
+    while (i < len && (txt[i] == ' ' || txt[i] == '\t' || txt[i] == '\r' || txt[i] == '\n')) i++;
+    if (len - i < 128) return -1;
+    for (int b = 0; b < 64; b++) {
+        int hi = ota_hex_nibble(txt[i + (size_t)b * 2]);
+        int lo = ota_hex_nibble(txt[i + (size_t)b * 2 + 1]);
+        if (hi < 0 || lo < 0) return -1;
+        sig[b] = (uint8_t)((hi << 4) | lo);
+    }
+    i += 128;
+    while (i < len) {
+        if (txt[i] != ' ' && txt[i] != '\t' && txt[i] != '\r' && txt[i] != '\n') return -1;
+        i++;
+    }
+    return 0;
+}
+
+/* Verify and atomically install an allowlisted, Ed25519-signed OTA .tar package staged at tar_path.
  * app_root is "/mnt/app" on the head unit (or a temp dir in host unit tests).
+ * pubkey is 32-byte Ed25519 public key (defaults to OTA_OFFICIAL_PUBKEY via ota_apply_tar).
  * Caller is responsible for mounting app_root rw before and ro after.
  * Returns 0 on success (writes summary to msg), non-zero on failure without modifying targets. */
-static int ota_apply_tar(const char *app_root, const char *tar_path, char *msg, size_t msz) {
+static int ota_apply_tar_with_key(const char *app_root, const char *tar_path,
+                                  const uint8_t pubkey[32], char *msg, size_t msz) {
     char stage_dir[320], bak_dir[320];
     snprintf(stage_dir, sizeof(stage_dir), "%s/eso/bin/apps/.ota_stage", app_root);
     snprintf(bak_dir, sizeof(bak_dir), "%s/eso/bin/apps/.ota_backup", app_root);
@@ -234,11 +264,19 @@ static int ota_apply_tar(const char *app_root, const char *tar_path, char *msg, 
     if (fd < 0) { snprintf(msg, msz, "无法打开升级包"); return -1; }
 
     char manifest[8192];
-    manifest[0] = '\0';
+    size_t manifest_len = 0;
+    int has_manifest = 0;
+    char sig_txt[256];
+    size_t sig_len = 0;
+    int has_sig = 0;
     char ver_txt[64];
-    ver_txt[0] = '\0';
+    size_t ver_len = 0;
+    int has_ver = 0;
     int present[16];
     memset(present, 0, sizeof(present));
+    manifest[0] = '\0';
+    sig_txt[0] = '\0';
+    ver_txt[0] = '\0';
     int count_files = 0;
 
     uint8_t hdr[512];
@@ -280,21 +318,27 @@ static int ota_apply_tar(const char *app_root, const char *tar_path, char *msg, 
 
         int slot_idx = -1;
         int is_manifest = (strcmp(name, "manifest.sha256") == 0);
+        int is_sig = (strcmp(name, "manifest.sha256.sig") == 0);
         int is_ver = (strcmp(name, "version.txt") == 0);
-        if (!is_manifest && !is_ver) {
+        if (!is_manifest && !is_sig && !is_ver) {
             for (int i = 0; OTA_ALLOWLIST[i].name; i++) {
                 if (strcmp(OTA_ALLOWLIST[i].name, name) == 0) { slot_idx = i; break; }
             }
             if (slot_idx < 0) {
                 snprintf(msg, msz, "升级包包含未授权白名单外文件：%s", name); err = -8; break;
             }
+            if (present[slot_idx]) {
+                snprintf(msg, msz, "升级包包含重复组件：%s", name); err = -8; break;
+            }
+        } else if ((is_manifest && has_manifest) || (is_sig && has_sig) || (is_ver && has_ver)) {
+            snprintf(msg, msz, "升级包包含重复元数据：%s", name); err = -8; break;
         }
 
         size_t pad = (512 - (fsz & 511u)) & 511u;
-        if (is_manifest || is_ver) {
-            char *dstb = is_manifest ? manifest : ver_txt;
-            size_t cap = is_manifest ? sizeof(manifest) : sizeof(ver_txt);
-            if (fsz >= cap) { snprintf(msg, msz, "清单文件过大"); err = -9; break; }
+        if (is_manifest || is_sig || is_ver) {
+            char *dstb = is_manifest ? manifest : (is_sig ? sig_txt : ver_txt);
+            size_t cap = is_manifest ? sizeof(manifest) : (is_sig ? sizeof(sig_txt) : sizeof(ver_txt));
+            if (fsz >= cap) { snprintf(msg, msz, "清单或签名文件过大"); err = -9; break; }
             size_t got = 0;
             while (got < fsz) {
                 ssize_t k = read(fd, dstb + got, fsz - got);
@@ -302,7 +346,10 @@ static int ota_apply_tar(const char *app_root, const char *tar_path, char *msg, 
                 got += (size_t)k;
             }
             dstb[got] = '\0';
-            if (err) { snprintf(msg, msz, "读取清单失败"); break; }
+            if (err) { snprintf(msg, msz, "读取清单或签名失败"); break; }
+            if (is_manifest) { manifest_len = got; has_manifest = 1; }
+            else if (is_sig) { sig_len = got; has_sig = 1; }
+            else { ver_len = got; has_ver = 1; }
         } else {
             char outp[512];
             snprintf(outp, sizeof(outp), "%s/%s", stage_dir, name);
@@ -330,9 +377,54 @@ static int ota_apply_tar(const char *app_root, const char *tar_path, char *msg, 
     close(fd);
 
     if (!err && count_files == 0) { snprintf(msg, msz, "升级包中无任何可更新组件"); err = -15; }
-    if (!err && !manifest[0]) { snprintf(msg, msz, "升级包缺少 manifest.sha256 校验清单"); err = -16; }
+    if (!err && (!has_manifest || manifest_len == 0)) { snprintf(msg, msz, "升级包缺少 manifest.sha256 校验清单"); err = -16; }
 
-    /* Phase 2: strict SHA-256 verification for every staged component BEFORE touching any live file */
+    /* Phase 1.5: strict Ed25519 signature verification over exact manifest.sha256 bytes.
+     * Unsigned packages are rejected by default; local SSH developers may opt in via
+     * <app_root>/eso/bin/apps/wifi_dev/allow_unsigned_ota (never exposed over HTTP). */
+    if (!err) {
+        char dev_flag[384];
+        snprintf(dev_flag, sizeof(dev_flag), "%s/eso/bin/apps/wifi_dev/allow_unsigned_ota", app_root);
+        struct stat dst_dev;
+        int allow_unsigned = (stat(dev_flag, &dst_dev) == 0 && S_ISREG(dst_dev.st_mode));
+        if (!allow_unsigned) {
+            uint8_t sig_raw[64];
+            if (!has_sig || sig_len == 0) {
+                snprintf(msg, msz, "升级包缺少官方 Ed25519 签名（manifest.sha256.sig）");
+                err = -21;
+            } else if (ota_parse_sig_hex(sig_txt, sig_len, sig_raw) != 0) {
+                snprintf(msg, msz, "升级包签名格式非法");
+                err = -22;
+            } else if (!pubkey || t_ed25519_verify(sig_raw, (const uint8_t *)manifest, manifest_len, pubkey) != 0) {
+                snprintf(msg, msz, "升级包 Ed25519 签名校验失败（非官方包或已被篡改）");
+                err = -23;
+            }
+        }
+    }
+
+    /* Phase 2: strict SHA-256 verification for every staged component (and version.txt) BEFORE touching any live file */
+    if (!err) {
+        if (memchr(manifest, '\0', manifest_len) != NULL) {
+            snprintf(msg, msz, "manifest.sha256 包含非法空字节");
+            err = -16;
+        }
+    }
+    if (!err && has_ver) {
+        char want_vhex[65], got_vhex[65];
+        if (!ota_manifest_lookup(manifest, "version.txt", want_vhex)) {
+            snprintf(msg, msz, "manifest.sha256 缺少 version.txt 哈希");
+            err = -17;
+        } else {
+            t_sha256_t vst;
+            t_sha256_init(&vst);
+            t_sha256_update(&vst, ver_txt, ver_len);
+            t_sha256_final_hex(&vst, got_vhex);
+            if (strcmp(want_vhex, got_vhex) != 0) {
+                snprintf(msg, msz, "version.txt SHA-256 校验不匹配");
+                err = -18;
+            }
+        }
+    }
     if (!err) {
         for (int i = 0; OTA_ALLOWLIST[i].name; i++) {
             if (!present[i]) continue;
@@ -406,6 +498,10 @@ static int ota_apply_tar(const char *app_root, const char *tar_path, char *msg, 
                  installed, ver_txt[0] ? " · 版本 " : "", ver_txt);
     }
     return err;
+}
+
+static int ota_apply_tar(const char *app_root, const char *tar_path, char *msg, size_t msz) {
+    return ota_apply_tar_with_key(app_root, tar_path, OTA_OFFICIAL_PUBKEY, msg, msz);
 }
 
 static int ota_rollback_backup(const char *app_root, char *msg, size_t msz) {

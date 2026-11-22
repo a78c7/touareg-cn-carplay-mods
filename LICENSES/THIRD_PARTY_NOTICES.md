@@ -25,3 +25,7 @@ All original components in `a78c7/touareg-cn-carplay-mods` are licensed under **
 ## 5. `zlib` 1.3.1 (zlib License)
 - Statically linked into `src/vhpatch` for in-place `viewhandler.zip` patching on the head unit.
 - License text: [`zlib_LICENSE.md`](zlib_LICENSE.md).
+
+## 6. TweetNaCl Ed25519 Field & Curve Arithmetic (Public Domain)
+- Upstream: <https://tweetnacl.cr.yp.to/> (Daniel J. Bernstein, Bernard van Gastel, Wesley Janssen, Tanja Lange, Peter Schwabe, Sjaak Smetsers).
+- Components: Curve25519/Edwards25519 signature verification arithmetic in `src/touareg_netd/ed25519_verify.h` (Public Domain, adapted with streaming SHA-512 and strict RFC 8032 canonical scalar check).

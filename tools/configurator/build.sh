@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build 「改装设置」 for Windows (x64) and macOS (universal: Intel + Apple Silicon) into the USB package root.
-# Needs Go 1.22+ and lipo / llvm-lipo. usage: sh build.sh v22.01
+# Needs Go 1.22+ and lipo / llvm-lipo. usage: sh build.sh v22.1
 set -e
 cd "$(dirname "$0")"
 V=${1:?usage: build.sh <version>}

@@ -2317,7 +2317,9 @@ static int dash_read_conf_file(const char *const *paths) {
 }
 
 static void nav_setup(int win_w, int win_h) {
-    if (!g_nav_conf.enabled) { LOG("navbox: off\n"); return; }
+    /* 即使 nav_box=0 也保留 406 KB 叠加层句柄，确保首次启动自动生成的无线控制台口令提示卡可随时弹出
+     * （平时 nav_box=0 且无 /tmp/touareg_setup_pin 时 g_nav_active=0，零绘制与合成开销） */
+    if (!g_nav_conf.enabled) { LOG("navbox: off (setup-pin overlay standby)\n"); }
     int side = g_nav_conf.side ? 1 : 0;
     int sym_w = g_dash_bw[0] >= 260 ? g_dash_bw[0] : (g_box[0].conf.right > g_box[0].conf.x ? (g_box[0].conf.right - g_box[0].conf.x) : 295);
     int bx = g_dash_bw[side] > 0 ? g_dash_x[side] : g_box[side].conf.x;
@@ -2700,10 +2702,11 @@ static pthread_cond_t  g_cp_cv = PTHREAD_COND_INITIALIZER;
 static void carpos_dbg(const char *what, int a, int b) {
     static char last[96];
     char m[96]; int n = snprintf(m, sizeof m, "%s %d %d\n", what, a, b);
-    if (!strcmp(m, last)) return;
-    strcpy(last, m);
+    if (n <= 0 || !strcmp(m, last)) return;
+    snprintf(last, sizeof last, "%s", m);
+    size_t wlen = ((size_t)n < sizeof m) ? (size_t)n : (sizeof m - 1);
     int fd = open("/tmp/cl_car_dbg", O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd >= 0) { write(fd, m, n); close(fd); }
+    if (fd >= 0) { if (write(fd, m, wlen) < 0) {} close(fd); }
 }
 
 static void *carpos_worker(void *arg) {

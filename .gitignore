@@ -1,5 +1,8 @@
 /touareg-cn-carplay-mods-*.zip
 /touareg-ota-*.tar
+/SHA256SUMS.txt
+/USB/改装设置（Mac）.command
+/USB/改装设置（Windows）.exe
 src/out/
 src/hud-java/out/
 src/hud-java/VWClusterNav_*.jar

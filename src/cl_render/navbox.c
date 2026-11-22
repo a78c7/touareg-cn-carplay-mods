@@ -99,9 +99,10 @@ static const char *nav_memchr(const char *s, int c, size_t n) {
 #define STBTT_fabs(x)   nav_fabs(x)
 #include "stb_truetype.h"
 
-#define NAV_STATE_PATH  "/tmp/cluster_cp.state"
-#define NAV_OFF_FLAG    "/tmp/navbox_off"
-#define NAV_MAX_W       560
+#define NAV_STATE_PATH     "/tmp/cluster_cp.state"
+#define NAV_OFF_FLAG       "/tmp/navbox_off"
+#define NAV_SETUP_PIN_PATH "/tmp/touareg_setup_pin"
+#define NAV_MAX_W          560
 #define NAV_MAX_H       640
 #define NAV_MAX_LANES   8
 #define NAV_MAX_ANGLES  12
@@ -1652,9 +1653,104 @@ static int nav_enter_idle(const char *cur_road) {
     return 0;
 }
 
-/* 轮询 /tmp/cluster_cp.state；返回 1 表示导航框显示状态或内容发生变化 */
+static char g_nav_setup_pin[24];
+
+/* ---- 首次启动自动生成随机口令提示卡（读取 /tmp/touareg_setup_pin；首次成功登录 8080 后自动隐藏） ---- */
+static int nav_read_setup_pin(char out[24]) {
+    out[0] = '\0';
+    FILE *fp = fopen(NAV_SETUP_PIN_PATH, "r");
+    if (!fp) return 0;
+    char buf[32];
+    if (!fgets(buf, sizeof(buf), fp)) { fclose(fp); return 0; }
+    fclose(fp);
+    size_t k = 0;
+    for (size_t i = 0; buf[i] && k < 16; i++) {
+        char c = buf[i];
+        if (c == '\r' || c == '\n' || c == ' ' || c == '\t') break;
+        if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+            out[k++] = c;
+        } else {
+            return 0;
+        }
+    }
+    out[k] = '\0';
+    return (k >= 4 && k <= 16);
+}
+
+static void nav_render_setup_pin(const char *pin) {
+    const int W = g_nav_w, H = g_nav_h;
+    const int pad_x = 14;
+    const int inner_w = W - pad_x * 2;
+    int bg_a = g_nav_alpha < 225 ? 235 : g_nav_alpha;
+
+    nav_fill_rrect_bg(W, H, 12, 12, 22, 36, bg_a);
+    nav_draw_hline(12, W - 12, 0, 56, 212, 255, 220);
+    nav_draw_hline(12, W - 12, 1, 56, 212, 255, 160);
+    nav_draw_hline(12, W - 12, H - 1, 56, 212, 255, 140);
+
+    int t1_px = 26;
+    const char *title = "无线控制台初始口令";
+    int t1_w = nav_text_width(title, t1_px, 1, 0);
+    int t1_x = (W - t1_w) / 2;
+    if (t1_x < pad_x) t1_x = pad_x;
+    nav_draw_text_clip(title, t1_x, 26 + nav_font_ascent(t1_px, 0), inner_w, t1_px, 1, 0, 128, 224, 255, 255);
+
+    nav_draw_hline(pad_x, W - pad_x, 70, 56, 212, 255, 80);
+
+    /* 中央大字号高亮显示自动生成的 6 位口令 */
+    int box_y = 92, box_h = 104;
+    nav_overlay_rrect(pad_x, box_y, inner_w, box_h, 12, 47, 129, 247, 68);
+    int pin_px = 56;
+    int pin_w = nav_text_width(pin, pin_px, 1, 1);
+    while (pin_px > 34 && pin_w > inner_w - 16) {
+        pin_px -= 4;
+        pin_w = nav_text_width(pin, pin_px, 1, 1);
+    }
+    int pin_x = (W - pin_w) / 2;
+    if (pin_x < pad_x) pin_x = pad_x;
+    int pin_base = box_y + (box_h - pin_px) / 2 + nav_font_ascent(pin_px, 1);
+    nav_draw_text_clip(pin, pin_x, pin_base, inner_w, pin_px, 1, 1, 255, 255, 255, 255);
+
+    int h1_px = 24;
+    const char *addr = "touareg.local:8080";
+    int a_w = nav_text_width(addr, h1_px, 1, 1);
+    int a_x = (W - a_w) / 2;
+    if (a_x < pad_x) a_x = pad_x;
+    nav_draw_text_clip(addr, a_x, 232 + nav_font_ascent(h1_px, 1), inner_w, h1_px, 1, 1, 168, 214, 255, 245);
+
+    int h2_px = 21;
+    const char *tip = "手机登录成功后自动隐藏";
+    int tip_w = nav_text_width(tip, h2_px, 1, 0);
+    int tip_x = (W - tip_w) / 2;
+    if (tip_x < pad_x) tip_x = pad_x;
+    nav_draw_text_clip(tip, tip_x, 282 + nav_font_ascent(h2_px, 0), inner_w, h2_px, 1, 0, 195, 206, 220, 235);
+}
+
+/* 轮询 /tmp/touareg_setup_pin 与 /tmp/cluster_cp.state；返回 1 表示显示状态或内容发生变化 */
 static int nav_poll(void) {
     g_nav_dirty = 0;
+
+    /* 优先显示首次启动自动生成的无线控制台口令（即使 nav_box=0 关闭也弹出，登录成功后自动消失） */
+    char setup_pin[24];
+    if (nav_read_setup_pin(setup_pin)) {
+        if (g_nav_active && g_nav_mode_cur == 3 && strcmp(g_nav_setup_pin, setup_pin) == 0) return 0;
+        snprintf(g_nav_setup_pin, sizeof(g_nav_setup_pin), "%s", setup_pin);
+        nav_render_setup_pin(g_nav_setup_pin);
+        g_nav_active = 1;
+        g_nav_mode_cur = 3;
+        g_nav_dirty = 1;
+        return 1;
+    }
+    if (g_nav_mode_cur == 3) {
+        g_nav_setup_pin[0] = '\0';
+        g_nav_mode_cur = 0;
+        g_nav_raw_len = -1;
+        if (!g_nav_conf.enabled) {
+            g_nav_active = 0;
+            return 1;
+        }
+    }
+
     if (!g_nav_conf.enabled) {
         if (g_nav_active) { g_nav_active = 0; g_nav_mode_cur = 0; return 1; }
         return 0;

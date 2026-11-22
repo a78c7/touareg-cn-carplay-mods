@@ -45,11 +45,16 @@ type wifiApplyOut struct {
 }
 
 func randomPin6() string {
-	var b [6]byte
-	_, _ = rand.Read(b[:])
 	out := make([]byte, 6)
+	var b [1]byte
 	for i := range out {
-		out[i] = '0' + (b[i] % 10)
+		for {
+			_, _ = rand.Read(b[:])
+			if b[0] < 250 { // 无偏拒绝采样（250 = 25 * 10）
+				out[i] = '0' + (b[0] % 10)
+				break
+			}
+		}
 	}
 	if out[0] == '0' {
 		out[0] = '8'
@@ -185,8 +190,8 @@ func validateWifi(w wifiReq) error {
 		}
 	}
 	pin := strings.TrimSpace(w.Pin)
-	if len(pin) < 4 || len(pin) > 8 {
-		return errors.New("手机网页管理口令请设为 4～8 位数字或字母")
+	if len(pin) < 6 || len(pin) > 16 {
+		return errors.New("手机网页管理口令请设为 6～16 位数字或英文字母")
 	}
 	for i := 0; i < len(pin); i++ {
 		c := pin[i]

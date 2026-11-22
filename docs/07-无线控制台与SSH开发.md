@@ -59,7 +59,9 @@
 - **内置轻量 mDNS 响应器（UDP 5353）**：监听 `224.0.0.251:5353`，收到查询 `touareg.local`（A 记录）时直接把当前 `bcm2` 的 IPv4 地址回给局域网设备。iPhone Safari 和电脑无需去热点列表翻 IP，直接访问 `http://touareg.local:8080` 或连 `root@touareg.local`。（注：部分安卓端原生编译程序内置 DNS 解析器不走系统 mDNS，连不上 `.local` 时填热点列表里 `touareg` 的实际 IP 即可。）
 - **仅绑定 `bcm2` 地址**：车机本地 `127.0.0.1:8080` 原本就有内部服务占用。`touareg_netd` 轮询拿到 `bcm2` 的局域网 IPv4 后，只绑定 `<bcm2_ip>:8080`（IP 变化时自动重绑），既避开本地端口冲突，又保证绝不在 `ecm0` 车联网接口上监听。
 - **口令与行车安全锁**：
-  - 除首页 HTML 外壳外，所有 `/api/` 接口强制核对「改装设置」生成的管理口令 `web.pin`（手机浏览器首次输入后保存在本地 `localStorage`），防止车机连上公共或公司 Wi-Fi 时同局域网他人误触；
+  - 除首页 HTML 外壳外，所有 `/api/` 接口默认 **fail-closed** 强制核对管理口令 `web.pin`（无有效口令时一律返回 `503` 拒绝访问）；
+  - **首次启动自动生成与旧版平滑升级**：若早期旧版升级或手动部署未配置 `web.pin`，`touareg_netd` 启动时会自动从 `/dev/urandom` 生成 6 位随机数字口令写入 `web.pin`（`0600`），并同步写入内存盘 `/tmp/touareg_setup_pin`，由 `cl_render`（`navbox.c`）在仪表屏弹出大字初始口令提示卡；手机首次使用该口令登录 `8080` 成功后立即自动删除提示文件并恢复正常仪表画面（已有 `web.pin` 时开机零闪存写入、不弹提示）；
+  - 口令仅通过 HTTP 请求头 `X-Pin` 传递（禁止 URL query 传参，文件与诊断包下载走 `fetch` + `Blob`），并按客户端来源 IP 独立计数阶梯退避限速（连续输错 5 次依次锁定 30s → 120s → 300s → 900s，防止跨设备误锁车主或暴力穷举）；桌面「改装设置」要求新设口令为 **6～16 位**字母/数字（车机端兼容旧版 4～8 位）；
   - 所有修改类接口先读 `/tmp/dash.state` 里的实时车速，车速 > 3 km/h 时拒绝写入，只允许停车状态改配置；
   - 写 `dash.conf`、`cl.conf`、`wpa.conf` 一律走同分区 `.new` 写入 + `fsync` + `rename` 原子替换，写完立刻把 `/mnt/app` 恢复只读挂载（`mount -ur /mnt/app`）。
 - **按需分离权限**：普通车主在「改装设置」里不勾选开发终端时，模块写入 `no_ssh` 标记，车机只开放 `8080` 网页控制台和 `5353` mDNS，不启动 `2012` 端口、也不写登录公钥；如果安装在未刷途锐仪表模块的同平台其他品牌 MH2p 车机上，网页检测到没有 `dash.conf` 会自动隐藏途锐专属仪表卡片，保留 Wi-Fi 管理、系统日志下载和车机软重启功能。
@@ -69,7 +71,7 @@
 已安装 `v22.0+` 无线控制台后，后续升级核心程序不再需要反复拔插 U 盘：
 
 - **流式落盘（零 `/tmp` 内存压力）**：在手机浏览器打开 `http://touareg.local:8080` → **开关运维 → 离线无线升级**，上传从官方 Release 下载的 `touareg-ota-<版本>.tar`（上限 `6 MB`）。`touareg_netd` 以 16 KB 分块流式直写至 `/mnt/app/eso/bin/apps/.ota_stage/pkg.tar`，绝不把升级包缓存在 `/tmp` 内存盘中。
-- **严格校验与白名单**：解析 POSIX `ustar` 归档时强制拒绝 `..` 路径穿越、子目录、符号链接与设备节点，仅放行 6 个白名单核心组件（`cl_render`、`clusterd`、`cl_probe.so`、`touareg_netd`、`VWClusterNav_v6.jar`、`VWPopupFilter.jar`），并逐一对照包内 `manifest.sha256` 完成纯 C FIPS 180-4 SHA-256 校验；任意一个字节不匹配即整体中止，不触碰车机任何现役文件。
+- **官方 Ed25519 签名与白名单校验**：解析 POSIX `ustar` 归档时强制拒绝 `..` 路径穿越、子目录、符号链接、设备节点与重复条目，仅放行 6 个白名单核心组件（`cl_render`、`clusterd`、`cl_probe.so`、`touareg_netd`、`VWClusterNav_v6.jar`、`VWPopupFilter.jar`）及版本/清单元数据；落盘前先使用车机内置公钥（`src/touareg_netd/ota_pubkey.h`）验证 `manifest.sha256.sig` 的纯 C RFC 8032 **Ed25519** 数字签名，再逐一对照 `manifest.sha256` 完成 FIPS 180-4 SHA-256 校验（含 `version.txt`），任意字节不匹配即整体中止，不触碰车机任何现役文件。（开发者若需测试本地未签名开发包，可通过 SSH 手动在车机创建 `/mnt/app/eso/bin/apps/wifi_dev/allow_unsigned_ota` 显式放行，该开关绝不通过网页暴露。）
 - **自动备份与一键回滚**：校验通过后先将车机现役文件复制到 `/mnt/app/eso/bin/apps/.ota_backup/`，再用同分区 `.new` → `fsync` → `rename` 原子替换并立刻把 `/mnt/app` 恢复只读。若新版异常，可在网页点 **「回滚上一版备份」** 一键还原。
 
 ## 9. 一键脱敏排障诊断包（v22.0）
@@ -102,3 +104,13 @@
    - `cl_render` 默认的 **`capture=h264`** 模式采用 **Tegra K1 NVDEC 硬解 + QNX `screen_blit` 硬件合成**，`dash.c` 仅在 CPU 上绘制两侧 `295×344` 小框。这套架构显示数字与轻量运动条极稳，配合 `v22.0` 的 `10Hz` 采样 + `smooth=1` 指数阻尼插值已足够跟手；**但千万不要让 AI 在 `dash.c` 里用 CPU 循环做全屏 `1920×639` 逐像素动画或高频大面积重绘**，否则必然掉帧发卡！
    - 若要实现 **全屏 60fps 仪表指针、弧形转速表、发光渐变或自定义动效主题**，请使用 `v22.0` 新增的独立 OpenGL ES 2.0 硬件加速引擎 **`src/cl_render/gles60.c`**（运行参数 `capture=gles60`，同一窗口 `58`，以 `eglSwapInterval(dpy, 1)` 锁死硬件 VSync 60fps，并用 `eglGetProcAddress` 动态解析 `gl*` 符号、绝不直接链接 `-lGLESv2`）。
 5. **先本地回放预览，再上车验证**：修改信息框布局或动画参数前，先在电脑双击打开 [`tools/preview/index.html`](../tools/preview/index.html)，拖入真实 `drive_logs/*.csv` 或切换内置场景实时预览，确认观感与帧率后再上车部署，并欢迎把满意的 `dash.conf` 与截图发到仓库 **GitHub Discussions** 共享给车友。
+
+## 12. 自动化测试、静态分析与 CI 门禁（v22.1）
+
+所有提交与发布前均由 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) 及本地一键脚本 [`tests/pre_release_check.sh`](../tests/pre_release_check.sh) 执行五类自动校验：
+
+1. **Go 配置器检查**：`go vet ./...` 与 `go test -race -v ./...`（覆盖模块依赖联动、PIN 6～16 位策略、Ed25519 SSH 密钥生成及 U 盘默认全关验证）。
+2. **C 主机单测（ASan + UBSan）**：[`tests/run_c_tests.sh`](../tests/run_c_tests.sh) 以 `-Wall -Wextra -Werror -fsanitize=address,undefined` 编译运行 `test_wired_rg`、`tests/test_ota.c`（SHA-256、RFC 8032 Ed25519 向量、OTA 验签/篡改拦截/回滚、诊断脱敏）与 `tests/test_netd.c`（fail-closed PIN、首次随机生成与自动清除、按 IP 阶梯限速、禁止 URL `?pin=`、CSRF 与路径穿越拦截）。
+3. **静态分析（`cppcheck`）**：对 `touareg_netd.c`、`clusterd.c`、`cl_wired_rg.c`、`vhpatch.c` 执行 `--enable=warning,performance,portability --error-exitcode=1` 零告警门禁。
+4. **43 项遥测三端对齐与仓库卫生门禁**：自动比对 `src/cl_render/dash.c`、`tools/configurator/package.go` 与 `src/touareg_netd/web_ui.html` 的 43 项遥测键名一致；检查前端 HTML 裸 DOM ID、禁止 ModKit `Update/*.sh` 提前锁回 `/mnt/app` 只读、检查 `web_ui_data.h` 与 `web_ui.html` 字节长度同步，并禁止大体积桌面配置器二进制或本机私有绝对路径误入 git。
+5. **Release 签名与产物校验**：[`.github/workflows/release.yml`](../.github/workflows/release.yml) 现场从源码编译双端配置器，使用仓库 Secret `OTA_SIGNING_KEY`（核对与 `src/touareg_netd/ota_pubkey.h` 严格匹配）为 `touareg-ota-*.tar` 生成 Ed25519 签名，并同步发布 `SHA256SUMS.txt`。

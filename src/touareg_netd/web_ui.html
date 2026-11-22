@@ -71,7 +71,7 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
 <div class="foss-bar"><b>免费开源项目 · 严禁倒卖</b>｜官方源码 github.com/a78c7/touareg-cn-carplay-mods｜如花钱购买本程序或改装包请立即退款</div>
 <header>
   <h1>
-    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v22.01</span></span>
+    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v22.1</span></span>
     <span id="spdBadge" class="badge">连接中...</span>
   </h1>
   <div class="meta">
@@ -193,11 +193,11 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
       <div class="row"><label>手动安全模式 (safe_mode)<span class="sub">勾选后下次重启跳过全部改装插件，快速回归纯原厂状态排障</span></label><input type="checkbox" id="tg_safe_mode" onchange="doToggle('safe_mode',this.checked)"></div>
     </div>
     <div class="card">
-      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v22.01</span></h2>
-      <div class="sub" style="margin-bottom:8px">上传从官方 GitHub Release 下载的 <code>touareg-ota-*.tar</code>（最大 6 MB）。流式直写 eMMC 暂存区、逐文件 SHA-256 校验与严格白名单落盘，写入前自动备份当前版本；升级后点下方「软重启车机」生效。</div>
+      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v22.1</span></h2>
+      <div class="sub" style="margin-bottom:8px">上传从官方 GitHub Release 下载的 <code>touareg-ota-*.tar</code>（最大 6 MB）。流式直写 eMMC 暂存区，强制校验官方 Ed25519 数字签名与逐文件 SHA-256 并按严格白名单落盘，写入前自动备份当前版本；升级后点下方「软重启车机」生效。</div>
       <input type="file" id="otaFile" accept=".tar">
       <div class="actions">
-        <button class="btn pri write-act" type="button" id="btnOtaUpload">校验并安装离线升级包</button>
+        <button class="btn pri write-act" type="button" id="btnOtaUpload">验签并安装离线升级包</button>
         <button class="btn dan write-act" type="button" id="btnOtaRollback" disabled>回滚上一版备份</button>
       </div>
       <div id="otaMsg" class="sub" style="margin-top:8px"></div>
@@ -219,7 +219,7 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
       <h2>一键脱敏排障诊断包<button class="btn sm" type="button" onclick="loadStatus()">刷新</button></h2>
       <div class="sub" style="margin-bottom:8px">自动打包版本、安全模式状态、dash.conf/cl.conf、崩溃文件列表与关键日志尾段，并自动脱敏 Wi-Fi 密码、管理口令、SSH 密钥、手机号/VIN，可直接发给 GitHub Issue 或车友群排障。</div>
       <div class="actions">
-        <a class="btn pri" id="btnDiagDl" href="#">下载脱敏诊断包 (touareg_diag_sanitized.txt)</a>
+        <button class="btn pri" type="button" id="btnDiagDl">下载脱敏诊断包 (touareg_diag_sanitized.txt)</button>
       </div>
     </div>
     <div class="card">
@@ -267,7 +267,7 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
 <div id="pinModal" class="modal">
   <div class="modal-box">
     <h2 style="margin:0 0 8px;font-size:16px">输入管理口令</h2>
-    <div class="sub" style="margin-bottom:10px">请输入在「改装设置」里设定的 4～8 位管理口令（验证通过后自动保存在本机浏览器）：</div>
+    <div class="sub" style="margin-bottom:10px">请输入在「改装设置」里设定的 6～16 位管理口令（兼容旧版 4～8 位；验证通过后保存在本机浏览器，仅通过请求头校验）：</div>
     <input type="password" id="pinInput" autocomplete="off" placeholder="管理口令">
     <div id="pinErr" class="pin-err"></div>
     <div class="actions">
@@ -408,22 +408,52 @@ function renderEditor(){
   });
 }
 
+async function downloadWithPin(url,fallbackName,btn){
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch(url,{headers:{'X-Pin':PIN}});
+    const ct=r.headers.get('Content-Type')||'';
+    if(r.status===401||ct.indexOf('application/json')>=0){
+      const j=await r.json().catch(()=>({}));
+      if(r.status===401||j.need_pin){
+        document.getElementById('pinErr').textContent=j.msg||'管理口令错误，请重试';
+        document.getElementById('pinModal').classList.add('on');
+        return;
+      }
+      toast(j.msg||('下载失败 (HTTP '+r.status+')'));
+      return;
+    }
+    if(!r.ok){toast('下载失败 (HTTP '+r.status+')');return;}
+    const blob=await r.blob();
+    let fname=fallbackName||'download.txt';
+    const cd=r.headers.get('Content-Disposition')||'';
+    const m=cd.match(/filename="([^"]+)"/);
+    if(m&&m[1])fname=m[1];
+    const objUrl=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=objUrl;a.download=fname;a.style.display='none';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(objUrl),1500);
+  }catch(e){toast('下载失败: '+e.message);}
+  finally{if(btn)btn.disabled=false;}
+}
+
 function renderFileList(elId,files,type,emptyTxt){
   const box=document.getElementById(elId);
   box.innerHTML='';
   if(!files||!files.length){
     const e=document.createElement('div');e.className='sub';e.textContent=emptyTxt;box.appendChild(e);return;
   }
-  const pq=PIN?('&pin='+encodeURIComponent(PIN)):'';
   files.forEach(f=>{
     const row=document.createElement('div');row.className='fitem';
     const info=document.createElement('div');
     const fn=document.createElement('div');fn.className='fnm';fn.textContent=f.name||'';
     const fs=document.createElement('div');fs.className='fsz';fs.textContent=fmtSz(Number(f.size)||0);
     info.append(fn,fs);
-    const a=document.createElement('a');a.className='btn sm';a.textContent='下载';
-    a.href='/api/dl?type='+encodeURIComponent(type)+'&name='+encodeURIComponent(f.name||'')+pq;
-    row.append(info,a);box.appendChild(row);
+    const b=document.createElement('button');b.type='button';b.className='btn sm';b.textContent='下载';
+    const url='/api/dl?type='+encodeURIComponent(type)+'&name='+encodeURIComponent(f.name||'');
+    b.onclick=()=>downloadWithPin(url,f.name||'log.txt',b);
+    row.append(info,b);box.appendChild(row);
   });
 }
 
@@ -436,8 +466,8 @@ function updateHeaderStatus(j){
   document.querySelectorAll('.write-act').forEach(btn=>{btn.disabled=driving||busy;});
   const rb=document.getElementById('btnOtaRollback');
   if(rb)rb.disabled=driving||busy||!j.has_ota_backup;
-  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v22.01';
-  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v22.01');
+  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v22.1';
+  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v22.1');
   document.getElementById('ipTxt').textContent='地址: touareg.local ('+(j.bcm2_ip||'--')+')';
   document.getElementById('procTxt').textContent='进程: clusterd='+(j.clusterd?'开':'关')+' render='+(j.cl_render?'开':'关');
   document.getElementById('odoTxt').textContent=j.odo>0?('总里程: '+j.odo.toFixed(1)+' km'):'';
@@ -536,14 +566,15 @@ async function loadStatus(){
     document.getElementById('tg_gles60_mode').checked=!!tg.gles60_mode;
     document.getElementById('tg_safe_mode').checked=!!tg.safe_mode;
 
-    const pq=PIN?('?pin='+encodeURIComponent(PIN)):'';
-    document.getElementById('btnDiagDl').href='/api/diag'+pq;
-
     renderFileList('driveList',S.drive_logs,'drive','未检测到 U 盘 drive_logs 目录或暂无 CSV');
     renderFileList('logList',S.sys_logs,'log','暂无日志');
     document.getElementById('wifiSaved').textContent='车机已保存热点条目：'+(S.wifi_count||0)+' 条';
   }catch(e){toast('读取状态失败: '+e.message);}
 }
+
+document.getElementById('btnDiagDl').onclick=function(){
+  downloadWithPin('/api/diag','touareg_diag_sanitized.txt',this);
+};
 
 document.getElementById('btnZeroTrip').onclick=()=>{
   if(S&&S.odo>0){document.getElementById('trip_base').value=S.odo.toFixed(1);toast('已填入当前总里程，别忘了点保存');}
@@ -611,10 +642,10 @@ document.getElementById('btnOtaUpload').onclick=async()=>{
   if(!f)return toast('请先选择 touareg-ota-*.tar 离线升级包');
   if(!f.name.endsWith('.tar'))return toast('请上传标准 .tar 格式离线升级包（不要解压，也不要上传 .zip）');
   if(f.size>6*1024*1024)return toast('升级包超过 6 MB 限制');
-  if(!confirm('确认将 '+f.name+' ('+fmtSz(f.size)+') 写入车机？\n车机会先校验 SHA-256 并自动备份旧版，期间请勿熄火。'))return;
+  if(!confirm('确认将 '+f.name+' ('+fmtSz(f.size)+') 写入车机？\n车机会先校验官方 Ed25519 签名与 SHA-256 并自动备份旧版，期间请勿熄火。'))return;
   busy=true;if(S)updateHeaderStatus(S);
   const msgEl=document.getElementById('otaMsg');
-  msgEl.textContent='正在上传并校验 SHA-256，请勿关闭页面或熄火...';
+  msgEl.textContent='正在上传并校验 Ed25519 签名与 SHA-256，请勿关闭页面或熄火...';
   try{
     const r=await fetch('/api/ota/upload',{
       method:'POST',

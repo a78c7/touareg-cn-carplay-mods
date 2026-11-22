@@ -239,8 +239,8 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
       </div>
       <div class="wbox">
         <div class="row">
-          <label style="font-size:14px;font-weight:600">手机网页管理口令（必填，4～8 位数字或字母）：</label>
-          <input class="winput" id="wpin" maxlength="8" style="width:140px;font-weight:600;letter-spacing:1px" placeholder="4～8位口令">
+          <label style="font-size:14px;font-weight:600">手机网页管理口令（必填，6～16 位数字或字母）：</label>
+          <input class="winput" id="wpin" maxlength="16" style="width:170px;font-weight:600;letter-spacing:1px" placeholder="6～16位口令">
           <button class="btn" type="button" id="wrandpin">随机换一个</button>
         </div>
         <p class="hint" style="margin:6px 0 0">手机浏览器首次打开 <code>http://touareg.local:8080</code> 时输入一次即自动记住；防止车机连上公共 Wi-Fi 时他人改动设置。</p>
@@ -544,7 +544,7 @@ function wifiInvalidMsg(){
     if (!n.ssid) return '热点名称不能为空';
     if (n.psk.length < 8 || n.psk.length > 63) return `热点「${n.ssid}」密码需 8～63 位`;
   }
-  if (!/^[0-9A-Za-z]{4,8}$/.test(w.pin)) return '网页管理口令需 4～8 位数字或英文字母';
+  if (!/^[0-9A-Za-z]{6,16}$/.test(w.pin)) return '网页管理口令需 6～16 位数字或英文字母';
   return '';
 }
 function renderWifi(){
@@ -633,7 +633,12 @@ $('amapturn').addEventListener('change', e => { dash.amap_turn = +e.target.value
 ['wssid0','wpsk0','wssid1','wpsk1','wssid2','wpsk2','wpin'].forEach(id => $(id).addEventListener('input', renderSummary));
 $('wssh').addEventListener('change', () => { renderWifi(); renderSummary(); });
 $('wshowpw').addEventListener('change', e => { document.querySelectorAll('.wpw').forEach(el => el.type = e.target.checked ? 'text' : 'password'); });
-$('wrandpin').addEventListener('click', () => { $('wpin').value = String(Math.floor(100000 + Math.random() * 900000)); renderSummary(); });
+$('wrandpin').addEventListener('click', () => {
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  $('wpin').value = String(100000 + (arr[0] % 900000));
+  renderSummary();
+});
 let lastSSHKey = '', lastSSHGuide = '';
 function dlBlob(name, text){ const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:'text/plain;charset=utf-8'})); a.download = name; a.click(); }
 
