@@ -150,6 +150,24 @@ func (p pkg) path(parts ...string) string {
 func isDir(p string) bool  { st, err := os.Stat(p); return err == nil && st.IsDir() }
 func isFile(p string) bool { st, err := os.Stat(p); return err == nil && !st.IsDir() }
 
+// writeFileSync 写入后立刻 fsync 落盘，降低 FAT32 U 盘未安全弹出时截断/0 字节风险
+func writeFileSync(path string, data []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(data)
+	serr := f.Sync()
+	cerr := f.Close()
+	if werr != nil {
+		return werr
+	}
+	if serr != nil {
+		return serr
+	}
+	return cerr
+}
+
 // where a mod folder is now: "mods", "park" or "" (missing); error if it is in both places
 func (p pkg) location(dir string) (string, error) {
 	m, k := isDir(p.path("Mods", dir)), isDir(p.path(parkDir, dir))
@@ -433,7 +451,7 @@ func (p pkg) writeDash(d dashConf) error {
 			out = append(out, kv.k+"="+kv.v)
 		}
 	}
-	if err := os.WriteFile(path, []byte(strings.Join(out, "\n")+"\n"), 0o644); err != nil {
+	if err := writeFileSync(path, []byte(strings.Join(out, "\n")+"\n"), 0o644); err != nil {
 		return err
 	}
 	swPath := p.switchOffPath()
@@ -442,7 +460,7 @@ func (p pkg) writeDash(d dashConf) error {
 			return err
 		}
 	} else {
-		if err := os.WriteFile(swPath, []byte{}, 0o644); err != nil {
+		if err := writeFileSync(swPath, []byte{}, 0o644); err != nil {
 			return err
 		}
 	}
@@ -596,7 +614,7 @@ func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
 			u := filepath.Join(p.modPath(d), "uninstall.txt")
 			if want == "uninstall" {
 				if !isFile(u) {
-					if err := os.WriteFile(u, nil, 0o644); err != nil {
+					if err := writeFileSync(u, nil, 0o644); err != nil {
 						return log, wout, err
 					}
 				}
@@ -688,6 +706,7 @@ func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
 	if n > 0 {
 		log = append(log, fmt.Sprintf("清理了 %d 个 Mac 隐藏文件（._* / .DS_Store）", n))
 	}
+	syncFS()
 	return log, wout, nil
 }
 
@@ -789,7 +808,7 @@ func (p pkg) setUsbMode(mode string) ([]string, error) {
 			}
 			log = append(log, "新建 "+logDir+" 文件夹")
 		}
-		if err := os.WriteFile(filepath.Join(p.path(logDir), aiGuideName), []byte(aiGuide), 0o644); err == nil {
+		if err := writeFileSync(filepath.Join(p.path(logDir), aiGuideName), []byte(aiGuide), 0o644); err == nil {
 			log = append(log, "写入 "+logDir+"/"+aiGuideName+"（把行车记录交给 AI 分析时用）")
 		}
 		log = append(log, "现在是行车记录 U 盘：插在车上不会刷机，行车数据记到 "+logDir)
@@ -803,5 +822,6 @@ func (p pkg) setUsbMode(mode string) ([]string, error) {
 	default:
 		return nil, errors.New("unknown mode")
 	}
+	syncFS()
 	return log, nil
 }

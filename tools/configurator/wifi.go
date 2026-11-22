@@ -393,10 +393,10 @@ func (p pkg) writeWifi(w wifiReq) ([]string, wifiApplyOut, error) {
 	nets := cleanWifiNets(w.Networks)
 	pin := strings.TrimSpace(w.Pin)
 
-	if err := os.WriteFile(filepath.Join(dir, "wpa.conf"), []byte(buildWpaConf(nets)), 0o600); err != nil {
+	if err := writeFileSync(filepath.Join(dir, "wpa.conf"), []byte(buildWpaConf(nets)), 0o600); err != nil {
 		return nil, out, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "web.pin"), []byte(pin+"\n"), 0o600); err != nil {
+	if err := writeFileSync(filepath.Join(dir, "web.pin"), []byte(pin+"\n"), 0o600); err != nil {
 		return nil, out, err
 	}
 
@@ -412,7 +412,7 @@ func (p pkg) writeWifi(w wifiReq) ([]string, wifiApplyOut, error) {
 	noSSHPath := filepath.Join(dir, "no_ssh")
 
 	if !w.EnableSSH {
-		if err := os.WriteFile(noSSHPath, nil, 0o644); err != nil {
+		if err := writeFileSync(noSSHPath, nil, 0o644); err != nil {
 			return logs, out, err
 		}
 		_ = os.Remove(akPath)
@@ -428,10 +428,10 @@ func (p pkg) writeWifi(w wifiReq) ([]string, wifiApplyOut, error) {
 		if err != nil {
 			return logs, out, fmt.Errorf("生成车机主机密钥失败：%v", err)
 		}
-		if err := os.WriteFile(hkPath, []byte(hPriv), 0o600); err != nil {
+		if err := writeFileSync(hkPath, []byte(hPriv), 0o600); err != nil {
 			return logs, out, err
 		}
-		_ = os.WriteFile(hkPubPath, []byte(hPub), 0o644)
+		_ = writeFileSync(hkPubPath, []byte(hPub), 0o644)
 	}
 
 	if !isFile(akPath) || w.RegenKey {
@@ -439,7 +439,7 @@ func (p pkg) writeWifi(w wifiReq) ([]string, wifiApplyOut, error) {
 		if err != nil {
 			return logs, out, fmt.Errorf("生成登录密钥对失败：%v", err)
 		}
-		if err := os.WriteFile(akPath, []byte(uPub), 0o600); err != nil {
+		if err := writeFileSync(akPath, []byte(uPub), 0o600); err != nil {
 			return logs, out, err
 		}
 		savedDir := saveKeyToDesktop(uPriv, uPub, pin)

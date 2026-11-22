@@ -53,10 +53,7 @@ type stateResp struct {
 	Errors    []string          `json:"errors"`
 }
 
-func findRoot() (string, error) {
-	if len(os.Args) > 1 && isDir(os.Args[1]) { // for testing: explicit package directory
-		return filepath.Abs(os.Args[1])
-	}
+func exeRoot() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
@@ -65,6 +62,13 @@ func findRoot() (string, error) {
 		exe = r
 	}
 	return filepath.Dir(exe), nil
+}
+
+func findRoot() (string, error) {
+	if len(os.Args) > 1 && isDir(os.Args[1]) { // for testing: explicit package directory
+		return filepath.Abs(os.Args[1])
+	}
+	return exeRoot()
 }
 
 func checkRoot(root string) error {
@@ -119,6 +123,9 @@ func waitExit(code int) {
 
 func main() {
 	consoleUTF8()
+	if hasCLIFlags(os.Args[1:]) {
+		os.Exit(runCLI(os.Args[1:]))
+	}
 	fmt.Printf("途锐改装设置 %s\n", version)
 	fmt.Println("【免费开源 · 严禁售卖】https://github.com/a78c7/touareg-cn-carplay-mods")
 	fmt.Printf("如果您是付费买到本程序、压缩包或付费代刷的，请立即申请退款！\n\n")
@@ -218,6 +225,26 @@ func main() {
 			fmt.Println("U 盘用途：", strings.Join(log, "；"))
 		}
 		json.NewEncoder(w).Encode(resp)
+	})
+	api("/api/eject", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		mnt, err := scheduleEject(root)
+		resp := map[string]any{"ok": err == nil, "mount": mnt}
+		if err != nil {
+			resp["error"] = err.Error()
+			fmt.Println("安全弹出失败：", err)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		fmt.Println("已触发安全弹出 U 盘：", mnt)
+		json.NewEncoder(w).Encode(resp)
+		select {
+		case quit <- struct{}{}:
+		default:
+		}
 	})
 	api("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{}"))

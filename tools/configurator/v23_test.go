@@ -47,9 +47,31 @@ func TestV23ConfigRoundTrip(t *testing.T) {
 		t.Fatal("expected oversize rejection")
 	}
 
-	// Turn off v23_mode + clear theme
+	// Turn off v23_mode while keeping custom theme -> writes v23_off so install.sh respects opt-out
+	if _, err := p.writeV23(v23ApplyReq{Enabled: false, ThemeAction: "keep"}); err != nil {
+		t.Fatal(err)
+	}
+	if !isFile(filepath.Join(upd, "v23_off")) || isFile(filepath.Join(upd, "v23_mode")) {
+		t.Fatalf("expected v23_off present and v23_mode removed")
+	}
+	stOff := p.readV23()
+	if stOff.Enabled || !stOff.HasTheme {
+		t.Fatalf("expected disabled with kept theme, got %+v", stOff)
+	}
+
+	// Simulate AI manually dropping my_theme.js without v23_mode or v23_off -> treated as enabled (matches install.sh auto-enable)
+	_ = os.Remove(filepath.Join(upd, "v23_off"))
+	stAuto := p.readV23()
+	if !stAuto.Enabled || !stAuto.HasTheme {
+		t.Fatalf("expected auto-enabled when theme exists without v23_off, got %+v", stAuto)
+	}
+
+	// Turn off v23_mode + clear theme -> removes v23_off too
 	if _, err := p.writeV23(v23ApplyReq{Enabled: false, ThemeAction: "clear"}); err != nil {
 		t.Fatal(err)
+	}
+	if isFile(filepath.Join(upd, "v23_off")) || isFile(filepath.Join(upd, "v23_mode")) {
+		t.Fatalf("expected both v23_mode and v23_off absent after clear")
 	}
 	st2 := p.readV23()
 	if st2.Enabled || st2.HasTheme {

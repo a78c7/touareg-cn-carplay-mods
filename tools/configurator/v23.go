@@ -49,7 +49,6 @@ func (p pkg) readV23() v23State {
 	if dir == "" {
 		return st
 	}
-	st.Enabled = isFile(filepath.Join(dir, "v23_mode"))
 	tp := filepath.Join(dir, "themes_user", "my_theme.js")
 	if b, err := os.ReadFile(tp); err == nil && len(b) > 0 {
 		st.HasTheme = true
@@ -60,6 +59,8 @@ func (p pkg) readV23() v23State {
 			st.ThemeName = "my_theme.js"
 		}
 	}
+	// 与车机 install.sh 保持一致：有 v23_mode，或存在非空自定义皮肤且未显式写 v23_off，均视作启用 v23
+	st.Enabled = isFile(filepath.Join(dir, "v23_mode")) || (st.HasTheme && !isFile(filepath.Join(dir, "v23_off")))
 	return st
 }
 
@@ -92,21 +93,6 @@ func (p pkg) writeV23(r v23ApplyReq) ([]string, error) {
 		return nil, fmt.Errorf("找不到 VW_HUD_3_CarPlayCluster/Update 目录")
 	}
 	var logs []string
-	flagPath := filepath.Join(dir, "v23_mode")
-	if r.Enabled {
-		if err := os.WriteFile(flagPath, []byte("1\n"), 0o644); err != nil {
-			return logs, err
-		}
-		logs = append(logs, "v23 60fps 皮肤引擎（Beta）：已启用（异常自动退回 v22.1 经典通道）")
-	} else {
-		if isFile(flagPath) {
-			if err := os.Remove(flagPath); err != nil {
-				return logs, err
-			}
-		}
-		logs = append(logs, "v23 60fps 皮肤引擎（Beta）：关闭（默认稳跑 v22.1 经典通道）")
-	}
-
 	userDir := filepath.Join(dir, "themes_user")
 	themePath := filepath.Join(userDir, "my_theme.js")
 	switch r.ThemeAction {
@@ -114,7 +100,7 @@ func (p pkg) writeV23(r v23ApplyReq) ([]string, error) {
 		if err := os.MkdirAll(userDir, 0o755); err != nil {
 			return logs, err
 		}
-		if err := os.WriteFile(themePath, []byte(r.ThemeCode), 0o644); err != nil {
+		if err := writeFileSync(themePath, []byte(r.ThemeCode), 0o644); err != nil {
 			return logs, err
 		}
 		logs = append(logs, fmt.Sprintf("已写入自定义 AI 皮肤到 U 盘：themes_user/my_theme.js（%.1f KB，上车插 U 盘一次生效）", float64(len(r.ThemeCode))/1024.0))
@@ -126,6 +112,32 @@ func (p pkg) writeV23(r v23ApplyReq) ([]string, error) {
 		}
 		_ = os.Remove(userDir)
 		logs = append(logs, "已清除 U 盘自定义皮肤（恢复使用内置官方默认 60fps 经典版）")
+	}
+
+	flagPath := filepath.Join(dir, "v23_mode")
+	offPath := filepath.Join(dir, "v23_off")
+	if r.Enabled {
+		if err := writeFileSync(flagPath, []byte("1\n"), 0o644); err != nil {
+			return logs, err
+		}
+		if isFile(offPath) {
+			_ = os.Remove(offPath)
+		}
+		logs = append(logs, "v23 60fps 皮肤引擎（Beta）：已启用（异常自动退回 v22.1 经典通道）")
+	} else {
+		if isFile(flagPath) {
+			if err := os.Remove(flagPath); err != nil {
+				return logs, err
+			}
+		}
+		if isFile(themePath) {
+			if err := writeFileSync(offPath, []byte("1\n"), 0o644); err != nil {
+				return logs, err
+			}
+		} else if isFile(offPath) {
+			_ = os.Remove(offPath)
+		}
+		logs = append(logs, "v23 60fps 皮肤引擎（Beta）：关闭（默认稳跑 v22.1 经典通道）")
 	}
 	return logs, nil
 }

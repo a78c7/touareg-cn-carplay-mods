@@ -721,15 +721,17 @@ $('save').addEventListener('click', async () => {
     const sshBanner = lastSSHKey ? `<div class="msg info" style="margin:10px 0"><b>已生成本车专属 SSH 密钥对</b>${r.sshKeySavedDir ? `，私钥已自动保存到电脑：<code>${esc(r.sshKeySavedDir)}</code>` : ''}（U 盘内不保留私钥，请妥善保存）。<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="dlpriv">下载私钥 touareg_ed25519</button><button class="btn" type="button" id="dlguide">下载连接说明.txt</button></div></div>` : '';
     const hasAction = S.features.some(f => sel[f.id] !== 'skip');
     const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip' || sel.nosimpopup !== 'skip' || sel.nobtauth !== 'skip';
-    $('result').innerHTML = `<div class="msg ok"><b>已保存。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>
+    const canEject = !!(S.vol && S.vol.removable);
+    const ejectBtn = canEject ? '<button class="primary" type="button" id="eject" style="margin-right:8px;padding:8px 18px;font-size:14px">⏏ 一键安全弹出 U 盘并退出</button>' : '';
+    $('result').innerHTML = `<div class="msg ok"><b>已保存并刷盘。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>
       ${sshBanner}
       ${hasAction ? `<b>接下来：</b><ol class="steps">
-        <li>${S.os === 'darwin' ? '在访达左侧点 U 盘旁边的 ⏏ 推出 U 盘' : '在任务栏右下角「安全删除硬件」里弹出 U 盘'}，再拔下来。</li>
+        <li>${canEject ? '点下方<b>「一键安全弹出 U 盘并退出」</b>（或手动安全弹出 U 盘），待系统 U 盘图标消失后再拔下来。' : (S.os === 'darwin' ? '在访达左侧点 U 盘旁边的 ⏏ 推出 U 盘' : '在任务栏右下角「安全删除硬件」里弹出 U 盘') + '，再拔下来。'}</li>
         <li>到车上<b>发动车辆</b>，插入 U 盘。约 10 秒后车机自动重启并开始刷机，过程几分钟，会重启几次、可能出现红色工程界面，<b>期间不要操作车机</b>。</li>
         <li>屏幕提示移除介质时拔出 U 盘，车机重启后就生效了。</li>
       </ol>
       ${keepNote ? '<p class="hint" style="margin-top:8px">刷机时会把原厂文件备份到这个 U 盘，建议保留这个 U 盘，平时不要插在车上（插着会再次进入刷机）。</p>' : ''}` : `<div class="msg warn">当前所有模块均设为「不处理」（已全部归位到「未选模块」文件夹，默认不开启任何功能）。如需上车安装或卸载模块，请在上方第 1 步点选「安装」或「卸载」后再次保存。</div>`}
-      <button class="btn" id="quit">完成，退出程序</button>`;
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${ejectBtn}<button class="btn" id="quit">完成，退出程序</button></div>`;
     S = await api('/api/state'); if ($('wregen')) $('wregen').checked = false;
     if (S.v23) v23Cfg = {enabled: !!S.v23.enabled, themeAction: 'keep', themeCode: '', themeName: S.v23.themeName || '', hasTheme: !!S.v23.hasTheme, themeSize: S.v23.themeSize || 0};
     renderStatus(); renderAll();
@@ -740,6 +742,17 @@ $('save').addEventListener('click', async () => {
 document.addEventListener('click', async e => {
   if (e.target.id === 'dlpriv' && lastSSHKey) dlBlob('touareg_ed25519', lastSSHKey);
   if (e.target.id === 'dlguide' && lastSSHGuide) dlBlob('无线连接说明.txt', lastSSHGuide);
+  if (e.target.id === 'eject') {
+    const b = e.target; b.disabled = true; b.textContent = '正在安全弹出 U 盘…';
+    try {
+      const r = await api('/api/eject', {});
+      if (!r.ok) { b.disabled = false; b.textContent = '⏏ 一键安全弹出 U 盘并退出'; $('result').insertAdjacentHTML('beforeend', `<div class="msg warn" style="margin-top:8px">${esc(r.error || '未能自动弹出，请手动安全弹出 U 盘')}</div>`); return; }
+      document.body.innerHTML = `<div class="wrap"><h1>途锐改装设置</h1><div class="msg ok" style="margin-top:14px"><b>已发送安全弹出 U 盘指令（${esc(r.mount || '')}）并退出程序。</b><br>请确认电脑上的 U 盘图标消失后再拔出上车刷机（若其他窗口正打开着 U 盘文件夹导致 3 秒后图标仍在，请关闭该窗口后手动点弹出）。</div><p class="lead">可以关闭这个网页了。</p></div>`;
+    } catch (err) {
+      b.disabled = false; b.textContent = '⏏ 一键安全弹出 U 盘并退出';
+      $('result').insertAdjacentHTML('beforeend', `<div class="msg warn" style="margin-top:8px">未能自动弹出（${esc(err.message)}），请手动点系统安全弹出后再拔 U 盘。</div>`);
+    }
+  }
   if (e.target.id === 'quit') { await api('/api/quit').catch(()=>{}); document.body.innerHTML = '<div class="wrap"><h1>途锐改装设置</h1><p class="lead">程序已退出，可以关闭这个网页了。</p></div>'; }
 });
 

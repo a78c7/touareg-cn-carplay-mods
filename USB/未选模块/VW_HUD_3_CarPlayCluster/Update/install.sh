@@ -73,15 +73,19 @@ if [ "$HAD_CLUSTER" = "0" ]; then
     fi
 fi
 # v23 60fps AI custom theme engine (opt-in via configurator; absent -> stay on battle-tested v22.1 path)
-if [[ -f $MOD_PATH/v23_mode ]]; then
-    : > $D/v23_mode && chmod 644 $D/v23_mode
-    echo "v23_mode: enabled (Beta opt-in, 3-layer fuse active)"
-else
-    rm -f $D/v23_mode
-fi
+# Auto-enables v23_mode if a non-empty themes_user/my_theme.js is deployed without an explicit v23_off marker.
 if [[ -f $MOD_PATH/themes_user/my_theme.js ]]; then
     mkdir -p $D/themes_user
     cp -v $MOD_PATH/themes_user/my_theme.js $D/themes_user/my_theme.js && chmod 644 $D/themes_user/my_theme.js
+fi
+if [[ -f $MOD_PATH/v23_mode ]]; then
+    : > $D/v23_mode && chmod 644 $D/v23_mode
+    echo "v23_mode: enabled (Beta opt-in, 3-layer fuse active)"
+elif [[ -s $MOD_PATH/themes_user/my_theme.js && ! -f $MOD_PATH/v23_off ]]; then
+    : > $D/v23_mode && chmod 644 $D/v23_mode
+    echo "v23_mode: auto-enabled (custom themes_user/my_theme.js present, 3-layer fuse active)"
+else
+    rm -f $D/v23_mode
 fi
 rm -f $D/disable $D/safe_mode $D/triple_off $D/tire_ref.state /tmp/ultra_theme /tmp/media_cp.state /tmp/rdk_probe.log /tmp/v23_fallback_v22 /tmp/v23_theme_loading
 # v22.0: record zero-wear crash baselines for 3-crash safe-mode fuse
