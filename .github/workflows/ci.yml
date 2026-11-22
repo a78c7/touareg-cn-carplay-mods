@@ -17,6 +17,33 @@ jobs:
         working-directory: tools/configurator
         run: go test -v ./...
 
+      - name: C host unit tests (clean-room iAP2 & OTA SHA-256)
+        run: |
+          gcc -Wall -Wextra -Werror -O2 -Isrc/cluster-probe/wired \
+            src/cluster-probe/wired/cl_wired_rg.c src/cluster-probe/wired/test_wired_rg.c \
+            -lpthread -o /tmp/test_wired_rg && /tmp/test_wired_rg
+          cat <<'EOF' > /tmp/test_ota_ci.c
+          #define _GNU_SOURCE
+          #include <assert.h>
+          #include <stdio.h>
+          #include "src/touareg_netd/ota_util.h"
+          int main(void) {
+              char hex[65];
+              t_sha256_hex((const uint8_t *)"abc", 3, hex);
+              assert(strcmp(hex, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") == 0);
+              char san[256];
+              diag_sanitize_line("psk=\"MySecretPass123\" pin=889900\n", san, sizeof(san));
+              assert(strstr(san, "MySecretPass123") == NULL);
+              assert(strstr(san, "889900") == NULL);
+              char msg[128];
+              assert(ota_apply_tar("/tmp/nonexistent_ota_root", "/tmp/no_such.tar", msg, sizeof(msg)) != 0);
+              assert(ota_rollback_backup("/tmp/nonexistent_ota_root", msg, sizeof(msg)) != 0);
+              puts("test_ota_ci: ALL PASSED");
+              return 0;
+          }
+          EOF
+          gcc -Wall -Wextra -Werror -O2 -I. /tmp/test_ota_ci.c -o /tmp/test_ota_ci && /tmp/test_ota_ci
+
       - name: Catalogue alignment, HTML DOM & USB script safety checks
         run: |
           python3 - <<'PY'
@@ -79,12 +106,14 @@ jobs:
                       if '/Users/' in txt or '.gemini/antigravity' in txt or '/home/admin/qnx-build' in txt:
                           errors.append(f'{p}: contains hardcoded personal machine path')
 
-          # 5) web_ui.html 与 web_ui_data.h 同步检查
+          # 5) web_ui.html 与 web_ui_data.h 同步检查 + 许可附加条款检查
           h_txt = read('src/touareg_netd/web_ui_data.h')
           m = re.search(r'WEB_UI_HTML_LEN\s*=\s*(\d+)', h_txt)
           actual_len = os.path.getsize('src/touareg_netd/web_ui.html')
           if not m or int(m.group(1)) != actual_len:
               errors.append(f'web_ui_data.h out of sync (header={m.group(1) if m else None}, html={actual_len})')
+          if not os.path.isfile('LICENSE.ADDITIONAL-TERMS.md'):
+              errors.append('missing LICENSE.ADDITIONAL-TERMS.md')
 
           if errors:
               print('CI CHECK FAILED:')

@@ -30,6 +30,7 @@ var features = []feature{
 	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在抬头显示 HUD 上", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
 	{"cluster", "仪表地图 + 大字运动信息框", "手机导航地图投屏到液晶仪表中央，左右两侧自由定制 43 项真实行车数据（大号粗体 + 运动刻度条）与大字导航卡；需配合「导航上 HUD」", []string{"VW_HUD_3_CarPlayCluster"}},
 	{"mapswitch", "方向盘 OK 双击切换 CarPlay / 原车地图", "方向盘右侧 OK 键 2 秒内连按 2 下，在 CarPlay 导航地图与原车自带地图之间来回切换；需配合「导航上 HUD」与「仪表地图 + 大字运动信息框」", []string{"VW_HUD_4_OkMapSwitch"}},
+	{"siri", "方向盘语音键短按直接唤 Siri", "连接 CarPlay 时短按方向盘语音键直接唤出手机 Siri（无需长按 2 秒，原厂长按不受影响；未连 CarPlay 时仍呼出原车语音）；需配合「导航上 HUD」", []string{"VW_HUD_5_SiriShortPress"}},
 	{"wifi5gfix", "老固件升 P2878 无线 CarPlay 5GHz 区域修复", "仅从旧版本（如 P9832）升级 P2878 后、有线正常但无线 CarPlay 连不上时勾选：解除 5GHz 国家码校验拦截（原厂 P2878 无线正常无需勾选）", []string{"VW_Wireless5GHzFix"}},
 	{"nobtauth", "去除「输入用户名」弹窗（屏蔽蓝牙 OBEX 认证）", "屏蔽蓝牙连接时反复弹出的「输入用户名」弹窗（Busrlo / BLUETOOTH_CONNECT_AUTH_REQUIRED），不影响正常蓝牙配对、通话、音乐与 CarPlay（大众 MH2p 通用）", []string{"VW_NoBtAuthPopup"}},
 	{"nosimpopup", "屏蔽「SIM 卡仅用于数据连接。」弹窗", "仅屏蔽连接 CarPlay / Android Auto 时反复弹出的 SIM 卡数据模式提示框（PHONE_SIM_DATAONLY），不影响 SIM 卡联网、蓝牙、CarPlay 与 SOS（大众 MH2p 通用）", []string{"VW_NoSimPopup"}},
@@ -97,6 +98,7 @@ const maxRows = 10
 type dashConf struct {
 	Show    bool     `json:"show"`
 	Bars    bool     `json:"bars"`
+	Smooth  bool     `json:"smooth"`
 	Items   []string `json:"items"`
 	X       int      `json:"x"`
 	Y       int      `json:"y"`
@@ -122,6 +124,7 @@ func defaultDash() dashConf {
 	return dashConf{
 		Show:     true,
 		Bars:     true,
+		Smooth:   true,
 		Items:    []string{"power", "torque", "g", "rpm", "oil", "gearbox"},
 		X:        5,
 		Y:        164,
@@ -286,6 +289,10 @@ func (p pkg) readDash() (dashConf, bool) {
 			if nerr == nil {
 				d.Bars = n != 0
 			}
+		case "smooth":
+			if nerr == nil {
+				d.Smooth = n != 0
+			}
 		case "x", "info_x":
 			if nerr == nil {
 				d.X = n
@@ -353,12 +360,15 @@ func (p pkg) writeDash(d dashConf) error {
 		}
 		b = []byte("# 仪表信息框设置（由「改装设置」程序生成）\n")
 	}
-	show, bars, rshow := 0, 0, 0
+	show, bars, smooth, rshow := 0, 0, 0, 0
 	if d.Show {
 		show = 1
 	}
 	if d.Bars {
 		bars = 1
+	}
+	if d.Smooth {
+		smooth = 1
 	}
 	if d.RShow {
 		rshow = 1
@@ -372,6 +382,7 @@ func (p pkg) writeDash(d dashConf) error {
 		{"items", strings.Join(d.Items, ",")},
 		{"show", strconv.Itoa(show)},
 		{"bars", strconv.Itoa(bars)},
+		{"smooth", strconv.Itoa(smooth)},
 		{"x", strconv.Itoa(d.X)},
 		{"y", strconv.Itoa(d.Y)},
 		{"alpha", strconv.Itoa(clamp(d.Alpha, 0, 255))},
@@ -498,11 +509,14 @@ func validate(r applyReq) error {
 	if r.Features["cluster"] == "install" && r.Features["hud"] != "install" {
 		return errors.New("装「仪表地图 + 大字运动信息框」时「导航上 HUD」也要选安装")
 	}
+	if r.Features["siri"] == "install" && r.Features["hud"] != "install" {
+		return errors.New("装「方向盘语音键短按直接唤 Siri」时「导航上 HUD」也要选安装")
+	}
 	if r.Features["mapswitch"] == "install" && (r.Features["cluster"] != "install" || r.Features["hud"] != "install") {
 		return errors.New("装「方向盘 OK 双击切换地图」时，「导航上 HUD」与「仪表地图 + 大字运动信息框」也要选安装")
 	}
-	if r.Features["hud"] == "uninstall" && (r.Features["cluster"] != "uninstall" || r.Features["mapswitch"] != "uninstall") {
-		return errors.New("卸载「导航上 HUD」时，「仪表地图 + 大字运动信息框」与「方向盘 OK 双击切换地图」也要一起卸载")
+	if r.Features["hud"] == "uninstall" && (r.Features["cluster"] != "uninstall" || r.Features["mapswitch"] != "uninstall" || r.Features["siri"] != "uninstall") {
+		return errors.New("卸载「导航上 HUD」时，「仪表地图 + 大字运动信息框」、「方向盘 OK 双击切换地图」与「语音键短按唤 Siri」也要一起卸载")
 	}
 	if r.Features["cluster"] == "uninstall" && r.Features["mapswitch"] != "uninstall" {
 		return errors.New("卸载「仪表地图 + 大字运动信息框」时，「方向盘 OK 双击切换地图」也要一起卸载")
@@ -635,7 +649,9 @@ func (p pkg) apply(r applyReq) ([]string, wifiApplyOut, error) {
 			} else {
 				log = append(log, "右边信息框：不显示")
 			}
-			log = append(log, fmt.Sprintf("运动刻度进度条：%s", map[bool]string{true: "开启", false: "关闭"}[r.Dash.Bars]))
+			log = append(log, fmt.Sprintf("运动刻度进度条：%s（阻尼平滑动画：%s）",
+				map[bool]string{true: "开启", false: "关闭"}[r.Dash.Bars],
+				map[bool]string{true: "开启", false: "关闭"}[r.Dash.Smooth]))
 			if r.Dash.NavBox > 0 {
 				sideTxt := "右框"
 				if strings.EqualFold(strings.TrimSpace(r.Dash.NavSide), "left") {

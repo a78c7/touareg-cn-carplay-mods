@@ -1,14 +1,27 @@
-# Third-Party Attribution: `luka-dev/mib2q-carplay-rgi` & `fifthBro/pcm5-androidauto-connect-fix`
+# Third-Party Notices & License Boundaries
 
-## 1. `luka-dev/mib2q-carplay-rgi` (GPL-3.0-or-later)
-- Upstream: <https://github.com/luka-dev/mib2q-carplay-rgi>
-- Files in this repository referencing upstream iAP2 TLV / PPS helpers:
-  - `src/cluster-probe/wired/framework/` (`common.h`, `logging.c`, `logging.h`, `pps_writer.c`, `pps_writer.h`)
-  - `src/cluster-probe/wired/routeguidance/` (`rgd_tlv.c`, `rgd_tlv.h`)
-- Full GPL-3.0 license text is included in the repository root [`LICENSE`](../LICENSE).
-- Note: These upstream files were originally bundled alongside `fifthBro/mh2p-cluster` (`dio_cluster.so` / `rg_core.inc`). Future releases plan to replace the wired TLV bridge with a clean-room implementation to eliminate any mixed-license linkage inside `cl_probe.so`.
+As of **v22.0**, the wired CarPlay iAP2 Route Guidance parser (`src/cluster-probe/wired/cl_wired_rg.c` & `cl_wired.c`) has been cleanly rewritten from scratch, eliminating all mixed GPL-3.0 / CC BY-NC-SA linkage inside `cl_probe.so`.
 
-## 2. `fifthBro/pcm5-androidauto-connect-fix` (Non-Commercial)
-- Upstream: <https://github.com/fifthBro/pcm5-androidauto-connect-fix>
-- Referenced inside the optional `LawPaul/MH2p_SD_ModKit` `AndroidAuto` module (`fix_partition_1008`, `aafix.jar`).
-- Free for personal, non-commercial use only; DO NOT SELL.
+All original components in `a78c7/touareg-cn-carplay-mods` are licensed under **PolyForm Noncommercial License 1.0.0 + `LICENSE.ADDITIONAL-TERMS.md`** (personal, non-commercial use; reselling prohibited). Third-party upstream components bundled or derived in this repository retain their respective licenses below:
+
+## 1. `LawPaul/MH2p_SD_ModKit` (CC BY-NC-SA 4.0)
+- Upstream: <https://github.com/LawPaul/MH2p_SD_ModKit>
+- Components: `USB/Data/`, `USB/Meta/`, optional `AppleCarPlay` and `AndroidAuto` modules under `USB/未选模块/`.
+- License text: [`MH2p_SD_ModKit_LICENSE.md`](MH2p_SD_ModKit_LICENSE.md).
+
+## 2. `fifthBro/mh2p-cluster` & `fifthBro/pcm5-androidauto-connect-fix` (CC BY-NC-SA 4.0 / Non-Commercial)
+- Upstream: <https://github.com/fifthBro/mh2p-cluster>, <https://github.com/fifthBro/pcm5-androidauto-connect-fix>
+- Components: `USB/未选模块/VW_HUD_1_RouteGuidance/Update/dio_cluster.so` (v0034), base `src/cl_render/cluster.c` / `boot_canim_data.h`, and `aafix.jar` / `fix_partition_1008` inside the optional `AndroidAuto` module.
+- License text: [`fifthBro_mh2p-cluster_LICENSE.md`](fifthBro_mh2p-cluster_LICENSE.md).
+
+## 3. Noto Sans CJK SC (SIL OFL 1.1)
+- Pre-rendered bitmap glyph tables (`src/cl_render/dash_font.h`) generated from Noto Sans CJK SC.
+- License text: [`NotoSansCJK_OFL.md`](NotoSansCJK_OFL.md).
+
+## 4. `stb_truetype.h` (Public Domain / MIT)
+- Used by `src/cl_render/navbox.c` for runtime vector glyph rasterization.
+- License text: [`stb_PUBLIC_DOMAIN.md`](stb_PUBLIC_DOMAIN.md).
+
+## 5. `zlib` 1.3.1 (zlib License)
+- Statically linked into `src/vhpatch` for in-place `viewhandler.zip` patching on the head unit.
+- License text: [`zlib_LICENSE.md`](zlib_LICENSE.md).

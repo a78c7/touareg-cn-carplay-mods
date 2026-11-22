@@ -1,4 +1,6 @@
 #!/bin/ksh
+# FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
+echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 # VW Touareg CN P-series (MH2p_CN_VWG36_P*): CarPlay route-guidance probe, step 1.
 # - copies dio_cluster.so (fifthBro/mh2p-cluster, CC BY-NC-SA, personal non-commercial use)
 #   to /mnt/app/eso/bin/apps/cluster/

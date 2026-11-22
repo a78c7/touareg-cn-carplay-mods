@@ -7,9 +7,39 @@ echo none > /tmp/cl_alt_cmd
 chmod 666 /tmp/cl_alt_cmd
 export LD_LIBRARY_PATH=/mnt/app/armle/lib:/mnt/app/armle/usr/lib:/mnt/app/armle/graphics:/eso/lib:/lib:/usr/lib
 export CL_ZOOM=0
-if [ -e $D/disable ]; then
+
+# v22.0 zero-wear 3-crash safe-mode fuse (no eMMC writes on normal boots)
+SAFE_CL=0
+if [ -e $D/safe_mode ]; then
+    : > /tmp/vw_dio_safe_mode
+    : > /tmp/vw_cluster_safe_mode
+    SAFE_CL=1
+    echo "SAFE_MODE: manual $D/safe_mode present" > /tmp/cluster_fuse.log
+else
+    if [ -f $D/dio_base_cores ]; then
+        base_d=$(cat $D/dio_base_cores 2>/dev/null)
+        cur_d=$(ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}')
+        if [ -n "$base_d" ] && [ "$cur_d" -ge $((base_d + 3)) ]; then
+            : > /tmp/vw_dio_safe_mode
+            rm -f /tmp/cl_alt_on /tmp/vwcn_noRG
+            SAFE_CL=1
+            echo "FUSE TRIPPED: dio_manager cores >= base+3 (base=$base_d cur=$cur_d)" > /tmp/cluster_fuse.log
+        fi
+    fi
+    if [ -f $D/render_base_cores ]; then
+        base_r=$(cat $D/render_base_cores 2>/dev/null)
+        cur_r=$(ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}')
+        if [ -n "$base_r" ] && [ "$cur_r" -ge $((base_r + 3)) ]; then
+            : > /tmp/vw_cluster_safe_mode
+            SAFE_CL=1
+            echo "FUSE TRIPPED: cl_render/clusterd cores >= base+3 (base=$base_r cur=$cur_r)" >> /tmp/cluster_fuse.log
+        fi
+    fi
+fi
+
+if [ -e $D/disable ] || [ "$SAFE_CL" = "1" ]; then
     rm -f /tmp/cl_alt_on /tmp/vwcn_noRG
-    echo "carplay cluster disabled"
+    echo "carplay cluster disabled (disable or safe_mode fuse)"
 elif [ -x $D/clusterd ] && ! pidin -p clusterd 2>/dev/null | grep -q clusterd; then
     ( trap "" HUP; exec $D/clusterd $D/cl_render capture=h264 xres=1920 yres=639 mode=stretch ) </dev/null >/dev/null 2>&1 &
     echo "clusterd started"

@@ -132,6 +132,9 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 <body>
 <div class="wrap">
   <header><h1>途锐改装设置</h1><span class="ver" id="ver"></span></header>
+  <div class="msg info" style="border:1px solid #9ec1fb;margin:8px 0 12px;line-height:1.6">
+    <b>【免费开源 · 严禁倒卖】</b>本项目遵循 PolyForm Noncommercial 1.0.0 与附加条款免费开源（<code>github.com/a78c7/touareg-cn-carplay-mods</code>），严禁售卖程序/安装包或商业捆绑；非官方协助安装仅可收取合理劳务费（上限 ¥100）。如果您是花钱买到本工具或压缩包的，请立即申请退款！
+  </div>
   <p class="lead">选好要装哪些功能、仪表信息框显示什么，点「保存到 U 盘」。保存后把 U 盘拿到车上刷机即可。</p>
   <div class="status" id="status"></div>
   <div id="alerts"></div>
@@ -157,6 +160,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
       <div class="row" style="gap:20px;margin-bottom:4px">
         <label class="switch"><input type="checkbox" id="show"> <span id="showlab">显示左边框</span></label>
         <label class="switch"><input type="checkbox" id="bars" checked> <span>显示运动刻度进度条（转速/扭矩斜切分段条、G 值双向滑块、油温/胎压区间条）</span></label>
+        <label class="switch"><input type="checkbox" id="smooth" checked> <span>运动条阻尼平滑动画（10Hz 遥测 + 指数补间）</span></label>
       </div>
       <div class="grid">
         <div>
@@ -260,17 +264,20 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
   </section>
 
   <section class="card" id="usbcard">
-    <h2><span class="num">5</span>U 盘用途：刷机 / 行车记录</h2>
-    <p class="hint">刷完改装后，可以把这个 U 盘改成「行车记录 U 盘」一直插在车上：车机不会再刷机，每次开车把功率、扭矩、车速、油温、四轮胎压、海拔坡度等 34 项真实物理数据约 10 次/秒记到 U 盘的 drive_logs 文件夹（每小时约 5 MB）。需要车上已装「导航上 HUD」。drive_logs 里会放一份「给AI分析行车记录.txt」，把 CSV 和它一起传给豆包、千问、DeepSeek 等 AI 就能分析。</p>
-    <div class="summary" id="usbnow"></div>
-    <button class="btn" id="torecord">改成行车记录 U 盘</button>
-    <button class="btn" id="toflash">改回刷机 U 盘</button>
-    <div class="result" id="usbresult"></div>
+    <details id="usbadv" style="margin-top:0">
+      <summary style="font-size:15px;font-weight:600;color:var(--ink)">进阶工具（可选）：U 盘用途切换 — 刷机 / 行车记录 U 盘（绝大多数车主无需操作）</summary>
+      <p class="hint" style="margin:10px 0 8px">绝大多数车主刷完直接拔走 U 盘即可，不需要行车记录功能。仅当你想采集 34 项物理传感器 CSV 给 AI 分析（或配合电脑端 <code>tools/preview/index.html</code> 回放预览仪表布局）时，才需将刷机 U 盘切为「行车记录 U 盘」（需车上已装「导航上 HUD」，每小时约 5 MB）。<b>长期插车记录时请务必选用品牌正品 U 盘（如闪迪/三星/铠侠），避免车辆突然断电导致杂牌 U 盘 FAT32 文件系统损坏。</b></p>
+      <div class="summary" id="usbnow"></div>
+      <button class="btn" id="torecord">改成行车记录 U 盘</button>
+      <button class="btn" id="toflash">改回刷机 U 盘</button>
+      <div class="result" id="usbresult"></div>
+    </details>
   </section>
 
   <footer>
+    <b>开源免费声明</b>：本项目代码与工具按 PolyForm Noncommercial 1.0.0 + 附加条款开源发布于 <code>github.com/a78c7/touareg-cn-carplay-mods</code>，仅供个人非商业学习与研究，严禁售卖程序/安装包；非官方代操作劳务费上限 ¥100。<br>
     本程序只修改这个 U 盘里的文件：不选的功能文件夹移到「未选模块」（车机不会刷它），卸载的功能里放一个 uninstall.txt，信息框设置写进 dash.conf，并删掉 Mac 自动生成的隐藏文件（._ 开头的文件和 .DS_Store）。不联网、不上传任何东西。<br>
-    全屏 CarPlay、HUD、仪表地图、OK 键切换与 5GHz 区域修复支持国行途锐 P 版车机通刷（MH2p_CN_VWG36_P*，P2878 已全功能实车验证；其余 P 版自动探测适配，皮肤不一致时全屏补丁自动安全跳过不改文件，非国行途锐 P 版自动跳过）；蓝牙与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。
+    全屏 CarPlay、HUD、仪表地图、OK 键切换、语音键短按唤 Siri 与 5GHz 区域修复支持国行途锐 P 版车机通刷（MH2p_CN_VWG36_P*，P2878 已全功能实车验证；其余 P 版自动探测适配，皮肤不一致时全屏补丁自动安全跳过不改文件，非国行途锐 P 版自动跳过）；蓝牙与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。
   </footer>
 </div>
 
@@ -346,6 +353,10 @@ function setFeat(id, v){
     sel.hud = 'install';
     notes.hud = ['info', '「仪表地图 + 大字运动信息框」需要它配合工作，已自动为您勾选为「安装」。'];
     showModal('已自动开启前置模块', '「仪表地图 + 大字运动信息框」需要「导航上 HUD」底层驱动配合工作，已自动为您同步设为「安装」。');
+  } else if (id === 'siri' && v === 'install' && sel.hud !== 'install') {
+    sel.hud = 'install';
+    notes.hud = ['info', '「方向盘语音键短按直接唤 Siri」需要它配合监听按键，已自动为您勾选为「安装」。'];
+    showModal('已自动开启前置模块', '「方向盘语音键短按直接唤 Siri」需要「导航上 HUD」模块监听方向盘按键事件，已自动为您同步设为「安装」。');
   } else if (id === 'mapswitch' && v === 'install') {
     const need = [];
     if (sel.hud !== 'install') {
@@ -373,8 +384,13 @@ function setFeat(id, v){
       notes.mapswitch = ['info', '卸载「导航上 HUD」时需同步卸载。'];
       sub.push('方向盘 OK 双击切换地图');
     }
+    if (sel.siri !== 'uninstall') {
+      sel.siri = 'uninstall';
+      notes.siri = ['info', '卸载「导航上 HUD」时需同步卸载。'];
+      sub.push('方向盘语音键短按直接唤 Siri');
+    }
     if (sub.length) {
-      showModal('已同步设为卸载', '卸载「导航上 HUD」时，依赖它的「' + sub.join('」与「') + '」无法单独运行，已自动同步设为「卸载」。');
+      showModal('已同步设为卸载', '卸载「导航上 HUD」时，依赖它的「' + sub.join('」、「') + '」无法单独运行，已自动同步设为「卸载」。');
     }
   } else if (id === 'cluster' && v === 'uninstall') {
     if (sel.mapswitch !== 'uninstall') {
@@ -394,8 +410,13 @@ function setFeat(id, v){
       notes.mapswitch = ['info', '需要「导航上 HUD」配合，已同步改为不处理。'];
       sub.push('方向盘 OK 双击切换地图');
     }
+    if (sel.siri === 'install') {
+      sel.siri = 'skip';
+      notes.siri = ['info', '需要「导航上 HUD」配合，已同步改为不处理。'];
+      sub.push('方向盘语音键短按直接唤 Siri');
+    }
     if (sub.length) {
-      showModal('已同步取消关联模块', '已将「导航上 HUD」设为不处理，依赖它的「' + sub.join('」与「') + '」已自动恢复为「不处理」。');
+      showModal('已同步取消关联模块', '已将「导航上 HUD」设为不处理，依赖它的「' + sub.join('」、「') + '」已自动恢复为「不处理」。');
     }
   } else if (id === 'cluster' && v === 'skip' && sel.mapswitch === 'install') {
     sel.mapswitch = 'skip';
@@ -482,6 +503,7 @@ function renderDash(){
   const items = curItems(), shown = side === 'l' ? dash.show : dash.r_show;
   $('show').checked = shown;
   $('bars').checked = dash.bars !== false;
+  $('smooth').checked = dash.smooth !== false;
   $('showlab').textContent = side === 'l' ? '显示左边框' : '显示常驻右边框';
   document.querySelectorAll('#sides button').forEach(b => { b.classList.toggle('on', b.dataset.side === side); b.textContent = (b.dataset.side === 'l' ? '左边框' : '右边框') + ((b.dataset.side === 'l' ? dash.show : dash.r_show) ? ` · ${(b.dataset.side === 'l' ? dash.items : dash.r_items).length} 项` : ' · 不显示'); });
   const n = items.length, full = n >= S.maxRows;
@@ -545,7 +567,7 @@ function renderSummary(){
   if (by.skip.length) lines.push(`<div>不处理：${esc(by.skip.join('、'))}</div>`);
   const lst = (show, l) => show ? (l.length ? esc(l.map(k => plain(item(k).label)).join('、')) : '<span style="color:var(--bad)">还没有选项目</span>') : '不显示';
   if (sel.cluster === 'install') {
-    lines.push(`<div>左边信息框：${lst(dash.show, dash.items)}（运动刻度条：<b>${dash.bars !== false ? '开启' : '关闭'}</b>）</div>`);
+    lines.push(`<div>左边信息框：${lst(dash.show, dash.items)}（运动刻度条：<b>${dash.bars !== false ? '开启' : '关闭'}</b> · 平滑动画：<b>${dash.smooth !== false ? '开启' : '关闭'}</b>）</div>`);
     lines.push(`<div>右边信息框：${lst(dash.r_show, dash.r_items)}</div>`);
     const nb = Number(dash.nav_box == null ? 1 : dash.nav_box);
     const navTxt = nb === 0 ? '关闭' : ((dash.nav_side === 'left' ? '左边框' : '右边框') + (nb >= 2 ? ' · 常驻（未导航显示待机框）' : ' · 仅导航时弹出'));
@@ -593,6 +615,7 @@ document.addEventListener('click', e => {
 });
 $('show').addEventListener('change', e => { if (side === 'l') dash.show = e.target.checked; else dash.r_show = e.target.checked; renderDash(); renderSummary(); });
 $('bars').addEventListener('change', e => { dash.bars = e.target.checked; renderDash(); renderSummary(); });
+$('smooth').addEventListener('change', e => { dash.smooth = e.target.checked; renderSummary(); });
 const num = (id, key, lo, hi) => $(id).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dash[key] = Math.max(lo, Math.min(hi, v)); if (id === 'alpha') { $('alphav').textContent = dash.alpha; } renderDashPreviewOnly(); } });
 function renderDashPreviewOnly(){ pvBox($('pv'), dash.show, dash.items, 'l'); pvBox($('pv2'), dash.r_show, dash.r_items, 'r'); }
 num('x', 'x', 0, 1500); num('y', 'y', 0, 600); num('alpha', 'alpha', 0, 255); num('tank', 'tank_l', 0, 200); num('navtz', 'nav_tz', -12, 14);
@@ -624,7 +647,7 @@ $('order').addEventListener('drop', e => { const li = e.target.closest('li[data-
 $('save').addEventListener('click', async () => {
   const btn = $('save'); btn.disabled = true; btn.textContent = '正在保存…';
   try {
-    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, bars: dash.bars !== false, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn, nav_box: Number(dash.nav_box == null ? 1 : dash.nav_box), nav_side: dash.nav_side === 'left' ? 'left' : 'right', nav_tz: dash.nav_tz == null ? 8 : dash.nav_tz, ok_switch: sel.mapswitch === 'install'}, wifi: collectWifi()});
+    const r = await api('/api/apply', {features: sel, dash: {show: dash.show, bars: dash.bars !== false, smooth: dash.smooth !== false, items: dash.items, r_show: dash.r_show, r_items: dash.r_items, x: dash.x, y: dash.y, alpha: dash.alpha, tank_l: dash.tank_l, lat_flip: dash.lat_flip, car_up: dash.car_up, acc_up: dash.acc_up, amap_turn: dash.amap_turn, nav_box: Number(dash.nav_box == null ? 1 : dash.nav_box), nav_side: dash.nav_side === 'left' ? 'left' : 'right', nav_tz: dash.nav_tz == null ? 8 : dash.nav_tz, ok_switch: sel.mapswitch === 'install'}, wifi: collectWifi()});
     if (!r.ok) { $('result').innerHTML = `<div class="msg bad">没有保存：${esc(r.error)}</div>`; return; }
     lastSSHKey = r.sshPrivKey || ''; lastSSHGuide = r.sshGuide || '';
     const sshBanner = lastSSHKey ? `<div class="msg info" style="margin:10px 0"><b>已生成本车专属 SSH 密钥对</b>${r.sshKeySavedDir ? `，私钥已自动保存到电脑：<code>${esc(r.sshKeySavedDir)}</code>` : ''}（U 盘内不保留私钥，请妥善保存）。<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="dlpriv">下载私钥 touareg_ed25519</button><button class="btn" type="button" id="dlguide">下载连接说明.txt</button></div></div>` : '';
@@ -658,9 +681,10 @@ document.addEventListener('click', async e => {
   S.features.forEach(f => { const s = S.states[f.id]; sel[f.id] = s === 'missing' ? 'skip' : (s === 'mixed' ? 'install' : s); });
   if (sel.mapswitch === 'install') { sel.cluster = 'install'; sel.hud = 'install'; }
   if (sel.cluster === 'install' && sel.hud !== 'install') sel.hud = 'install';
-  if (sel.hud === 'uninstall') { sel.cluster = 'uninstall'; sel.mapswitch = 'uninstall'; }
+  if (sel.siri === 'install' && sel.hud !== 'install') sel.hud = 'install';
+  if (sel.hud === 'uninstall') { sel.cluster = 'uninstall'; sel.mapswitch = 'uninstall'; sel.siri = 'uninstall'; }
   if (sel.cluster === 'uninstall') { sel.mapswitch = 'uninstall'; }
-  dash = Object.assign({}, S.dash, {bars: S.dash.bars !== false, items: (S.dash.items || []).slice(), r_items: (S.dash.r_items || []).slice(), r_show: !!S.dash.r_show});
+  dash = Object.assign({}, S.dash, {bars: S.dash.bars !== false, smooth: S.dash.smooth !== false, items: (S.dash.items || []).slice(), r_items: (S.dash.r_items || []).slice(), r_show: !!S.dash.r_show});
   if (S.wifi) {
     (S.wifi.networks || []).slice(0, 3).forEach((n, i) => { $('wssid' + i).value = n.ssid || ''; $('wpsk' + i).value = n.psk || ''; });
     $('wpin').value = S.wifi.pin || '';

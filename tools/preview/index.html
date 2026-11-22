@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>途锐 MH2p 仪表本地预览 &amp; 行车 CSV 回放器</title>
+<style>
+:root{
+  --bg:#0b0f17; --card:#131a26; --card2:#0e141f; --bd:#263144;
+  --tx:#eef3fb; --mut:#8b97ab; --acc:#2f81f7; --cyan:#22d3ee; --ok:#34d399; --warn:#f59e0b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.foss{background:rgba(47,129,247,.13);border-bottom:1px solid rgba(47,129,247,.32);color:#bfdbfe;font-size:12px;text-align:center;padding:6px 12px}
+.wrap{max-width:1360px;margin:0 auto;padding:16px 18px 40px}
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+h1{margin:0;font-size:20px;font-weight:700}
+.sub{color:var(--mut);font-size:12.5px}
+.stage-card{background:#05070b;border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:14px}
+canvas#cockpit{width:100%;height:auto;display:block;border-radius:8px;background:#090d14}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.scrub{flex:1;min-width:200px;accent-color:var(--acc)}
+.btn{background:#1c2536;color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:#4b6085}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.on{background:rgba(34,211,238,.16);border-color:var(--cyan);color:#67e8f9}
+select,input[type=text],textarea{background:var(--card2);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;font:inherit}
+.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:14px}
+@media(max-width:960px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.card h2{margin:0 0 8px;font-size:15px;display:flex;align-items:center;justify-content:space-between}
+.drop{border:1.5px dashed #3b4c68;border-radius:10px;padding:12px;text-align:center;color:var(--mut);cursor:pointer;margin-bottom:10px}
+.drop.over{border-color:var(--cyan);background:rgba(34,211,238,.08);color:var(--tx)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0}
+label.cb{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:13px}
+textarea#confBox{width:100%;min-height:145px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#93c5fd}
+.pill{font-size:11.5px;padding:2px 8px;border-radius:99px;background:rgba(52,211,153,.14);color:var(--ok);border:1px solid rgba(52,211,153,.3)}
+footer{margin-top:18px;font-size:12px;color:var(--mut);text-align:center}
+</style>
+</head>
+<body>
+<div class="foss"><b>途锐 MH2p 仪表本地预览 &amp; CSV 回放器</b> · 免费开源（PolyForm Noncommercial 1.0.0）· github.com/a78c7/touareg-cn-carplay-mods · 纯浏览器本地运行，不上传任何行车数据</div>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>1920×639 液晶仪表离线预览与回放</h1>
+      <div class="sub">先在电脑上调好 <code>dash.conf</code> 布局、对比 60fps 阻尼平滑与 5Hz 阶跃、或拖入 <code>drive_logs/*.csv</code> 真实回放，再去车上调试或分享到 GitHub Discussions</div>
+    </div>
+    <div class="row" style="margin:0">
+      <span class="pill" id="fpsPill">60 fps</span>
+      <button class="btn" id="btnSnap" type="button">保存 1920×639 截图 PNG</button>
+    </div>
+  </header>
+
+  <div class="stage-card">
+    <canvas id="cockpit" width="1920" height="639"></canvas>
+    <div class="bar">
+      <button class="btn pri" id="btnPlay" type="button">暂停</button>
+      <select id="selScene">
+        <option value="city">内置场景 1：城市巡航 + 高德导航</option>
+        <option value="pull">内置场景 2：0–100 地板油加速</option>
+        <option value="offroad">内置场景 3：山路坡度 + 四轮胎压</option>
+      </select>
+      <select id="selSpeed">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="5">5x</option>
+      </select>
+      <input class="scrub" type="range" id="scrub" min="0" max="1000" value="0">
+      <span class="sub" id="timeTxt" style="min-width:98px;text-align:right">00:00 / 00:30</span>
+    </div>
+    <div class="bar">
+      <label class="cb"><input type="checkbox" id="cbSmooth" checked> 阻尼平滑动画 (<code>smooth=1</code>)</label>
+      <label class="cb"><input type="checkbox" id="cbBars" checked> 运动刻度进度条 (<code>bars=1</code>)</label>
+      <label class="cb"><input type="checkbox" id="cbGles"> 独立 60fps GLES2 仪表模式（无地图背景）</label>
+      <label class="cb"><input type="checkbox" id="cbNight" checked> 夜间深色地图底图</label>
+      <label class="cb"><input type="checkbox" id="cbOem" checked> 显示原厂挡位/车速梯形与时钟参考线</label>
+      <label class="cb"><input type="checkbox" id="cbNav" checked> 模拟导航激活（右侧大字导航卡）</label>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>载入真实行车记录 CSV（drive_logs）<span class="sub" id="csvInfo">当前：内置模拟轨迹</span></h2>
+      <div class="drop" id="dropZone">
+        点击选择或直接把 U 盘 <code>drive_logs/*.csv</code> 拖到这里<br>
+        <span style="font-size:12px">支持 34 列全量物理传感器字段（仅在本机浏览器内存解析，绝不上传）</span>
+        <input type="file" id="csvFile" accept=".csv,.txt" style="display:none">
+      </div>
+      <div class="row">
+        <span class="sub">快捷布局方案：</span>
+        <button class="btn" type="button" data-p="torque,rpm,g,oil,cons|tires,pitch,roll,alt,gearbox">推荐 5 项大字（46px）</button>
+        <button class="btn" type="button" data-p="power,torque,g,rpm,oil,gearbox|t100,pmax,tqmax,gmax,fuel,range">经典动力 6 项（41px）</button>
+        <button class="btn" type="button" data-p="tires,tpfl,tpfr,tprl,tprr,pitch,roll,alt|oil,gearbox,coolant,outside,fuel,range">越野胎压 8 项（35px）</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>dash.conf 实时联动（可直接粘贴分享到 Discussions）</h2>
+      <textarea id="confBox" spellcheck="false"></textarea>
+      <div class="bar" style="margin-top:8px">
+        <button class="btn pri" id="btnApplyConf" type="button">应用到预览</button>
+        <button class="btn" id="btnCopyConf" type="button">复制 dash.conf 分享配置</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    说明：本工具按 <code>src/cl_render/dash.c</code>（x=5..300 / r_x=1620..1915 / y=164 / 4 档自适应字号）与 <code>gles60.c</code> 阻尼模型还原；实车观感以 MH2p 仪表屏幕为准。欢迎把你的 <code>dash.conf</code> 与预览截图发到仓库 <b>GitHub Discussions</b> 与车友交流。
+  </footer>
+</div>
+
+<script>
+const ITEMS = {
+  power:["功率","kW","seg",250], torque:["扭矩","Nm","seg",450], rpm:["转速","rpm","seg",6500],
+  pedal:["油门","%","seg",100], brake:["制动压力","bar","seg",100],
+  g:["G 值","g","bi",1.0], glong:["纵向 G","g","bi",1.0], glat:["横向 G","g","bi",1.0],
+  t100:["0–100","s","",0], pmax:["最大功率","kW","",0], tqmax:["最大扭矩","Nm","",0], gmax:["最大 G 值","g","",0],
+  speed:["车速","km/h","",0], steer:["转向角","°","bi",450], gear:["挡位","","",0], tripkm:["Trip","km","",0],
+  tires:["四轮胎压","bar","rng",3.2], tpfl:["左前胎压","bar","rng",3.2], tpfr:["右前胎压","bar","rng",3.2],
+  tprl:["左后胎压","bar","rng",3.2], tprr:["右后胎压","bar","rng",3.2],
+  pitch:["俯仰角","°","bi",20], roll:["侧倾角","°","bi",20], alt:["海拔","m","",0],
+  oil:["机油温度","°C","rng",130], gearbox:["变速箱油温","°C","rng",130], coolant:["冷却液温度","°C","rng",120], outside:["车外温度","°C","",0],
+  cons:["当前消耗","L/100km","",0], fuel:["燃油存量","L","rng",90], range:["续驶里程","km","",0],
+  trip:["本次油耗","L/100km","",0], tripdist:["本次里程","km","",0], tripspeed:["本次均速","km/h","",0], triptime:["本次时长","h","",0],
+  refuel:["加油后油耗","L/100km","",0], refueldist:["加油后里程","km","",0], refuelspeed:["加油后均速","km/h","",0], refueltime:["加油后时长","h","",0],
+  total:["累计油耗","L/100km","",0], totaldist:["累计里程","km","",0], totalspeed:["累计均速","km/h","",0], totaltime:["累计时长","h","",0]
+};
+
+let cfg = {
+  show:true, r_show:true, bars:true, smooth:true, alpha:200, tank_l:90, nav_box:1, nav_side:'right',
+  items:['torque','rpm','g','oil','cons'],
+  r_items:['tires','pitch','roll','alt','gearbox']
+};
+
+const cv = document.getElementById('cockpit'), ctx = cv.getContext('2d');
+let playing = true, speedMul = 1, simTime = 0, frames = [], csvName = '';
+let disp = { rpm:800, torque:60, power:18, pedal:8, brake:0, g:0, glong:0, glat:0, steer:0, pitch:0, roll:0, speed:0 };
+let rawHold = null, lastRawStep = -1;
+let maxStats = { pmax:0, tqmax:0, gmax:0, t100:null };
+
+function confToText(){
+  return [
+    '# Touareg MH2p dash.conf (v22.0)',
+    'items=' + cfg.items.join(','),
+    'show=' + (cfg.show ? 1 : 0),
+    'r_items=' + cfg.r_items.join(','),
+    'r_show=' + (cfg.r_show ? 1 : 0),
+    'bars=' + (cfg.bars ? 1 : 0),
+    'smooth=' + (cfg.smooth ? 1 : 0),
+    'alpha=' + cfg.alpha,
+    'tank_l=' + cfg.tank_l,
+    'nav_box=' + cfg.nav_box,
+    'nav_side=' + cfg.nav_side
+  ].join('\n');
+}
+function parseConfText(txt){
+  txt.split(/\r?\n/).forEach(line => {
+    const t = line.replace(/#.*$/, '').trim();
+    const eq = t.indexOf('=');
+    if (eq < 0) return;
+    const k = t.slice(0, eq).trim(), v = t.slice(eq + 1).trim();
+    if (k === 'items') cfg.items = v.split(',').map(s=>s.trim()).filter(s=>ITEMS[s]).slice(0,10);
+    else if (k === 'r_items') cfg.r_items = v.split(',').map(s=>s.trim()).filter(s=>ITEMS[s]).slice(0,10);
+    else if (k === 'show') cfg.show = v !== '0';
+    else if (k === 'r_show') cfg.r_show = v !== '0';
+    else if (k === 'bars') { cfg.bars = v !== '0'; document.getElementById('cbBars').checked = cfg.bars; }
+    else if (k === 'smooth') { cfg.smooth = v !== '0'; document.getElementById('cbSmooth').checked = cfg.smooth; }
+    else if (k === 'alpha') cfg.alpha = Math.max(0, Math.min(255, parseInt(v,10)||200));
+    else if (k === 'tank_l') cfg.tank_l = Math.max(0, Math.min(200, parseInt(v,10)||90));
+    else if (k === 'nav_box') cfg.nav_box = Math.max(0, Math.min(2, parseInt(v,10)||0));
+    else if (k === 'nav_side') cfg.nav_side = v === 'left' ? 'left' : 'right';
+  });
+}
+
+function synthScenario(kind){
+  const out = [];
+  const N = 300; // 30s @ 10Hz
+  for (let i = 0; i < N; i++) {
+    const t = i * 0.1;
+    let spd=58, rpm=1650, tq=165, pwr=48, ped=22, brk=0, ax=0.4, ay=0.05, steer=8, gear=5, oil=95, gb=78, cool=90, cons=8.8, pitch=0.8, roll=-0.4, alt=64;
+    let tp=[2.35,2.34,2.24,2.25];
+    if (kind === 'city') {
+      spd = 42 + 24 * Math.sin(t * 0.35) + 8 * Math.sin(t * 0.9);
+      ped = Math.max(0, 26 + 22 * Math.cos(t * 0.35));
+      brk = ped < 6 ? (6 - ped) * 6 : 0;
+      rpm = 1200 + spd * 24 + ped * 18;
+      tq = 80 + ped * 4.5;
+      pwr = Math.round(tq * rpm / 9550);
+      ax = (ped - 18) * 0.08 - brk * 0.1;
+      ay = 0.22 * Math.sin(t * 0.55);
+      steer = 65 * Math.sin(t * 0.55);
+      gear = Math.min(8, Math.max(1, Math.floor(spd / 14) + 1));
+      cons = 6.2 + ped * 0.28;
+    } else if (kind === 'pull') {
+      const ph = t % 12;
+      if (ph < 1.5) { spd=0; rpm=820; tq=45; ped=0; brk=28; ax=0; gear=1; cons=1.2; }
+      else if (ph < 7.8) {
+        const u = (ph - 1.5) / 6.3;
+        spd = 115 * Math.pow(u, 0.88);
+        const shift = (ph - 1.5) % 1.9;
+        rpm = 2600 + (shift / 1.9) * 3500;
+        ped = 98; brk = 0; tq = 440 - 45 * Math.abs(shift - 0.9);
+        pwr = Math.min(250, Math.round(tq * rpm / 9550));
+        ax = 5.4 - u * 1.9;
+        gear = Math.min(4, Math.floor((ph - 1.5) / 1.9) + 1);
+        cons = 36.5;
+      } else {
+        const u = (ph - 7.8) / 4.2;
+        spd = Math.max(0, 115 * (1 - u));
+        rpm = Math.max(820, 1100 + spd * 14);
+        ped = 0; brk = 48 * (1 - u * 0.5); tq = 20; pwr = 5; ax = -5.8; gear = Math.max(1, Math.ceil(spd / 25)); cons = 0;
+      }
+      oil = 101; gb = 84;
+    } else {
+      spd = 36 + 14 * Math.sin(t * 0.4);
+      pitch = 6.5 * Math.sin(t * 0.3) + 2.5;
+      roll = 5.8 * Math.sin(t * 0.65);
+      steer = 140 * Math.sin(t * 0.65);
+      alt = 240 + t * 2.4;
+      ped = Math.max(8, 34 + pitch * 3.5);
+      rpm = 1850 + ped * 22;
+      tq = 150 + ped * 3.6;
+      pwr = Math.round(tq * rpm / 9550);
+      ax = 0.08 * (ped - 28); ay = 0.32 * Math.sin(t * 0.65);
+      gear = Math.max(2, Math.min(5, Math.floor(spd / 12)));
+      tp = [2.42, 2.40, 2.28, 2.29];
+      oil = 104; gb = 88;
+    }
+    out.push({
+      t, speed:spd, rpm, power:pwr, torque:tq, pedal:ped, brake:brk, steer,
+      glong:ax/9.81, glat:ay, g:(ax>=0?1:-1)*Math.hypot(ax/9.81, ay),
+      gear:'D'+gear, oil, gearbox:gb, coolant:cool, outside:21, cons,
+      fuel:48, range:430, pitch, roll, alt,
+      tpfl:tp[0], tpfr:tp[1], tprl:tp[2], tprr:tp[3],
+      tires: ((tp[0]+tp[1])/2).toFixed(1)+'·'+((tp[2]+tp[3])/2).toFixed(1),
+      trip:9.6, tripdist:34, tripspeed:46, triptime:'0:44',
+      refuel:10.4, refueldist:268, refuelspeed:51, refueltime:'5:15',
+      total:11.1, totaldist:1940, totalspeed:50, totaltime:'38:48', tripkm:512.4
+    });
+  }
+  return out;
+}
+
+function parseCSV(text, name){
+  const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith('#'));
+  if (lines.length < 2) return alert('CSV 内容为空或格式不正确');
+  const hdr = lines[0].split(',').map(s => s.trim());
+  const idx = k => hdr.indexOf(k);
+  const cT=idx('t_ms'), cSpd=idx('real_spd_kmh')>=0?idx('real_spd_kmh'):idx('spd_kmh');
+  const num = (cols, name, def=0) => {
+    const i = idx(name); if (i < 0 || !cols[i]) return def;
+    const v = parseFloat(cols[i]); return isNaN(v) ? def : v;
+  };
+  let t0 = null;
+  const parsed = [];
+  const lmap = {1:'P',2:'R',3:'N',4:'D',5:'S',6:'M'};
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < 4) continue;
+    const tms = cT >= 0 ? parseFloat(cols[cT]) : i * 100;
+    if (isNaN(tms)) continue;
+    if (t0 === null) t0 = tms;
+    let spd = cSpd >= 0 ? parseFloat(cols[cSpd]) : 0;
+    if (isNaN(spd) || spd > 400) spd = 0;
+    const ax = num(cols, 'ax_ms2', 0), ay = num(cols, 'ay_g', 0);
+    const glong = ax / 9.81;
+    const lv = Math.round(num(cols, 'lever', 4)), gr = Math.round(num(cols, 'gear', 0));
+    const tpfl = num(cols, 'tp_fl', 2.3), tpfr = num(cols, 'tp_fr', 2.3), tprl = num(cols, 'tp_rl', 2.2), tprr = num(cols, 'tp_rr', 2.2);
+    let gb = num(cols, 'gearbox_c', 78); if (gb < -40) gb = 0;
+    const tankPct = num(cols, 'tank_pct', 50);
+    parsed.push({
+      t: (tms - t0) / 1000, speed: spd, rpm: num(cols, 'rpm', 800), power: num(cols, 'power_kw', 0),
+      torque: num(cols, 'torque_nm', 0), pedal: num(cols, 'pedal_pct', 0), brake: num(cols, 'brake_bar', 0),
+      steer: num(cols, 'steer_deg', 0), glong, glat: ay, g: (glong>=0?1:-1)*Math.hypot(glong, ay),
+      gear: (lmap[lv]||'D') + (gr>0 && lv>=4 ? gr : ''),
+      oil: num(cols, 'oil_c', 90), gearbox: gb, coolant: num(cols, 'coolant_c', 90),
+      outside: num(cols, 'outside_c', 20), cons: num(cols, 'cons', 9.5),
+      fuel: cfg.tank_l ? (tankPct * cfg.tank_l / 100) : tankPct,
+      range: num(cols, 'range_km', 400), pitch: num(cols, 'pitch_deg', 0), roll: num(cols, 'roll_deg', 0),
+      alt: num(cols, 'alt_m', 50), tpfl, tpfr, tprl, tprr,
+      tires: ((tpfl+tpfr)/2).toFixed(1)+'·'+((tprl+tprr)/2).toFixed(1),
+      trip:9.8, tripdist:25, tripspeed:44, triptime:'0:34', refuel:10.5, refueldist:220, refuelspeed:49, refueltime:'4:30',
+      total:11.0, totaldist:1850, totalspeed:50, totaltime:'37:00', tripkm:128.4
+    });
+  }
+  if (!parsed.length) return alert('未解析到有效行车数据');
+  frames = parsed; csvName = name; simTime = 0; maxStats = {pmax:0,tqmax:0,gmax:0,t100:null};
+  document.getElementById('csvInfo').textContent = `已加载 ${name}（${parsed.length} 帧 · ${parsed[parsed.length-1].t.toFixed(1)} 秒）`;
+}
+
+function getFrameAt(t){
+  if (!frames.length) return null;
+  const dur = frames[frames.length - 1].t || 1;
+  const tt = t % dur;
+  let lo = 0, hi = frames.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (frames[mid].t < tt) lo = mid + 1; else hi = mid; }
+  return frames[lo];
+}
+
+function drawMapBg(night){
+  const g = ctx.createLinearGradient(0, 0, 0, 639);
+  if (night) { g.addColorStop(0, '#0f1726'); g.addColorStop(1, '#162338'); }
+  else { g.addColorStop(0, '#dbe6ee'); g.addColorStop(1, '#c5d7e3'); }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 1920, 639);
+
+  // Subtle map roads + navigation route ribbon
+  ctx.save();
+  ctx.strokeStyle = night ? 'rgba(148,163,184,.16)' : 'rgba(51,65,85,.18)';
+  ctx.lineWidth = 4;
+  for (let i = -3; i <= 6; i++) {
+    const off = (simTime * 48) % 120;
+    ctx.beginPath();
+    ctx.moveTo(420, i * 120 + off);
+    ctx.lineTo(1500, i * 120 + off + 40);
+    ctx.stroke();
+  }
+  // Route line
+  ctx.strokeStyle = '#22c55e';
+  ctx.lineWidth = 18;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(960, 620); ctx.lineTo(960, 290); ctx.quadraticCurveTo(960, 220, 1080, 185);
+  ctx.stroke();
+  // Car arrow centered below clock
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.moveTo(960, 392); ctx.lineTo(982, 434); ctx.lineTo(960, 422); ctx.lineTo(938, 434); ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawGles60Bg(f){
+  const g = ctx.createLinearGradient(0, 0, 1920, 639);
+  g.addColorStop(0, '#070b12'); g.addColorStop(0.5, '#0c1626'); g.addColorStop(1, '#070b12');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 1920, 639);
+
+  // Center dynamic RPM & Speed GLES2-style dual arc gauge
+  const cx = 960, cy = 355, R = 210;
+  ctx.save();
+  ctx.lineWidth = 22;
+  ctx.strokeStyle = 'rgba(255,255,255,.08)';
+  ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI * 0.78, Math.PI * 2.22); ctx.stroke();
+
+  const frac = Math.max(0, Math.min(1, disp.rpm / 6500));
+  const endAng = Math.PI * (0.78 + 1.44 * frac);
+  const ag = ctx.createLinearGradient(cx - R, cy, cx + R, cy);
+  ag.addColorStop(0, '#19d6d2'); ag.addColorStop(0.7, '#f59e0b'); ag.addColorStop(1, '#ef4444');
+  ctx.strokeStyle = ag;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI * 0.78, endAng); ctx.stroke();
+
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.font = '800 96px -apple-system,sans-serif';
+  ctx.fillText(Math.round(disp.speed), cx, cy + 16);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '600 24px -apple-system,sans-serif';
+  ctx.fillText('km/h  ·  ' + Math.round(disp.rpm) + ' rpm  ·  ' + f.gear, cx, cy + 56);
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = '600 18px -apple-system,sans-serif';
+  ctx.fillText('独立 GLES2 60fps 动画通道 (gles60.c)', cx, cy + 96);
+  ctx.restore();
+}
+
+function drawOemGuides(f){
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.45)';
+  ctx.fillRect(0, 0, 1920, 52);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = '600 22px -apple-system,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('13:42   21°C   D · 正常', 960, 34);
+  // Bottom-left gear trapezoid & bottom-right speed trapezoid
+  ctx.strokeStyle = 'rgba(56,189,248,.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, 520); ctx.lineTo(295, 520); ctx.lineTo(360, 639); ctx.lineTo(0, 639); ctx.closePath(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(1920, 520); ctx.lineTo(1625, 520); ctx.lineTo(1560, 639); ctx.lineTo(1920, 639); ctx.closePath(); ctx.stroke();
+  ctx.fillStyle = 'rgba(226,232,240,.65)';
+  ctx.font = '700 40px -apple-system,sans-serif';
+  ctx.textAlign = 'left'; ctx.fillText(f.gear, 42, 594);
+  ctx.textAlign = 'right'; ctx.fillText(Math.round(f.speed) + ' km/h', 1878, 594);
+  ctx.restore();
+}
+
+function fmtVal(k, f, src){
+  const v = src[k] !== undefined ? src[k] : f[k];
+  if (k === 'pmax') return Math.round(maxStats.pmax);
+  if (k === 'tqmax') return Math.round(maxStats.tqmax);
+  if (k === 'gmax') return maxStats.gmax.toFixed(2);
+  if (k === 't100') return maxStats.t100 ? maxStats.t100.toFixed(1) : '6.8';
+  if (typeof v === 'string') return v;
+  if (['g','glong','glat'].includes(k)) return (v >= 0 ? '+' : '') + v.toFixed(2);
+  if (['pitch','roll','cons','fuel','trip','refuel','total','tripkm','tpfl','tpfr','tprl','tprr'].includes(k)) return Number(v).toFixed(1);
+  return String(Math.round(Number(v) || 0));
+}
+
+function drawBox(x, items, f, src){
+  if (!items.length) return;
+  const n = items.length;
+  const tier = n <= 5 ? {row:66,val:42,lab:22,unit:16} : n === 6 ? {row:55,val:36,lab:20,unit:15} : n <= 8 ? {row:42,val:29,lab:18,unit:14} : {row:34,val:24,lab:15,unit:12};
+  const W = 295, padY = 10, H = padY * 2 + tier.row * n;
+  const y = 164;
+
+  ctx.save();
+  ctx.fillStyle = `rgba(14,17,23,${(cfg.alpha / 255).toFixed(3)})`;
+  ctx.strokeStyle = 'rgba(255,255,255,.14)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(x, y, W, H, 8); ctx.fill(); ctx.stroke();
+
+  items.forEach((k, i) => {
+    const it = ITEMS[k]; if (!it) return;
+    const ry = y + padY + i * tier.row;
+    if (i > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,.08)';
+      ctx.beginPath(); ctx.moveTo(x + 12, ry); ctx.lineTo(x + W - 12, ry); ctx.stroke();
+    }
+    const baseLine = ry + (cfg.bars && n <= 6 && it[2] ? tier.row - 18 : tier.row - 11);
+    ctx.fillStyle = '#dcdcdc'; ctx.font = `700 ${tier.lab}px -apple-system,sans-serif`; ctx.textAlign = 'left';
+    ctx.fillText(it[0], x + 14, baseLine);
+
+    const u = (k === 'fuel' && !cfg.tank_l) ? '%' : it[1];
+    let rx = x + W - 14;
+    if (u) {
+      ctx.fillStyle = '#9ca3af'; ctx.font = `600 ${tier.unit}px -apple-system,sans-serif`; ctx.textAlign = 'right';
+      ctx.fillText(u, rx, baseLine);
+      rx -= ctx.measureText(u).width + 5;
+    }
+    ctx.fillStyle = '#ffffff'; ctx.font = `800 ${tier.val}px -apple-system,sans-serif`; ctx.textAlign = 'right';
+    ctx.fillText(fmtVal(k, f, src), rx, baseLine);
+
+    if (cfg.bars && n <= 6 && it[2]) {
+      const bx = x + 14, by = ry + tier.row - 10, bw = W - 28, bh = 6;
+      ctx.fillStyle = 'rgba(255,255,255,.10)';
+      ctx.fillRect(bx, by, bw, bh);
+      const rawV = Number(src[k] !== undefined ? src[k] : f[k]) || 0;
+      if (it[2] === 'seg') {
+        const frac = Math.max(0, Math.min(1, rawV / it[3]));
+        const segs = 18, lit = Math.round(frac * segs), sw = bw / segs;
+        for (let s = 0; s < lit; s++) {
+          ctx.fillStyle = s > segs * 0.8 ? '#ef4444' : (s > segs * 0.6 ? '#f59e0b' : '#19d6d2');
+          ctx.fillRect(bx + s * sw, by, sw - 2, bh);
+        }
+      } else if (it[2] === 'bi') {
+        const frac = Math.max(-1, Math.min(1, rawV / it[3]));
+        const mid = bx + bw / 2;
+        ctx.fillStyle = frac >= 0 ? '#22dcda' : '#f97316';
+        ctx.fillRect(frac >= 0 ? mid : mid + frac * (bw / 2), by, Math.abs(frac) * (bw / 2), bh);
+        ctx.fillStyle = '#fff'; ctx.fillRect(mid - 1, by - 1, 2, bh + 2);
+      } else if (it[2] === 'rng') {
+        const vnum = k === 'tires' ? f.tpfl : rawV;
+        const frac = Math.max(0, Math.min(1, vnum / it[3]));
+        ctx.fillStyle = frac > 0.86 ? '#ef4444' : (frac < 0.35 ? '#38bdf8' : '#20deb8');
+        ctx.fillRect(bx, by, bw * frac, bh);
+      }
+    }
+  });
+  ctx.restore();
+}
+
+function drawNavCard(x){
+  const y = 164, W = 295, H = 344;
+  ctx.save();
+  ctx.fillStyle = `rgba(14,17,23,${(cfg.alpha / 255).toFixed(3)})`;
+  ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(x, y, W, H, 8); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255,255,255,.08)';
+  ctx.beginPath(); ctx.roundRect(x + 16, y + 18, 56, 56, 10); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = '700 36px -apple-system,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('↱', x + 44, y + 58);
+
+  const dist = Math.max(20, Math.round(320 - (simTime * 18) % 300));
+  ctx.textAlign = 'left';
+  ctx.font = '800 38px -apple-system,sans-serif'; ctx.fillText(dist + ' m', x + 84, y + 50);
+  ctx.fillStyle = '#6cd6ff'; ctx.font = '700 18px -apple-system,sans-serif'; ctx.fillText('前方右转', x + 84, y + 74);
+
+  ctx.fillStyle = '#fff'; ctx.font = '700 24px -apple-system,sans-serif'; ctx.fillText('滨江大道辅路', x + 16, y + 128);
+  ctx.strokeStyle = 'rgba(255,255,255,.15)';
+  ctx.beginPath(); ctx.moveTo(x + 16, y + 166); ctx.lineTo(x + W - 16, y + 166); ctx.stroke();
+
+  const rows = [['剩余路程','9.4 km'],['剩余时间','15 分钟'],['预计到达','13:57']];
+  rows.forEach(([l, v], i) => {
+    const ry = y + 210 + i * 44;
+    ctx.fillStyle = '#cbd5e1'; ctx.font = '600 18px -apple-system,sans-serif'; ctx.textAlign = 'left'; ctx.fillText(l, x + 16, ry);
+    ctx.fillStyle = '#fff'; ctx.font = '800 24px -apple-system,sans-serif'; ctx.textAlign = 'right'; ctx.fillText(v, x + W - 16, ry);
+  });
+  ctx.restore();
+}
+
+let lastTs = performance.now(), fpsCnt = 0, fpsLast = performance.now();
+function tick(now){
+  const dt = Math.min(0.05, (now - lastTs) / 1000);
+  lastTs = now;
+  fpsCnt++;
+  if (now - fpsLast >= 500) {
+    document.getElementById('fpsPill').textContent = Math.round(fpsCnt * 1000 / (now - fpsLast)) + ' fps';
+    fpsCnt = 0; fpsLast = now;
+  }
+
+  const dur = frames.length ? (frames[frames.length - 1].t || 1) : 1;
+  if (playing) simTime = (simTime + dt * speedMul) % dur;
+  const f = getFrameAt(simTime);
+  if (f) {
+    if (f.power > maxStats.pmax) maxStats.pmax = f.power;
+    if (f.torque > maxStats.tqmax) maxStats.tqmax = f.torque;
+    if (Math.abs(f.g) > maxStats.gmax) maxStats.gmax = Math.abs(f.g);
+
+    // Compare smooth=1 (exponential damping @ 60fps) vs smooth=0 (5Hz stepped updates)
+    const alpha = 1 - Math.exp(-dt * 12);
+    if (cfg.smooth) {
+      ['rpm','torque','power','pedal','brake','g','glong','glat','steer','pitch','roll','speed'].forEach(k => {
+        disp[k] += (f[k] - disp[k]) * alpha;
+      });
+    } else {
+      const step5 = Math.floor(simTime * 5);
+      if (step5 !== lastRawStep || !rawHold) {
+        lastRawStep = step5;
+        rawHold = Object.assign({}, f);
+      }
+      ['rpm','torque','power','pedal','brake','g','glong','glat','steer','pitch','roll','speed'].forEach(k => {
+        disp[k] = rawHold[k];
+      });
+    }
+
+    const gles = document.getElementById('cbGles').checked;
+    if (gles) drawGles60Bg(f);
+    else drawMapBg(document.getElementById('cbNight').checked);
+    if (document.getElementById('cbOem').checked) drawOemGuides(f);
+
+    const navOn = document.getElementById('cbNav').checked && cfg.nav_box > 0;
+    const navLeft = navOn && cfg.nav_side === 'left';
+    const navRight = navOn && cfg.nav_side !== 'left';
+    if (navLeft) drawNavCard(5); else if (cfg.show) drawBox(5, cfg.items, f, disp);
+    if (navRight) drawNavCard(1620); else if (cfg.r_show) drawBox(1620, cfg.r_items, f, disp);
+
+    document.getElementById('scrub').value = Math.round((simTime / dur) * 1000);
+    const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+    document.getElementById('timeTxt').textContent = `${fmt(simTime)} / ${fmt(dur)}`;
+  }
+  requestAnimationFrame(tick);
+}
+
+// Events
+document.getElementById('btnPlay').onclick = e => { playing = !playing; e.target.textContent = playing ? '暂停' : '播放'; };
+document.getElementById('selScene').onchange = e => { frames = synthScenario(e.target.value); simTime = 0; maxStats={pmax:0,tqmax:0,gmax:0,t100:null}; document.getElementById('csvInfo').textContent='当前：内置模拟轨迹'; };
+document.getElementById('selSpeed').onchange = e => { speedMul = parseFloat(e.target.value) || 1; };
+document.getElementById('scrub').oninput = e => { const dur = frames.length ? (frames[frames.length-1].t||1) : 1; simTime = (e.target.value / 1000) * dur; };
+document.getElementById('cbSmooth').onchange = e => { cfg.smooth = e.target.checked; document.getElementById('confBox').value = confToText(); };
+document.getElementById('cbBars').onchange = e => { cfg.bars = e.target.checked; document.getElementById('confBox').value = confToText(); };
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+  const [l, r] = b.dataset.p.split('|');
+  cfg.items = l.split(','); cfg.r_items = r.split(','); cfg.show = true; cfg.r_show = true;
+  document.getElementById('confBox').value = confToText();
+});
+document.getElementById('btnApplyConf').onclick = () => { parseConfText(document.getElementById('confBox').value); };
+document.getElementById('btnCopyConf').onclick = () => { navigator.clipboard?.writeText(document.getElementById('confBox').value).then(()=>alert('已复制 dash.conf 配置，可直接发到 GitHub Discussions 分享！')); };
+document.getElementById('btnSnap').onclick = () => { const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = 'touareg-cluster-preview.png'; a.click(); };
+
+const dz = document.getElementById('dropZone'), fi = document.getElementById('csvFile');
+dz.onclick = () => fi.click();
+fi.onchange = e => { const f = e.target.files[0]; if (f) f.text().then(t => parseCSV(t, f.name)); };
+dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); };
+dz.ondragleave = () => dz.classList.remove('over');
+dz.ondrop = e => { e.preventDefault(); dz.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) f.text().then(t => parseCSV(t, f.name)); };
+
+frames = synthScenario('city');
+document.getElementById('confBox').value = confToText();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

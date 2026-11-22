@@ -11,6 +11,7 @@
  */
 #include "aeabi_shim.h"
 #include "web_ui_data.h"
+#include "ota_util.h"
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -437,7 +438,7 @@ typedef struct {
     char items[256];
     char r_items[256];
     char nav_side[16];
-    int show, r_show, bars, car_up, acc_up, amap_turn, alpha, tank_l, lat_flip, nav_box, nav_tz;
+    int show, r_show, bars, smooth, car_up, acc_up, amap_turn, alpha, tank_l, lat_flip, nav_box, nav_tz;
     double trip_base;
 } dash_cfg_t;
 
@@ -445,7 +446,7 @@ static void parse_dash_conf(dash_cfg_t *c) {
     memset(c, 0, sizeof(*c));
     strcpy(c->items, "power,torque,g,rpm,oil,gearbox");
     strcpy(c->nav_side, "right");
-    c->show = 1; c->r_show = 0; c->bars = 1; c->car_up = 35; c->acc_up = 80;
+    c->show = 1; c->r_show = 0; c->bars = 1; c->smooth = 1; c->car_up = 35; c->acc_up = 80;
     c->amap_turn = 3; c->alpha = 200; c->tank_l = 90; c->lat_flip = 0;
     c->nav_box = 1; c->nav_tz = 8;
     c->trip_base = 0.0;
@@ -470,6 +471,7 @@ static void parse_dash_conf(dash_cfg_t *c) {
         else if (strcmp(k, "show") == 0) c->show = atoi(v);
         else if (strcmp(k, "r_show") == 0) c->r_show = atoi(v);
         else if (strcmp(k, "bars") == 0) c->bars = atoi(v);
+        else if (strcmp(k, "smooth") == 0) c->smooth = atoi(v);
         else if (strcmp(k, "car_up") == 0) c->car_up = atoi(v);
         else if (strcmp(k, "acc_up") == 0) c->acc_up = atoi(v);
         else if (strcmp(k, "amap_turn") == 0) c->amap_turn = atoi(v);
@@ -520,6 +522,7 @@ static int save_dash_conf(const char *body) {
     int show = clamp_int(form_get(body, "show", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
     int r_show = clamp_int(form_get(body, "r_show", bufv, sizeof(bufv)) ? bufv : "0", 0, 1, 0);
     int bars = clamp_int(form_get(body, "bars", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
+    int smooth = clamp_int(form_get(body, "smooth", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
     int car_up = clamp_int(form_get(body, "car_up", bufv, sizeof(bufv)) ? bufv : "35", 0, 90, 35);
     int acc_up = clamp_int(form_get(body, "acc_up", bufv, sizeof(bufv)) ? bufv : "80", 0, 90, 80);
     int amap_turn = clamp_int(form_get(body, "amap_turn", bufv, sizeof(bufv)) ? bufv : "3", 0, 3, 3);
@@ -538,27 +541,28 @@ static int save_dash_conf(const char *body) {
         if (trip_base != trip_base || trip_base < 0.0 || trip_base > 9999999.0) trip_base = 0.0;
     }
 
-    const char *keys[15] = {
-        "items", "show", "r_items", "r_show", "bars", "car_up", "acc_up",
+    const char *keys[16] = {
+        "items", "show", "r_items", "r_show", "bars", "smooth", "car_up", "acc_up",
         "amap_turn", "alpha", "tank_l", "lat_flip", "trip_base", "nav_box", "nav_side", "nav_tz"
     };
-    char vals[15][280];
+    char vals[16][280];
     snprintf(vals[0], sizeof(vals[0]), "%s", items);
     snprintf(vals[1], sizeof(vals[1]), "%d", show);
     snprintf(vals[2], sizeof(vals[2]), "%s", r_items);
     snprintf(vals[3], sizeof(vals[3]), "%d", r_show);
     snprintf(vals[4], sizeof(vals[4]), "%d", bars);
-    snprintf(vals[5], sizeof(vals[5]), "%d", car_up);
-    snprintf(vals[6], sizeof(vals[6]), "%d", acc_up);
-    snprintf(vals[7], sizeof(vals[7]), "%d", amap_turn);
-    snprintf(vals[8], sizeof(vals[8]), "%d", alpha);
-    snprintf(vals[9], sizeof(vals[9]), "%d", tank_l);
-    snprintf(vals[10], sizeof(vals[10]), "%d", lat_flip);
-    snprintf(vals[11], sizeof(vals[11]), "%.1f", trip_base);
-    snprintf(vals[12], sizeof(vals[12]), "%d", nav_box);
-    snprintf(vals[13], sizeof(vals[13]), "%s", nav_side);
-    snprintf(vals[14], sizeof(vals[14]), "%d", nav_tz);
-    int seen[15];
+    snprintf(vals[5], sizeof(vals[5]), "%d", smooth);
+    snprintf(vals[6], sizeof(vals[6]), "%d", car_up);
+    snprintf(vals[7], sizeof(vals[7]), "%d", acc_up);
+    snprintf(vals[8], sizeof(vals[8]), "%d", amap_turn);
+    snprintf(vals[9], sizeof(vals[9]), "%d", alpha);
+    snprintf(vals[10], sizeof(vals[10]), "%d", tank_l);
+    snprintf(vals[11], sizeof(vals[11]), "%d", lat_flip);
+    snprintf(vals[12], sizeof(vals[12]), "%.1f", trip_base);
+    snprintf(vals[13], sizeof(vals[13]), "%d", nav_box);
+    snprintf(vals[14], sizeof(vals[14]), "%s", nav_side);
+    snprintf(vals[15], sizeof(vals[15]), "%d", nav_tz);
+    int seen[16];
     memset(seen, 0, sizeof(seen));
 
     char *out = malloc(65536);
@@ -577,7 +581,7 @@ static int save_dash_conf(const char *body) {
                 if (eq) {
                     size_t kl = (size_t)(eq - p);
                     while (kl > 0 && (p[kl - 1] == ' ' || p[kl - 1] == '\t')) kl--;
-                    for (int i = 0; i < 15; i++) {
+                    for (int i = 0; i < 16; i++) {
                         if (strlen(keys[i]) == kl && memcmp(p, keys[i], kl) == 0) {
                             matched = i;
                             break;
@@ -598,7 +602,7 @@ static int save_dash_conf(const char *body) {
         }
         fclose(fp);
     }
-    for (int i = 0; i < 15 && ol + 320 < 65536; i++) {
+    for (int i = 0; i < 16 && ol + 320 < 65536; i++) {
         if (!seen[i]) ol += (size_t)snprintf(out + ol, 65536 - ol, "%s=%s\n", keys[i], vals[i]);
     }
 
@@ -762,17 +766,129 @@ static const char *USB_MOUNTS[] = {
 };
 
 static const char *SYS_LOG_ALLOW[] = {
-    "cl_probe.log", "clusterd.log", "vwcn.log", "vwcn_persist.log", "dio_cluster.log",
-    "dash.state", "cluster_cp.state", "cl_render_dbg", "cl_car_dbg", "vw_popup_filter.log",
-    "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log", "touareg_netd.log", "wifi_dev_persist.log", NULL
+    "cl_probe.log", "cl_wired.log", "clusterd.log", "cluster_fuse.log", "vwcn.log", "vwcn_persist.log",
+    "dio_cluster.log", "dash.state", "cluster_cp.state", "cl_render_dbg", "cl_car_dbg",
+    "vw_popup_filter.log", "wpa_bcm2.log", "hostapd_bcm0.log", "dhcp_bcm2.log",
+    "touareg_netd.log", "wifi_dev_persist.log", NULL
 };
+
+static int has_ota_backup_files(void) {
+    for (int i = 0; OTA_ALLOWLIST[i].name; i++) {
+        char bak[320];
+        snprintf(bak, sizeof(bak), "/mnt/app/eso/bin/apps/.ota_backup/%s", OTA_ALLOWLIST[i].name);
+        if (file_exists(bak)) return 1;
+    }
+    return 0;
+}
+
+static void read_small_text(const char *path, char *out, size_t sz, const char *defv) {
+    snprintf(out, sz, "%s", defv);
+    FILE *fp = fopen(path, "r");
+    if (!fp) return;
+    if (fgets(out, (int)sz, fp)) {
+        char *nl = strpbrk(out, "\r\n");
+        if (nl) *nl = '\0';
+    }
+    fclose(fp);
+}
+
+static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
+    const size_t CAP = 256u * 1024u;
+    char *buf = (char *)malloc(CAP);
+    if (!buf) { send_json(fd, 500, 0, "内存不足"); return; }
+    size_t l = 0;
+    char ipstr[32], ota_ver[48];
+    ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.0");
+
+    l += (size_t)snprintf(buf + l, CAP - l,
+        "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
+        "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
+        "netd_version=v22.0 ota_version=%s bcm2_ip=%s\n"
+        "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d\n"
+        "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d\n\n",
+        ota_ver, ipstr,
+        file_exists(CLUSTER_DIR "/safe_mode"), file_exists("/tmp/vw_hmi_safe_mode"),
+        file_exists("/tmp/vw_dio_safe_mode"), file_exists("/tmp/vw_cluster_safe_mode"),
+        file_exists("/tmp/cl_render_fused"),
+        file_exists(CLUSTER_DIR "/disable"), file_exists(CLUSTER_DIR "/ka_off"),
+        file_exists(CLUSTER_DIR "/zoom_flip"), file_exists(CLUSTER_DIR "/switch_off"),
+        file_exists(CLUSTER_DIR "/siri_short"), file_exists(CLUSTER_DIR "/gles60_mode"));
+
+    /* Include dash.conf & cl.conf (non-sensitive display config) */
+    const char *cfgs[] = { DASH_CONF_PATH, CL_CONF_PATH, NULL };
+    for (int i = 0; cfgs[i] && l + 1024 < CAP; i++) {
+        FILE *fp = fopen(cfgs[i], "r");
+        if (!fp) continue;
+        l += (size_t)snprintf(buf + l, CAP - l, "--- %s ---\n", cfgs[i]);
+        char line[512], san[540];
+        while (fgets(line, sizeof(line), fp) && l + 600 < CAP) {
+            diag_sanitize_line(line, san, sizeof(san));
+            size_t sl = strlen(san);
+            memcpy(buf + l, san, sl); l += sl;
+        }
+        fclose(fp);
+        l += (size_t)snprintf(buf + l, CAP - l, "\n");
+    }
+
+    /* Include crashlog directory listing (names & sizes only) */
+    const char *cdirs[] = { "/mnt/crashlogs/java", "/mnt/crashlogs/core", NULL };
+    for (int i = 0; cdirs[i] && l + 1024 < CAP; i++) {
+        DIR *d = opendir(cdirs[i]);
+        if (!d) continue;
+        l += (size_t)snprintf(buf + l, CAP - l, "--- ls %s ---\n", cdirs[i]);
+        struct dirent *de;
+        int n = 0;
+        while ((de = readdir(d)) != NULL && n < 40 && l + 256 < CAP) {
+            if (de->d_name[0] == '.') continue;
+            l += (size_t)snprintf(buf + l, CAP - l, "  %s\n", de->d_name);
+            n++;
+        }
+        closedir(d);
+    }
+
+    /* Tail last 12 KB of each allowlisted /tmp log with automatic redaction */
+    for (int i = 0; SYS_LOG_ALLOW[i] && l + 2048 < CAP; i++) {
+        char path[256];
+        snprintf(path, sizeof(path), "/tmp/%s", SYS_LOG_ALLOW[i]);
+        FILE *fp = fopen(path, "r");
+        if (!fp) continue;
+        if (fseek(fp, 0, SEEK_END) == 0) {
+            long fsz = ftell(fp);
+            if (fsz > 12288) fseek(fp, fsz - 12288, SEEK_SET);
+            else fseek(fp, 0, SEEK_SET);
+        }
+        l += (size_t)snprintf(buf + l, CAP - l, "\n--- /tmp/%s (sanitized tail) ---\n", SYS_LOG_ALLOW[i]);
+        char line[512], san[540];
+        while (fgets(line, sizeof(line), fp) && l + 600 < CAP) {
+            diag_sanitize_line(line, san, sizeof(san));
+            size_t sl = strlen(san);
+            memcpy(buf + l, san, sl); l += sl;
+        }
+        fclose(fp);
+    }
+
+    char hdr[512];
+    int hl = snprintf(hdr, sizeof(hdr),
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "Content-Disposition: attachment; filename=\"touareg_diag_sanitized.txt\"\r\n"
+        "Content-Length: %lu\r\n"
+        "Cache-Control: no-store\r\n"
+        "Connection: close\r\n\r\n",
+        (unsigned long)l);
+    if (hl > 0 && send_all(fd, hdr, (size_t)hl) == 0 && l > 0) send_all(fd, buf, l);
+    free(buf);
+}
 
 static void handle_status(int fd, uint32_t bcm2_ip) {
     char *j = malloc(32768);
     if (!j) { send_json(fd, 500, 0, "内存不足"); return; }
     size_t l = 0;
-    char ipstr[32], esc1[320], esc2[320];
+    char ipstr[32], esc1[320], esc2[320], ota_ver[48], esc_ov[64];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v22.0");
+    json_escape(ota_ver, esc_ov, sizeof(esc_ov));
     double spd = -1.0, odo = -1.0;
     read_dash_state(&spd, &odo);
     int has_cl = g_dry_test ? 1 : (file_exists(DASH_CONF_PATH) ? 1 : 0);
@@ -786,27 +902,38 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     json_escape(dc.r_items, esc2, sizeof(esc2));
 
     l += (size_t)snprintf(j + l, 32768 - l,
-        "{\"ok\":true,\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
+        "{\"ok\":true,\"version\":\"v22.0\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
+        "\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
-        "\"dash\":{\"items\":\"%s\",\"show\":%d,\"r_items\":\"%s\",\"r_show\":%d,\"bars\":%d,"
+        "\"safe_mode\":{\"manual\":%d,\"hmi\":%d,\"dio\":%d,\"cluster\":%d,\"render_fused\":%d},"
+        "\"dash\":{\"items\":\"%s\",\"show\":%d,\"r_items\":\"%s\",\"r_show\":%d,\"bars\":%d,\"smooth\":%d,"
         "\"car_up\":%d,\"acc_up\":%d,\"amap_turn\":%d,\"alpha\":%d,\"tank_l\":%d,\"lat_flip\":%d,\"trip_base\":%.1f,"
         "\"nav_box\":%d,\"nav_side\":\"%s\",\"nav_tz\":%d},"
         "\"cl\":{\"wide_on\":%d,\"wide\":%d,\"view\":%d},"
-        "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d},\"drive_logs\":[",
+        "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d,\"siri_short\":%d,\"gles60_mode\":%d,\"safe_mode\":%d},\"drive_logs\":[",
+        esc_ov, has_ota_backup_files(),
         ipstr, spd, odo, has_cl, ssh_on,
         proc_alive("pidin -p clusterd 2>/dev/null | grep -q clusterd"),
         proc_alive("pidin -p cl_render 2>/dev/null | grep -q cl_render"),
         proc_alive("pidin -p dio_manager 2>/dev/null | grep -q dio_manager"),
         count_wifi_networks(),
-        esc1, dc.show, esc2, dc.r_show, dc.bars,
+        file_exists(CLUSTER_DIR "/safe_mode"),
+        file_exists("/tmp/vw_hmi_safe_mode"),
+        file_exists("/tmp/vw_dio_safe_mode"),
+        file_exists("/tmp/vw_cluster_safe_mode"),
+        file_exists("/tmp/cl_render_fused"),
+        esc1, dc.show, esc2, dc.r_show, dc.bars, dc.smooth,
         dc.car_up, dc.acc_up, dc.amap_turn, dc.alpha, dc.tank_l, dc.lat_flip, dc.trip_base,
         dc.nav_box, dc.nav_side, dc.nav_tz,
         wide_on, wide, view,
         file_exists(CLUSTER_DIR "/disable"),
         file_exists(CLUSTER_DIR "/ka_off"),
         file_exists(CLUSTER_DIR "/zoom_flip"),
-        file_exists(CLUSTER_DIR "/switch_off"));
+        file_exists(CLUSTER_DIR "/switch_off"),
+        file_exists(CLUSTER_DIR "/siri_short"),
+        file_exists(CLUSTER_DIR "/gles60_mode"),
+        file_exists(CLUSTER_DIR "/safe_mode"));
 
     /* 扫描 U 盘 drive_logs CSV 文件 */
     int first = 1;
@@ -952,18 +1079,6 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
         if (!nl) break;
         p = nl + 2;
     }
-    if (clen > 4096 || hdr_len + clen >= sizeof(req)) { send_json(cfd, 413, 0, "请求过大"); return; }
-    while (got < hdr_len + clen && got + 1 < sizeof(req)) {
-        size_t rem_body = hdr_len + clen - got;
-        size_t rem_buf = sizeof(req) - 1 - got;
-        size_t want = rem_body < rem_buf ? rem_body : rem_buf;
-        ssize_t r = recv(cfd, req + got, want, 0);
-        if (r <= 0) break;
-        got += (size_t)r;
-    }
-    req[got] = '\0';
-    const char *body = req + hdr_len;
-
     char method[16], target[512];
     if (sscanf(req, "%15s %511s", method, target) != 2) return;
     char *q = strchr(target, '?');
@@ -996,9 +1111,72 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
         return;
     }
 
+    /* Streaming offline OTA upload (POST /api/ota/upload): writes directly to /mnt/app/.ota_stage, never /tmp RAM */
+    if (strcmp(method, "POST") == 0 && strcmp(target, "/api/ota/upload") == 0) {
+        char xrw[64];
+        header_get(req, hdr_end, "X-Requested-With", xrw, sizeof(xrw));
+        if (strcmp(xrw, "touareg-webui") != 0) { send_json(cfd, 403, 0, "非法跨站请求（缺少安全头）"); return; }
+        if (is_driving_now()) { send_json(cfd, 403, 0, "车辆行驶中，请停车后再升级"); return; }
+        if (clen == 0 || clen > OTA_MAX_BYTES) { send_json(cfd, 413, 0, "升级包大小超限（需 1 B ～ 6 MB 的标准 .tar 包）"); return; }
+        const char *app_root = getenv("NETD_APP_ROOT");
+        if (!app_root || !app_root[0]) app_root = "/mnt/app";
+        char stage_dir[320], tar_path[384];
+        snprintf(stage_dir, sizeof(stage_dir), "%s/eso/bin/apps/.ota_stage", app_root);
+        snprintf(tar_path, sizeof(tar_path), "%s/pkg.tar", stage_dir);
+        mount_app_rw();
+        mkdir(stage_dir, 0755);
+        int tfd = open(tar_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        if (tfd < 0) { mount_app_ro(); send_json(cfd, 500, 0, "无法创建车机暂存文件"); return; }
+        size_t pre = (got > hdr_len) ? (got - hdr_len) : 0;
+        if (pre > clen) pre = clen;
+        size_t written = 0;
+        int io_ok = 1;
+        if (pre > 0) {
+            if (write(tfd, req + hdr_len, pre) != (ssize_t)pre) io_ok = 0;
+            else written += pre;
+        }
+        struct timeval tv_up = { 20, 0 };
+        setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv_up, sizeof(tv_up));
+        uint8_t sbuf[16384];
+        while (io_ok && written < clen) {
+            size_t want = clen - written;
+            if (want > sizeof(sbuf)) want = sizeof(sbuf);
+            ssize_t r = recv(cfd, sbuf, want, 0);
+            if (r <= 0) { io_ok = 0; break; }
+            if (write(tfd, sbuf, (size_t)r) != r) { io_ok = 0; break; }
+            written += (size_t)r;
+        }
+        fsync(tfd);
+        close(tfd);
+        char msg[256];
+        int rc = -1;
+        if (!io_ok || written != clen) {
+            unlink(tar_path);
+            snprintf(msg, sizeof(msg), "接收升级包中断（%lu/%lu B）", (unsigned long)written, (unsigned long)clen);
+        } else {
+            rc = ota_apply_tar(app_root, tar_path, msg, sizeof(msg));
+        }
+        mount_app_ro();
+        send_json(cfd, rc == 0 ? 200 : 400, rc == 0, msg);
+        return;
+    }
+
+    if (clen > 4096 || hdr_len + clen >= sizeof(req)) { send_json(cfd, 413, 0, "请求过大"); return; }
+    while (got < hdr_len + clen && got + 1 < sizeof(req)) {
+        size_t rem_body = hdr_len + clen - got;
+        size_t rem_buf = sizeof(req) - 1 - got;
+        size_t want = rem_body < rem_buf ? rem_body : rem_buf;
+        ssize_t r = recv(cfd, req + got, want, 0);
+        if (r <= 0) break;
+        got += (size_t)r;
+    }
+    req[got] = '\0';
+    const char *body = req + hdr_len;
+
     if (strcmp(method, "GET") == 0 || strcmp(method, "HEAD") == 0) {
         if (strcmp(target, "/api/status") == 0) handle_status(cfd, bcm2_ip);
         else if (strcmp(target, "/api/dl") == 0) handle_download(cfd, query);
+        else if (strcmp(target, "/api/diag") == 0) handle_diag_bundle(cfd, bcm2_ip);
         else send_json(cfd, 404, 0, "未找到路径");
         return;
     }
@@ -1030,7 +1208,9 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
             form_get(body, "name", name, sizeof(name));
             form_get(body, "val", val, sizeof(val));
             if (strcmp(name, "disable") != 0 && strcmp(name, "ka_off") != 0 &&
-                strcmp(name, "zoom_flip") != 0 && strcmp(name, "switch_off") != 0) {
+                strcmp(name, "zoom_flip") != 0 && strcmp(name, "switch_off") != 0 &&
+                strcmp(name, "siri_short") != 0 && strcmp(name, "gles60_mode") != 0 &&
+                strcmp(name, "safe_mode") != 0) {
                 send_json(cfd, 400, 0, "不支持的开关");
                 return;
             }
@@ -1046,6 +1226,14 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
             }
             mount_app_ro();
             send_json(cfd, ok ? 200 : 500, ok, ok ? "开关已更新" : "开关写入失败");
+        } else if (strcmp(target, "/api/ota/rollback") == 0) {
+            const char *app_root = getenv("NETD_APP_ROOT");
+            if (!app_root || !app_root[0]) app_root = "/mnt/app";
+            char msg[256];
+            mount_app_rw();
+            int rc = ota_rollback_backup(app_root, msg, sizeof(msg));
+            mount_app_ro();
+            send_json(cfd, rc == 0 ? 200 : 400, rc == 0, msg);
         } else if (strcmp(target, "/api/action") == 0) {
             char act[32];
             form_get(body, "act", act, sizeof(act));
@@ -1056,11 +1244,29 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip) {
                 }
                 send_json(cfd, 200, 1, "已触发仪表地图切换（CarPlay ↔ 原车）");
             } else if (strcmp(act, "restart_render") == 0) {
-                if (!g_dry_test) (void)system("slay -f cl_render >/dev/null 2>&1");
+                if (!g_dry_test) {
+                    unlink("/tmp/cl_render_fused");
+                    (void)system("slay -f cl_render >/dev/null 2>&1");
+                }
                 send_json(cfd, 200, 1, "已刷新仪表渲染进程");
             } else if (strcmp(act, "restart_carplay") == 0) {
                 if (!g_dry_test) (void)system("slay -f dio_manager >/dev/null 2>&1");
                 send_json(cfd, 200, 1, "已重启 CarPlay 进程，几秒后自动重连");
+            } else if (strcmp(act, "clear_safe_mode") == 0) {
+                if (!g_dry_test) {
+                    unlink("/tmp/vw_hmi_safe_mode");
+                    unlink("/tmp/vw_dio_safe_mode");
+                    unlink("/tmp/vw_cluster_safe_mode");
+                    unlink("/tmp/cl_render_fused");
+                    mount_app_rw();
+                    unlink(CLUSTER_DIR "/safe_mode");
+                    (void)system("ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/j9_base_crashes");
+                    (void)system("ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/dio_base_cores");
+                    (void)system("ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/render_base_cores");
+                    (void)system("ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " WIFI_DIR "/iopkt_base_cores");
+                    mount_app_ro();
+                }
+                send_json(cfd, 200, 1, "已清除安全模式锁并刷新崩溃基线，建议重启车机生效");
             } else if (strcmp(act, "reboot_hu") == 0) {
                 send_json(cfd, 200, 1, "正在软重启车机...");
                 if (!g_dry_test) {
@@ -1113,7 +1319,7 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v21.0.1 started (iface=%s port=%d)", g_iface, g_http_port);
+    nlog("touareg_netd v22.0 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
 
     uint32_t cur_ip = 0;
     int http_fd = -1, mdns_fd = -1;

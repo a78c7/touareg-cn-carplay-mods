@@ -730,6 +730,9 @@ int run_h264_mode(int argc, char **argv);
 int run_test_mode(int argc, char **argv);
 int run_idle_logo(int argc, char **argv, int default_duration_s);
 int run_canim_splash(int argc, char **argv, int default_duration_s);
+#ifdef USE_DASH
+static int run_gles60_mode(int argc, char **argv);
+#endif
 
 /* Forward declarations for canim helper used by run_h264_mode (defined later
  * in the file alongside run_canim_splash). */
@@ -795,6 +798,11 @@ int main(int argc, char **argv) {
     if (strcmp(capture, "h264") == 0) {
         return run_h264_mode(argc, argv);
     }
+#ifdef USE_DASH
+    if (strcmp(capture, "gles60") == 0) {
+        return run_gles60_mode(argc, argv);
+    }
+#endif
     if (strcmp(capture, "test") == 0) {
         return run_test_mode(argc, argv);
     }
@@ -2410,11 +2418,12 @@ static void dash_setup(int win_w, int win_h) {
     nav_setup(win_w, win_h);
 }
 
-/* poll /tmp/dash.state + /tmp/cluster_cp.state at most every 200 ms; copy changed boxes into pixmaps. */
+/* v22.0: poll /tmp/dash.state every 100 ms (or 33 ms while bar damping animation is in flight); copy changed boxes into pixmaps. */
 static int dash_tick(void) {
     if (!g_dash_pix[0] && !g_dash_pix[1] && !g_nav_pix) return 0;
     uint64_t now = now_us() / 1000ULL;
-    if (now - g_dash_poll_ms < 200) return 0;
+    uint64_t min_iv = g_dash_animating ? 33ULL : 100ULL;
+    if (now - g_dash_poll_ms < min_iv) return 0;
     g_dash_poll_ms = now;
     int ch = dash_poll(now);
     if (ch && g_dash_have) {
@@ -2553,10 +2562,11 @@ static void apply_stage_signals(void) {
             cl_post_buf(dst, pidx, 1);
         }
     }
-    /* idle refresh: no decoded frame for 300 ms -> re-blit pinned clean base frame into a real back buffer */
+    /* idle refresh: no decoded frame for 300 ms (or 33 ms while smooth bar interpolation is active) -> re-blit pinned clean base frame into a real back buffer */
+    uint64_t idle_iv = g_dash_animating ? 33ULL : 300ULL;
     if (dash_tick() && g_dec.scr_ready && g_render_stage == STAGE_RENDERING && g_last_posted_pidx >= 0 &&
         g_have_clean_didx && g_last_clean_didx >= 0 &&
-        (now_us() / 1000ULL) - g_last_post_ms > 300 && (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
+        (now_us() / 1000ULL) - g_last_post_ms >= idle_iv && (now_us() / 1000ULL) >= g_boot_splash_until_ms) {
         int pidx = -1;
         screen_buffer_t dst = cl_pick_render_buf(&pidx);
         if (dst) {
@@ -4368,6 +4378,10 @@ int run_canim_splash(int argc, char **argv, int default_duration_s) {
     }
     return 0;
 }
+
+#ifdef USE_DASH
+#include "gles60.c"
+#endif
 
 /* When built as the standalone aa_cluster_decoder binary (-DSTANDALONE),
  * define g_verbose ourselves and provide a small main() wrapper.

@@ -37,9 +37,9 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           awk -v t="## $TAG" '$0==t{f=1;next} /^## /{f=0} f' RELEASE_NOTES.md > notes.md 2>/dev/null || true
-          printf '\n下载 `touareg-cn-carplay-mods-%s.zip`，解压后把里面的全部内容复制到 FAT32 U 盘根目录，**先运行根目录的「改装设置」勾选要安装的模块并保存**，再上车插盘刷入。\n' "$TAG" >> notes.md
+          printf '\n- **首次安装**：下载 `touareg-cn-carplay-mods-%s.zip`，解压全部内容到 FAT32 U 盘根目录，**先运行「改装设置」勾选模块并保存**再上车刷入。\n- **已装 v22.0+ 无线控制台升级**：直接下载 `touareg-ota-%s.tar`，连热点打开 `http://touareg.local:8080` → 开关运维 → 离线无线升级（SHA-256 校验 + 自动备份回滚）。\n' "$TAG" "$TAG" >> notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "touareg-cn-carplay-mods-$TAG.zip" --clobber
+            gh release upload "$TAG" "touareg-cn-carplay-mods-$TAG.zip" "touareg-ota-$TAG.tar" --clobber
           else
-            gh release create "$TAG" "touareg-cn-carplay-mods-$TAG.zip" --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md --latest
+            gh release create "$TAG" "touareg-cn-carplay-mods-$TAG.zip" "touareg-ota-$TAG.tar" --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md --latest
           fi

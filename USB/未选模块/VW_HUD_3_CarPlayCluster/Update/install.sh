@@ -1,5 +1,7 @@
 #!/bin/ksh
 # VW Touareg CN P-series (MH2p_CN_VWG36_P*): CarPlay map on the instrument cluster, step 3.
+# FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
+echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 # Needs VW_HUD_1_RouteGuidance (dio_cluster.so preloaded into dio_manager) and VW_HUD_2_ClusterNav.
 # - cl_probe.so : preloaded into dio_manager next to dio_cluster.so; advertises a cluster display to the iPhone
 #                 (altScreen), dynamically captures HomeKit pairing pointer, receives + decrypts stream 111 -> /cluster_h264_shm
@@ -70,7 +72,10 @@ if [ "$HAD_CLUSTER" = "0" ]; then
         rm -f $D/switch_off
     fi
 fi
-rm -f $D/disable $D/triple_off $D/tire_ref.state /tmp/ultra_theme /tmp/media_cp.state /tmp/rdk_probe.log
+rm -f $D/disable $D/safe_mode $D/triple_off $D/tire_ref.state /tmp/ultra_theme /tmp/media_cp.state /tmp/rdk_probe.log
+# v22.0: record zero-wear crash baselines for 3-crash safe-mode fuse
+ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > $D/dio_base_cores
+ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > $D/render_base_cores
 ls -l $D
 
 # 2) json: append cl_probe.so to the dio_cluster.so LD_PRELOAD entry

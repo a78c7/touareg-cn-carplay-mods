@@ -1,4 +1,6 @@
 #!/bin/ksh
+# FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
+echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 # VW MH2p: Suppress the recurring "SIM 卡仅用于数据连接。" (PHONE_SIM_DATAONLY) popup when CarPlay / Android Auto connects.
 # - installs shared VWPopupFilter.jar (Java 1.4, version 48) as HMI bundle 98 (orthogonal to bundle 97 VWClusterNav)
 # - enables flag /mnt/app/eso/hmi/lsd/config/popup_filter/no_sim_dataonly

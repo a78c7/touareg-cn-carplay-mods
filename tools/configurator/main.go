@@ -117,7 +117,9 @@ func waitExit(code int) {
 
 func main() {
 	consoleUTF8()
-	fmt.Printf("途锐改装设置 %s\n\n", version)
+	fmt.Printf("途锐改装设置 %s\n", version)
+	fmt.Println("【免费开源 · 严禁售卖】https://github.com/a78c7/touareg-cn-carplay-mods")
+	fmt.Printf("如果您是付费买到本程序或压缩包的，请立即申请退款！非官方协助安装劳务费上限 ¥100。\n\n")
 	root, err := findRoot()
 	if err == nil {
 		err = checkRoot(root)

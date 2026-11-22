@@ -1,6 +1,8 @@
 #!/bin/ksh
 # VW Touareg CN P-series (MH2p_CN_VWG36_P*): CarPlay route guidance -> instrument cluster + HUD, step 2.
-# The jar keeps the file name VWClusterNav_v6.jar; content is v21.1 (also used by VW_HUD_3_CarPlayCluster: event-driven display switching, info box & tire/chassis telemetry).
+# FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
+# The jar keeps the file name VWClusterNav_v6.jar; content is v22.0 (also used by VW_HUD_3_CarPlayCluster).
+echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 # Needs step 1 (VW_HUD_1_RouteGuidance: dio_cluster.so preloaded into dio_manager) already installed.
 # - copies VWClusterNav_v6.jar (Java 1.4 class files, version 48) to /mnt/app/eso/hmi/lsd/jars/, removes older versions
 # - registers it orthogonally as HMI bundle 97 in Bundle.Startup.Lateload without disturbing other bundles (e.g. 98 VWPopupFilter)
@@ -144,7 +146,10 @@ ls -l $JD
 # 2) install updated bundles.properties atomically
 cp -v /tmp/bp_new $B.new && chmod 644 $B.new && mv -f $B.new $B
 rm -f /tmp/bp_new
-# 3) clean legacy pre-v19 Persist directory so two Persist loops never run side-by-side
+# 3) record zero-wear J9 crash baseline for 3-crash safe-mode fuse & clean legacy pre-v19 Persist directory
+mkdir -p /mnt/app/eso/bin/apps/cluster
+ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > /mnt/app/eso/bin/apps/cluster/j9_base_crashes
+rm -f /mnt/app/eso/bin/apps/cluster/safe_mode
 [[ ! -e "/mnt/ota" ]] && mount -t qnx6 /dev/mnanda0t177.16 /mnt/ota 2>/dev/null
 mount -uw /mnt/ota 2>/dev/null || true
 rm -rf /mnt/ota/modkit/Mods/VW_ClusterNav 2>/dev/null

@@ -56,13 +56,22 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:
 .modal.on{display:flex}
 .modal-box{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;width:100%;max-width:360px}
 .pin-err{color:var(--err);font-size:12.5px;margin:8px 0 0;min-height:18px}
+.foss-bar{background:rgba(47,129,247,.12);border-bottom:1px solid rgba(47,129,247,.32);color:#bfdbfe;font-size:11.5px;padding:6px 14px;text-align:center;line-height:1.45}
+.foss-bar b{color:#fff}
+.safe-banner{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.45);border-radius:12px;padding:12px 14px;margin:10px 14px 0;max-width:732px;display:none}
+.safe-banner h3{margin:0 0 4px;font-size:14px;color:var(--warn)}
+.foss-foot{max-width:760px;margin:8px auto 0;padding:10px 14px;font-size:11.5px;color:var(--mut);text-align:center;line-height:1.55;border-top:1px solid rgba(40,50,68,.5)}
+details.opt-card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+details.opt-card>summary{cursor:pointer;font-size:14px;font-weight:700;color:var(--mut);list-style:none;display:flex;align-items:center;justify-content:space-between}
+input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px dashed var(--bd);border-radius:9px;padding:10px;font-size:13px}
 #toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#1f2937;color:#fff;border:1px solid var(--bd);padding:10px 16px;border-radius:10px;font-size:13px;z-index:99;display:none;max-width:92vw;box-shadow:0 10px 28px rgba(0,0,0,.55)}
 </style>
 </head>
 <body>
+<div class="foss-bar"><b>免费开源项目 · 严禁倒卖</b>｜官方源码 github.com/a78c7/touareg-cn-carplay-mods｜如花钱购买本程序或改装包请立即退款</div>
 <header>
   <h1>
-    <span>MH2p 无线控制台</span>
+    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v22.0</span></span>
     <span id="spdBadge" class="badge">连接中...</span>
   </h1>
   <div class="meta">
@@ -71,6 +80,14 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:
     <span id="odoTxt"></span>
   </div>
 </header>
+
+<div id="safeBanner" class="safe-banner" style="margin-left:auto;margin-right:auto">
+  <h3>⚠ 车机当前处于安全模式（已自动跳过部分或全部插件）</h3>
+  <div id="safeReason" class="sub" style="color:#fde68a"></div>
+  <div class="actions" style="margin-top:8px">
+    <button class="btn sm pri write-act" type="button" id="btnClearSafe" onclick="doAct('clear_safe_mode',this)">清除安全模式并刷新崩溃基线</button>
+  </div>
+</div>
 
 <div class="tabs">
   <div class="tab on" data-t="dash">仪表配置</div>
@@ -113,6 +130,7 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:
       <div class="card">
         <h2>运动条、导航卡与车标参数</h2>
         <div class="row"><label>行内运动刻度进度条<span class="sub">转速/扭矩斜切分段条、G 值/坡度中心游标、油温/胎压区间条</span></label><input type="checkbox" id="bars" checked></div>
+        <div class="row"><label>运动条阻尼平滑动画 (smooth)<span class="sub">指数阻尼补间 + 10Hz 遥测，转速/扭矩/G 值条流畅过渡不跳格</span></label><input type="checkbox" id="smooth" checked></div>
         <div class="row stack">
           <label>大字导航信息卡<span class="sub">与左框严格等宽对称（295px），可选仅导航弹出或常驻待机框</span></label>
           <select id="nav_mode">
@@ -170,6 +188,19 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:
       <div class="row"><label>关闭切原车界面保活 (ka_off)<span class="sub">建议保持关闭，防止切收音机 30 秒断联</span></label><input type="checkbox" id="tg_ka_off" onchange="doToggle('ka_off',this.checked)"></div>
       <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放方向反转</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
       <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">v21 默认由 VW_HUD_4 模块开启；取消勾选即允许连按 2 下 OK 键切换地图</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
+      <div class="row"><label>方向盘语音键短按唤 Siri (siri_short)<span class="sub">CarPlay 在线时短按方向盘语音键直接唤出 Siri（原厂长按不受影响；需已装 v22.0 HUD 或 Siri 模块）</span></label><input type="checkbox" id="tg_siri_short" onchange="doToggle('siri_short',this.checked)"></div>
+      <div class="row"><label>独立 60fps GLES2 动画仪表（试验，gles60_mode）<span class="sub">无 CarPlay 地图流时启用独立 OpenGL ES 2.0 60fps 仪表；有 CarPlay 地图流时自动切回地图模式</span></label><input type="checkbox" id="tg_gles60_mode" onchange="doToggle('gles60_mode',this.checked)"></div>
+      <div class="row"><label>手动安全模式 (safe_mode)<span class="sub">勾选后下次重启跳过全部改装插件，快速回归纯原厂状态排障</span></label><input type="checkbox" id="tg_safe_mode" onchange="doToggle('safe_mode',this.checked)"></div>
+    </div>
+    <div class="card">
+      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v22.0</span></h2>
+      <div class="sub" style="margin-bottom:8px">上传从官方 GitHub Release 下载的 <code>touareg-ota-*.tar</code>（最大 6 MB）。流式直写 eMMC 暂存区、逐文件 SHA-256 校验与严格白名单落盘，写入前自动备份当前版本；升级后点下方「软重启车机」生效。</div>
+      <input type="file" id="otaFile" accept=".tar">
+      <div class="actions">
+        <button class="btn pri write-act" type="button" id="btnOtaUpload">校验并安装离线升级包</button>
+        <button class="btn dan write-act" type="button" id="btnOtaRollback" disabled>回滚上一版备份</button>
+      </div>
+      <div id="otaMsg" class="sub" style="margin-top:8px"></div>
     </div>
     <div class="card">
       <h2>快捷运维（仅停车可用）</h2>
@@ -177,6 +208,7 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:
         <button class="btn pri write-act" type="button" onclick="doAct('toggle_map',this)">切换仪表地图 (CarPlay ↔ 原车)</button>
         <button class="btn write-act" type="button" onclick="doAct('restart_render',this)">刷新仪表画面</button>
         <button class="btn write-act" type="button" onclick="doAct('restart_carplay',this)">重连 CarPlay</button>
+        <button class="btn write-act" type="button" onclick="doAct('clear_safe_mode',this)">重置安全模式基线</button>
         <button class="btn dan write-act" type="button" onclick="confirmReboot(this)">软重启车机 (gem-reset)</button>
       </div>
     </div>
@@ -184,13 +216,21 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:
 
   <section id="p-logs" class="pane">
     <div class="card">
-      <h2>行车记录 CSV（U 盘 drive_logs）<button class="btn sm" type="button" onclick="loadStatus()">刷新</button></h2>
-      <div id="driveList" class="sub">加载中...</div>
+      <h2>一键脱敏排障诊断包<button class="btn sm" type="button" onclick="loadStatus()">刷新</button></h2>
+      <div class="sub" style="margin-bottom:8px">自动打包版本、安全模式状态、dash.conf/cl.conf、崩溃文件列表与关键日志尾段，并自动脱敏 Wi-Fi 密码、管理口令、SSH 密钥、手机号/VIN，可直接发给 GitHub Issue 或车友群排障。</div>
+      <div class="actions">
+        <a class="btn pri" id="btnDiagDl" href="#">下载脱敏诊断包 (touareg_diag_sanitized.txt)</a>
+      </div>
     </div>
     <div class="card">
       <h2>车机排障日志（/tmp）</h2>
       <div id="logList" class="sub">加载中...</div>
     </div>
+    <details class="opt-card">
+      <summary><span>进阶（可选）：行车记录 CSV（U 盘 drive_logs）</span><span class="sub" style="margin:0">点击展开</span></summary>
+      <div class="sub" style="margin:8px 0">绝大多数车主无需此功能。若长期插 U 盘记录 CSV，请务必选用品牌正品 U 盘以降低断电写坏 FAT32 的风险。</div>
+      <div id="driveList" class="sub">加载中...</div>
+    </details>
   </section>
 
   <section id="p-dev" class="pane">
@@ -218,6 +258,11 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:
     </div>
   </section>
 </main>
+
+<div class="foss-foot">
+  本固件与控制台完全免费开源（PolyForm Noncommercial 1.0.0 + 附加条款）· 官方仓库：github.com/a78c7/touareg-cn-carplay-mods<br>
+  严禁售卖程序/安装包或商业捆绑；非官方协助安装仅可收取合理劳务费（上限 ¥100），如被高价倒卖请立即退款并举报。
+</div>
 
 <div id="pinModal" class="modal">
   <div class="modal-box">
@@ -389,9 +434,22 @@ function updateHeaderStatus(j){
   else if(j.speed>=0){b.textContent='停车就绪';b.className='badge ok';}
   else{b.textContent='已连接';b.className='badge warn';}
   document.querySelectorAll('.write-act').forEach(btn=>{btn.disabled=driving||busy;});
+  const rb=document.getElementById('btnOtaRollback');
+  if(rb)rb.disabled=driving||busy||!j.has_ota_backup;
+  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v22.0';
+  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v22.0');
   document.getElementById('ipTxt').textContent='地址: touareg.local ('+(j.bcm2_ip||'--')+')';
   document.getElementById('procTxt').textContent='进程: clusterd='+(j.clusterd?'开':'关')+' render='+(j.cl_render?'开':'关');
   document.getElementById('odoTxt').textContent=j.odo>0?('总里程: '+j.odo.toFixed(1)+' km'):'';
+  const sm=j.safe_mode||{};
+  const reasons=[];
+  if(sm.manual)reasons.push('手动安全模式已开启');
+  if(sm.hmi)reasons.push('J9 HMI 连续 3 次崩溃触发熔断');
+  if(sm.dio)reasons.push('dio_manager 连续 3 次崩溃触发熔断');
+  if(sm.cluster)reasons.push('仪表模块连续 3 次崩溃触发熔断');
+  if(sm.render_fused)reasons.push('cl_render 30 秒内连续 3 次崩溃已暂停投屏');
+  document.getElementById('safeBanner').style.display=reasons.length?'block':'none';
+  document.getElementById('safeReason').textContent=reasons.join('；');
 }
 
 async function postForm(url,obj){
@@ -455,6 +513,7 @@ async function loadStatus(){
     R=(d.r_items||'').split(',').map(x=>x.trim()).filter(x=>x&&IMAP[x]);
     lOn=d.show!=0;rOn=d.r_show==1;
     document.getElementById('bars').checked=d.bars!==0;
+    document.getElementById('smooth').checked=d.smooth!==0;
     ['car_up','acc_up','amap_turn','alpha','tank_l','trip_base','nav_tz'].forEach(k=>{
       if(d[k]!==undefined)document.getElementById(k).value=d[k];
     });
@@ -473,6 +532,12 @@ async function loadStatus(){
     document.getElementById('tg_ka_off').checked=!!tg.ka_off;
     document.getElementById('tg_zoom_flip').checked=!!tg.zoom_flip;
     document.getElementById('tg_switch_off').checked=!!tg.switch_off;
+    document.getElementById('tg_siri_short').checked=!!tg.siri_short;
+    document.getElementById('tg_gles60_mode').checked=!!tg.gles60_mode;
+    document.getElementById('tg_safe_mode').checked=!!tg.safe_mode;
+
+    const pq=PIN?('?pin='+encodeURIComponent(PIN)):'';
+    document.getElementById('btnDiagDl').href='/api/diag'+pq;
 
     renderFileList('driveList',S.drive_logs,'drive','未检测到 U 盘 drive_logs 目录或暂无 CSV');
     renderFileList('logList',S.sys_logs,'log','暂无日志');
@@ -496,6 +561,7 @@ document.getElementById('btnSaveDash').onclick=async()=>{
       items:L.join(','),show:lOn?1:0,
       r_items:R.join(','),r_show:rOn?1:0,
       bars:document.getElementById('bars').checked?1:0,
+      smooth:document.getElementById('smooth').checked?1:0,
       car_up:document.getElementById('car_up').value||'0',
       acc_up:document.getElementById('acc_up').value||'0',
       amap_turn:document.getElementById('amap_turn').value||'3',
@@ -527,17 +593,67 @@ document.getElementById('btnSaveCl').onclick=async()=>{
 };
 
 async function doToggle(name,val){
-  try{const j=await postForm('/api/toggle',{name,val:val?1:0});toast(j.msg||'已更新');}
+  try{const j=await postForm('/api/toggle',{name,val:val?1:0});toast(j.msg||'已更新');setTimeout(pollBadgeOnly,600);}
   catch(e){toast('操作失败: '+e.message);document.getElementById('tg_'+name).checked=!val;}
 }
 
 async function doAct(act){
   if(busy)return;
   busy=true;if(S)updateHeaderStatus(S);
-  try{const j=await postForm('/api/action',{act});toast(j.msg||'已执行');setTimeout(pollBadgeOnly,1500);}
+  try{const j=await postForm('/api/action',{act});toast(j.msg||'已执行');setTimeout(loadStatus,1200);}
   catch(e){toast('执行失败: '+e.message);}
   finally{busy=false;if(S)updateHeaderStatus(S);}
 }
+
+document.getElementById('btnOtaUpload').onclick=async()=>{
+  if(busy)return;
+  const f=document.getElementById('otaFile').files[0];
+  if(!f)return toast('请先选择 touareg-ota-*.tar 离线升级包');
+  if(!f.name.endsWith('.tar'))return toast('请上传标准 .tar 格式离线升级包（不要解压，也不要上传 .zip）');
+  if(f.size>6*1024*1024)return toast('升级包超过 6 MB 限制');
+  if(!confirm('确认将 '+f.name+' ('+fmtSz(f.size)+') 写入车机？\n车机会先校验 SHA-256 并自动备份旧版，期间请勿熄火。'))return;
+  busy=true;if(S)updateHeaderStatus(S);
+  const msgEl=document.getElementById('otaMsg');
+  msgEl.textContent='正在上传并校验 SHA-256，请勿关闭页面或熄火...';
+  try{
+    const r=await fetch('/api/ota/upload',{
+      method:'POST',
+      headers:{'X-Pin':PIN,'X-Requested-With':'touareg-webui','Content-Type':'application/octet-stream'},
+      body:f
+    });
+    const j=await r.json();
+    if(r.status===401||j.need_pin){
+      document.getElementById('pinErr').textContent=j.msg||'管理口令错误';
+      document.getElementById('pinModal').classList.add('on');
+      throw new Error(j.msg||'需要验证管理口令');
+    }
+    if(!r.ok||!j.ok)throw new Error(j.msg||('HTTP '+r.status));
+    msgEl.textContent='✓ '+(j.msg||'升级成功，请点击「软重启车机」生效');
+    toast(j.msg||'离线升级成功，请重启车机生效');
+    document.getElementById('otaFile').value='';
+    loadStatus();
+  }catch(e){
+    msgEl.textContent='✗ 升级失败：'+e.message;
+    toast('升级失败: '+e.message);
+  }finally{busy=false;if(S)updateHeaderStatus(S);}
+};
+
+document.getElementById('btnOtaRollback').onclick=async()=>{
+  if(busy)return;
+  if(!confirm('确认回滚到上一次无线升级前的备份？回滚后请点「软重启车机」生效。'))return;
+  busy=true;if(S)updateHeaderStatus(S);
+  const msgEl=document.getElementById('otaMsg');
+  msgEl.textContent='正在从备份恢复旧版文件...';
+  try{
+    const j=await postForm('/api/ota/rollback',{});
+    msgEl.textContent='✓ '+(j.msg||'已回滚备份，请重启车机');
+    toast(j.msg||'已回滚');
+    loadStatus();
+  }catch(e){
+    msgEl.textContent='✗ 回滚失败：'+e.message;
+    toast('回滚失败: '+e.message);
+  }finally{busy=false;if(S)updateHeaderStatus(S);}
+};
 
 document.getElementById('btnAddWifi').onclick=async()=>{
   if(busy)return;

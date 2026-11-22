@@ -8,9 +8,23 @@
 #    that has a "cluster_logs" folder.
 ST=/tmp/cluster_cp.state
 PL=/tmp/vwcn_persist.log
+D_APP=/mnt/app/eso/bin/apps/cluster
 [[ ! -e $ST ]] && : > $ST
 chmod 666 $ST
 echo "boot: $(ls -l $ST)" > $PL
+# v22.0 zero-wear 3-crash safe-mode fuse for J9 HMI bundles (97 & 98):
+# compares /mnt/crashlogs/java count against install baseline without writing to eMMC on normal boots.
+if [[ -f $D_APP/safe_mode ]]; then
+    : > /tmp/vw_hmi_safe_mode
+    echo "SAFE_MODE: manual lock file $D_APP/safe_mode present" >> $PL
+elif [[ -f $D_APP/j9_base_crashes ]]; then
+    base_j9=$(cat $D_APP/j9_base_crashes 2>/dev/null)
+    cur_j9=$(ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}')
+    if [[ -n "$base_j9" && "$cur_j9" -ge $((base_j9 + 3)) ]]; then
+        : > /tmp/vw_hmi_safe_mode
+        echo "FUSE TRIPPED: J9 crashes increased by >=3 (base=$base_j9 cur=$cur_j9) -> /tmp/vw_hmi_safe_mode" >> $PL
+    fi
+fi
 (
 restarted=0
 t=0

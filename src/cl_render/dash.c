@@ -44,10 +44,11 @@ typedef struct {
     int compact;   /* font size: -1 auto (by row count), 0 normal, 1 compact, 2 small */
     int right;     /* x of the box's right edge (0 = width from the content) */
     int bars;      /* 1 = inline sport gauge bars beneath dynamic rows (default), 0 = text only */
+    int smooth;    /* v22.0: 1 = exponential damping interpolation on gauge bars (default), 0 = raw step */
     double trip_base; /* odometer reading (km) where the cluster's Trip was last reset; Trip = odometer - this */
 } dash_conf_t;
 
-static dash_conf_t g_dash_conf = { 1, 5, 164, 200, 90, 5000, 0, 352, -1, 300, 1, 0 };
+static dash_conf_t g_dash_conf = { 1, 5, 164, 200, 90, 5000, 0, 352, -1, 300, 1, 1, 0 };
 
 /* ---- the item catalogue: config key, label (also accepted in items=), unit, sample for column width ---- */
 enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL, IT_BRAKE, IT_STEER, IT_GEAR,
@@ -217,6 +218,7 @@ static void dash_read_conf_line1(const char *l) {
     else if (sscanf(l, "compact = %d", &v) == 1) g_dash_conf.compact = v;
     else if (sscanf(l, "right = %d", &v) == 1) g_dash_conf.right = v;
     else if (sscanf(l, "bars = %d", &v) == 1) g_dash_conf.bars = v ? 1 : 0;
+    else if (sscanf(l, "smooth = %d", &v) == 1) g_dash_conf.smooth = v ? 1 : 0;
 }
 
 static void dash_read_conf_line(const char *l) {
@@ -229,7 +231,8 @@ static void dash_read_conf_line(const char *l) {
     dash_read_conf_line1(l);
     double dv;
     if (sscanf(l, "tank_l = %d", &v) == 1 || sscanf(l, "lat_flip = %d", &v) == 1 || sscanf(l, "trip_base = %lf", &dv) == 1 ||
-        sscanf(l, "alpha = %d", &v) == 1 || sscanf(l, "info_alpha = %d", &v) == 1 || sscanf(l, "bars = %d", &v) == 1) {
+        sscanf(l, "alpha = %d", &v) == 1 || sscanf(l, "info_alpha = %d", &v) == 1 ||
+        sscanf(l, "bars = %d", &v) == 1 || sscanf(l, "smooth = %d", &v) == 1) {
         dash_use(1 - cur); dash_read_conf_line1(l); dash_use(cur);
     }
 }
@@ -872,10 +875,36 @@ static void dash_render_all(const dash_vals_t *v) {
     dash_use(cur);
 }
 
+static dash_vals_t g_dash_tgt, g_dash_sm;
+static int         g_dash_sm_inited;
+static int         g_dash_animating;
+static uint64_t    g_dash_sm_ms;
+
+static int dash_step_f(float *cur, float tgt, float alpha, float eps) {
+    if (DASH_NAN(tgt)) { *cur = tgt; return 0; }
+    if (DASH_NAN(*cur)) { *cur = tgt; return 1; }
+    float d = tgt - *cur;
+    if (d > -eps && d < eps) { *cur = tgt; return 0; }
+    *cur += d * alpha;
+    return 1;
+}
+
+static int dash_step_i(int *cur, int tgt, float alpha, int eps) {
+    if (tgt == -999) { *cur = tgt; return 0; }
+    if (*cur == -999) { *cur = tgt; return 1; }
+    int d = tgt - *cur;
+    if (d >= -eps && d <= eps) { *cur = tgt; return 0; }
+    int step = dash_round((double)d * (double)alpha);
+    if (step == 0) step = d > 0 ? 1 : -1;
+    *cur += step;
+    return 1;
+}
+
 static int dash_poll(uint64_t now_ms) {
-    int want = 0, changed = 0;
+    int want = 0, changed = 0, got_new = 0;
     if (!g_box[0].conf.enabled && !g_box[1].conf.enabled && !g_dash_conf.enabled) {
         want = 0;
+        g_dash_animating = 0;
     } else {
         FILE *f = fopen(DASH_STATE, "r");
         if (!f) f = fopen(DASH_STATE ".new", "r");
@@ -887,13 +916,45 @@ static int dash_poll(uint64_t now_ms) {
                 if (strcmp(l, g_dash_line)) {
                     strncpy(g_dash_line, l, sizeof g_dash_line - 1);
                     g_dash_line[sizeof g_dash_line - 1] = 0;
-                    dash_render_all(&v);
-                    changed = 1;
+                    g_dash_tgt = v;
+                    if (!g_dash_sm_inited || !g_dash_conf.smooth) {
+                        g_dash_sm = v;
+                        g_dash_sm_inited = 1;
+                    }
+                    got_new = 1;
                 }
             }
             fclose(f);
         }
         want = g_dash_last_n >= 0 && now_ms - g_dash_last_new_ms < (uint64_t)g_dash_conf.stale_ms;
+        if (want && g_dash_sm_inited) {
+            if (!g_dash_conf.smooth) {
+                g_dash_animating = 0;
+                if (got_new) { dash_render_all(&g_dash_tgt); changed = 1; }
+            } else {
+                float dt = g_dash_sm_ms ? (float)(now_ms - g_dash_sm_ms) * 0.001f : 0.05f;
+                if (dt < 0.01f) dt = 0.01f;
+                if (dt > 0.15f) dt = 0.15f;
+                g_dash_sm_ms = now_ms;
+                float alpha = 1.0f - expf(-14.0f * dt);
+                /* Keep discrete/text values exact, smoothly interpolate dynamic bars & fast gauges */
+                dash_vals_t prev = g_dash_sm;
+                g_dash_sm = g_dash_tgt;
+                g_dash_sm.rpm = prev.rpm; g_dash_sm.tq = prev.tq; g_dash_sm.ped = prev.ped; g_dash_sm.str = prev.str;
+                g_dash_sm.p = prev.p; g_dash_sm.brk = prev.brk; g_dash_sm.gx = prev.gx; g_dash_sm.gy = prev.gy;
+                int mv = 0;
+                mv |= dash_step_i(&g_dash_sm.rpm, g_dash_tgt.rpm, alpha, 25);
+                mv |= dash_step_i(&g_dash_sm.tq,  g_dash_tgt.tq,  alpha, 4);
+                mv |= dash_step_i(&g_dash_sm.ped, g_dash_tgt.ped, alpha, 1);
+                mv |= dash_step_i(&g_dash_sm.str, g_dash_tgt.str, alpha, 2);
+                mv |= dash_step_f(&g_dash_sm.p,   g_dash_tgt.p,   alpha, 2.0f);
+                mv |= dash_step_f(&g_dash_sm.brk, g_dash_tgt.brk, alpha, 0.4f);
+                mv |= dash_step_f(&g_dash_sm.gx,  g_dash_tgt.gx,  alpha, 0.02f);
+                mv |= dash_step_f(&g_dash_sm.gy,  g_dash_tgt.gy,  alpha, 0.02f);
+                g_dash_animating = mv;
+                if (got_new || mv) { dash_render_all(&g_dash_sm); changed = 1; }
+            }
+        }
     }
     if (want != g_dash_have) { g_dash_have = want; changed = 1; }
     return changed;

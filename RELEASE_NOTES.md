@@ -1,5 +1,26 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v22.0
+- **全链路安全熔断 + `8080` 离线无线升级（OTA）& 脱敏诊断 + 语音键短按 Siri + 10Hz 阻尼平滑与独立 GLES2 60fps 引擎**：
+  - **全链路 3 次崩溃零损耗安全模式自动熔断（正常开机零 eMMC 写入）**：
+    - 保护范围从原 `io-pkt` 扩展至全栈：J9 HMI 插件（Bundle `97` `VWClusterNav` + Bundle `98` `VWPopupFilter`）、`cl_probe.so`（`dio_manager`）以及 `clusterd` / `cl_render`（开机只读比对 `/mnt/crashlogs/` 崩溃计数基线 + 运行期 30 秒连崩 3 次熔断回退原车地图 `[33]`）；
+    - 支持 `8080` 无线控制台顶部告警横幅、手动安全模式开关（`safe_mode`）及一键清除锁并刷新基线。
+  - **手机 `8080` 无线控制台重磅升级（`touareg_netd` v22.0）**：
+    - **离线无线升级（OTA）与一键回滚**：支持直接上传官方 Release 提供的 `touareg-ota-*.tar`（流式直写 `/mnt/app/eso/bin/apps/.ota_stage/pkg.tar`，绝不占 `/tmp` 内存、上限 6 MB），纯 C FIPS 180-4 SHA-256 逐文件校验 + 6 组件严格白名单 + 路径穿越/符号链接拦截，写入前自动备份至 `.ota_backup/`，支持网页一键回滚；
+    - **一键脱敏排障诊断包（`GET /api/diag`）**：自动汇总版本、安全模式状态、配置文件、崩溃列表与关键日志尾段，自动脱敏 Wi-Fi 密码、管理口令、SSH 私钥、手机号与 17 位 VIN。
+  - **方向盘语音键短按直接唤 Siri（新增可选模块 `VW_HUD_5_SiriShortPress` + `8080` 实时开关 `siri_short`）**：
+    - 连接 CarPlay 时短按方向盘语音键直接唤出手机 Siri（无需长按 2 秒），未连接 CarPlay 时保持原车语音，长按不受影响；默认存放于 `USB/未选模块/` 按需勾选（依赖 `VW_HUD_2_ClusterNav`）。
+  - **10Hz 遥测 + 运动条阻尼平滑（`smooth=1`）+ 独立 GLES2 60fps 动画引擎（`gles60.c`）**：
+    - 保留 `v21.1` 稳定的 `capture=h264` 地图投屏与窗口 `58`（`[58, 33]`）覆盖架构无需重写：`Dash.java` 采样提频至 `10Hz`，`dash.c` 新增 `smooth=1` 指数阻尼插值（运动条流畅收敛，稳态巡航自动降回 300ms 零额外 CPU 开销）；
+    - 新增独立 OpenGL ES 2.0 硬件加速引擎 `src/cl_render/gles60.c`（`capture=gles60`，同一窗口 `58`，通过 `eglGetProcAddress` 动态解析 `gl*`、不硬链 `-lGLESv2`，`eglSwapInterval(dpy, 1)` 锁死 60fps VSync），作为全屏 60fps 动画仪表的试验通道与自定义主题模板（`8080` 网页可开关 `gles60_mode`）。
+  - **电脑端离线 CSV 回放与布局预览器（`tools/preview/index.html`）+ AI 无线开发硬件/渲染护栏**：
+    - 浏览器本地即可按 `1920×639` 还原左右 `295px` 信息框、导航卡与原厂斜边参考线，直观对比 `smooth=1` 与 5Hz 阶跃，支持拖入真实 `drive_logs/*.csv` 回放、一键导出 `dash.conf` 与截图分享到 GitHub Discussions；
+    - `README.md` 与 `docs/07` 补齐车机 2 GB RAM、`/tmp` 内存盘、eMMC 零高频写、锁车断电与 CPU 软渲 vs GLES2 60fps 的明确开发界限；行车记录 U 盘折叠收纳为「进阶工具」并标注品牌正品 U 盘建议。
+  - **自研有线 iAP2 导航解析器与免费开源提示完善**：
+    - 有线 CarPlay 导航解析模块重构为独立自研实现（`src/cluster-probe/wired/cl_wired_rg.{h,c}`），并同步在桌面「改装设置」（Windows/Mac）、车机 `8080` 无线控制台与刷机脚本中内嵌醒目的免费开源提示。
+- **验证边界说明**：全套 QNX ARMv7 二进制（`cl_probe.so` / `clusterd` / `cl_render` / `touareg_netd`）、Java 1.4 JAR（`VWClusterNav_v6.jar` / `VWPopupFilter.jar`，全类 major version `48`）及双端 Go 配置器已完成交叉编译、符号/哈希表审计、`cl_wired_rg` & `ota_util` C 单元测试与真实 `touareg-ota-v22.0.tar` 验签回滚回归；`v22.0` 新增车端交互项（语音键短按 Siri、独立 `gles60_mode` 与实车 OTA）待上车进一步实测复核。
+- 包含 v21.1 的全部内容
+
 ## v21.1
 - **国行途锐 P 版全系安全通刷（`MH2p_CN_VWG36_P*`）+ 根治 0.1s 仪表瞬闪原车地图 + 消除静止流 6 秒误断连**：
   - **国行途锐 P 版全系自动通刷与安全熔断**：

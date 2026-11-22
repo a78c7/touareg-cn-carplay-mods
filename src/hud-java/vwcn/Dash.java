@@ -122,7 +122,7 @@ public final class Dash implements Runnable {
                 else if (!want && subscribed) unsubscribe();
                 if (subscribed) write();
                 if (subscribed && logging) DriveLog.flush(nowMs);
-                Thread.sleep(subscribed ? 200 : 1000);
+                Thread.sleep(subscribed ? 100 : 1000);
             }
             if (subscribed) unsubscribe();
         } catch (Throwable t) {

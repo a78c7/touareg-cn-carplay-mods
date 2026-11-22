@@ -1,4 +1,6 @@
 #!/bin/ksh
+# FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
+echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 # VW Touareg CN P-series (MH2p_CN_VWG36_P*): Fix Wireless CarPlay handshake blocked by 5GHz country adaption.
 # On older units (e.g. P9832) upgraded to P2878, the BCM4359 WLAN country code may remain locked to XT/0
 # (2.4GHz channels 1..11 only, no 5GHz channels). P2878 introduced "enable5GHzCountryAdaption":true in

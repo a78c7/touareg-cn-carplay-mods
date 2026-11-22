@@ -277,14 +277,30 @@ int main(int argc, char **argv) {
      * window created later. So the list is now set only after the renderer reports its window
      * (/tmp/cl_render_ready = its pid); a renderer that never reports within 12 s is restarted. */
     int new_stream = 1, stage = 0, zoomed = 0;
+    int fast_crash_cnt = 0, safe_logged = 0, gles_child = 0;
     uint32_t wd_bytes = 0; int wd_init = 0, wd_frozen = 0; time_t wd_last_wake = 0; unsigned wd_seq = 0;
     time_t shown_t = 0;
     const char *did = getenv("CL_DISPID");
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
     char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate10;st", did);   /* ours on top, native 33 kept underneath */
     const char *back_seq = getenv("CL_BACKSEQ") ? getenv("CL_BACKSEQ") : "unhold;33;vis1;rate10;st";
-    logm("clusterd start", getpid());
+    logm("clusterd v22.0 start", getpid());
     for (;;) {
+        int safe_mode = (access("/mnt/app/eso/bin/apps/cluster/safe_mode", F_OK) == 0 ||
+                         access("/tmp/vw_cluster_safe_mode", F_OK) == 0 ||
+                         access("/tmp/cl_render_fused", F_OK) == 0);
+        if (safe_mode) {
+            if (!safe_logged) { logs("safe_mode / render fuse active -> yielding cluster back to stock map [33]"); safe_logged = 1; }
+            if (child > 0) {
+                kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
+                waitpid(child, NULL, 0); child = 0; gles_child = 0; new_stream = 1;
+                rebind(back_seq);
+            }
+            usleep(1000000);
+            continue;
+        }
+        if (safe_logged) { safe_logged = 0; fast_crash_cnt = 0; logs("safe_mode cleared -> clusterd resuming"); }
+
         if (!s) {
             int fd = shm_open("/cluster_h264_shm", O_RDONLY, 0);
             if (fd >= 0) {
@@ -296,6 +312,7 @@ int main(int argc, char **argv) {
         uint32_t flags = s ? s->flags : 0u;
         int flag_on = s && s->magic == 0x48323634u && (flags & 1u);
         int active = flag_on;
+        int want_gles60 = (!active && access("/mnt/app/eso/bin/apps/cluster/gles60_mode", F_OK) == 0);
         /* v21.1 fallback: cl_probe increments upper 24 bits of flags on EVERY stream-111 packet (incl. op=5 keepalive
          * and wait_idr). Only treat a live flag as a crashed dio_manager if BOTH heartbeat and total_bytes freeze for 10 s. */
         if (s) {
@@ -307,13 +324,43 @@ int main(int argc, char **argv) {
             active = 0;
             if (!stall_logged) { logm("shm stall timeout (s*2)", stall); stall_logged = 1; }
         }
-        if (child > 0 && waitpid(child, NULL, WNOHANG) == child) { logm("renderer exited", child); child = 0; }
+        if (child > 0) {
+            int wst = 0;
+            if (waitpid(child, &wst, WNOHANG) == child) {
+                time_t alive = time(NULL) - started;
+                logm("renderer exited", child);
+                child = 0;
+                int was_gles = gles_child;
+                gles_child = 0;
+                /* v22.0: 3 rapid crashes within 30s -> fuse off renderer and restore stock map [33] */
+                if (alive < 30 && (!WIFEXITED(wst) || WEXITSTATUS(wst) != 0)) {
+                    fast_crash_cnt++;
+                    logm("renderer rapid crash count", fast_crash_cnt);
+                    if (fast_crash_cnt >= 3) {
+                        int ffd = open("/tmp/cl_render_fused", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                        if (ffd >= 0) { const char *msg = "3 rapid crashes\n"; (void)write(ffd, msg, strlen(msg)); close(ffd); }
+                        logs("FUSE TRIPPED: cl_render crashed 3 times rapidly -> restored stock map [33]");
+                        rebind(back_seq);
+                        continue;
+                    }
+                } else if (alive >= 60) {
+                    fast_crash_cnt = 0;
+                }
+                (void)was_gles;
+            } else if (time(NULL) - started >= 60 && fast_crash_cnt > 0) {
+                fast_crash_cnt = 0;
+            }
+        }
         if (active) {
             inactive = 0;
+            if (child > 0 && gles_child) {
+                kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
+                waitpid(child, NULL, 0); child = 0; gles_child = 0; new_stream = 1;
+            }
             if (child <= 0) {
                 child = fork();
                 if (child == 0) { execv(argv[1], argv + 1); _exit(127); }
-                started = time(NULL); stage = 0;
+                started = time(NULL); stage = 0; gles_child = 0;
                 if (new_stream) { unlink("/tmp/cl_pan_mode"); new_stream = 0; zoomed = 0; wd_init = 0; wd_frozen = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
                 logm("renderer started", child);
             } else if (stage == 0 && time(NULL) - started >= 2) {
@@ -376,9 +423,35 @@ int main(int argc, char **argv) {
                     }
                 }
             }
+        } else if (want_gles60) {
+            inactive = 0;
+            if (child > 0 && !gles_child) {
+                kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
+                waitpid(child, NULL, 0); child = 0; new_stream = 1;
+            }
+            if (child <= 0) {
+                child = fork();
+                if (child == 0) {
+                    char *gargv[] = { argv[1], "capture=gles60", "xres=1920", "yres=639", NULL };
+                    execv(argv[1], gargv);
+                    _exit(127);
+                }
+                started = time(NULL); stage = 0; gles_child = 1;
+                logm("gles60 standalone renderer started", child);
+            } else if (stage == 0) {
+                char rb[32];
+                if (read_file("/tmp/cl_render_ready", rb, sizeof rb) > 0 && atoi(rb) == child) {
+                    if (strcmp(did, "33") != 0) rebind(show_seq);
+                    stage = 2; shown_t = time(NULL);
+                    logm("gles60 window ready", child);
+                } else if (time(NULL) - started >= 8) {
+                    kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
+                    waitpid(child, NULL, 0); child = 0; gles_child = 0;
+                }
+            }
         } else if (child > 0 && ++inactive >= 6) {   /* ~3 s without stream: release window 33 */
             kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
-            waitpid(child, NULL, 0); logm("renderer stopped", child); child = 0;
+            waitpid(child, NULL, 0); logm("renderer stopped", child); child = 0; gles_child = 0;
             new_stream = 1;
             usleep(500000);
             rebind(back_seq);                 /* back to native map 33, same steps as the VIEW key */

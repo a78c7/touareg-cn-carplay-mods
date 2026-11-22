@@ -5,5 +5,9 @@ __attribute__((visibility("hidden"), used)) double __aeabi_ul2d(unsigned long lo
     volatile uint32_t hi = (uint32_t)(x >> 32), lo = (uint32_t)x;
     return (double)hi * 4294967296.0 + (double)lo;
 }
+__attribute__((visibility("hidden"), used)) float __aeabi_ul2f(unsigned long long x) {
+    volatile uint32_t hi = (uint32_t)(x >> 32), lo = (uint32_t)x;
+    return (float)((double)hi * 4294967296.0 + (double)lo);
+}
 FILE *popen(const char *c, const char *m) { (void)c; (void)m; return NULL; }
 int pclose(FILE *f) { (void)f; return -1; }

@@ -1,4 +1,5 @@
 /touareg-cn-carplay-mods-*.zip
+/touareg-ota-*.tar
 src/out/
 src/hud-java/out/
 src/hud-java/VWClusterNav_*.jar

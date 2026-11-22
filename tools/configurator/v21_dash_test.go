@@ -19,6 +19,7 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 		"未选模块/VW_HUD_2_ClusterNav",
 		"未选模块/VW_HUD_3_CarPlayCluster/Update",
 		"未选模块/VW_HUD_4_OkMapSwitch/Update",
+		"未选模块/VW_HUD_5_SiriShortPress/Update",
 		"未选模块/VW_Wireless5GHzFix",
 		"未选模块/VW_NoBtAuthPopup/Update",
 		"未选模块/VW_NoSimPopup/Update",
@@ -31,17 +32,26 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 
 	p := pkg{Root: tmp}
 
-	// 验证前置依赖校验：单独装 mapswitch 或 cluster 而未勾 hud 应被后端拒绝
+	// 验证前置依赖校验：单独装 mapswitch / siri 而未勾 hud 应被后端拒绝
 	badReq := applyReq{
 		Features: map[string]string{
 			"fullscreen": "skip", "carplay": "skip", "aa": "skip",
-			"hud": "skip", "cluster": "skip", "mapswitch": "install",
+			"hud": "skip", "cluster": "skip", "mapswitch": "install", "siri": "skip",
 			"wifi5gfix": "skip", "nobtauth": "skip", "nosimpopup": "skip", "wifi": "skip",
 		},
 		Dash: defaultDash(),
 	}
 	if _, _, err := p.apply(badReq); err == nil {
 		t.Fatalf("expected dependency validation error when mapswitch=install without hud+cluster")
+	}
+	badSiri := badReq
+	badSiri.Features = map[string]string{
+		"fullscreen": "skip", "carplay": "skip", "aa": "skip",
+		"hud": "skip", "cluster": "skip", "mapswitch": "skip", "siri": "install",
+		"wifi5gfix": "skip", "nobtauth": "skip", "nosimpopup": "skip", "wifi": "skip",
+	}
+	if _, _, err := p.apply(badSiri); err == nil {
+		t.Fatalf("expected dependency validation error when siri=install without hud")
 	}
 
 	req := applyReq{
@@ -52,6 +62,7 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 			"hud":        "install",
 			"cluster":    "install",
 			"mapswitch":  "install",
+			"siri":       "install",
 			"wifi5gfix":  "skip",
 			"nobtauth":   "skip",
 			"nosimpopup": "skip",
@@ -60,6 +71,7 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 		Dash: dashConf{
 			Show:     true,
 			Bars:     true,
+			Smooth:   true,
 			Items:    []string{"torque", "rpm", "g", "oil", "cons"},
 			RShow:    true,
 			RItems:   []string{"tires", "tpfl", "tpfr", "tprl", "tprr", "pitch", "roll", "alt"},
@@ -83,13 +95,16 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 	if !isDir(filepath.Join(tmp, "Mods", "VW_HUD_4_OkMapSwitch")) {
 		t.Fatalf("expected VW_HUD_4_OkMapSwitch in Mods/ when mapswitch=install")
 	}
+	if !isDir(filepath.Join(tmp, "Mods", "VW_HUD_5_SiriShortPress")) {
+		t.Fatalf("expected VW_HUD_5_SiriShortPress in Mods/ when siri=install")
+	}
 
 	got, found := p.readDash()
 	if !found {
 		t.Fatalf("expected dash.conf to be found")
 	}
-	if !got.Bars || !got.OkSwitch || got.NavBox != 2 || got.NavSide != "right" {
-		t.Fatalf("unexpected v21 dash fields: %+v", got)
+	if !got.Bars || !got.Smooth || !got.OkSwitch || got.NavBox != 2 || got.NavSide != "right" {
+		t.Fatalf("unexpected v22 dash fields: %+v", got)
 	}
 	if strings.Join(got.Items, ",") != "torque,rpm,g,oil,cons" {
 		t.Fatalf("unexpected left items: %v", got.Items)
@@ -98,9 +113,10 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected right items: %v", got.RItems)
 	}
 
-	// 关闭运动条并卸载 mapswitch
+	// 关闭运动条、平滑动画并卸载 mapswitch
 	req.Features["mapswitch"] = "uninstall"
 	req.Dash.Bars = false
+	req.Dash.Smooth = false
 	if _, _, err := p.apply(req); err != nil {
 		t.Fatalf("re-apply failed: %v", err)
 	}
@@ -108,8 +124,8 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 		t.Fatalf("expected uninstall.txt in Mods/VW_HUD_4_OkMapSwitch")
 	}
 	got2, _ := p.readDash()
-	if got2.Bars || got2.OkSwitch {
-		t.Fatalf("expected Bars=false OkSwitch=false, got %+v", got2)
+	if got2.Bars || got2.Smooth || got2.OkSwitch {
+		t.Fatalf("expected Bars=false Smooth=false OkSwitch=false, got %+v", got2)
 	}
 
 	// Switch to record mode and verify AI guide contains 34 real sensor columns
@@ -137,8 +153,8 @@ func TestRealUSBPackageAllDefaultOffAndUninstallable(t *testing.T) {
 	if len(st.Errors) > 0 {
 		t.Fatalf("unexpected USB package errors: %v", st.Errors)
 	}
-	if len(features) != 10 {
-		t.Fatalf("expected 10 streamlined features, got %d", len(features))
+	if len(features) != 11 {
+		t.Fatalf("expected 11 streamlined features, got %d", len(features))
 	}
 	for _, f := range features {
 		if st.States[f.ID] != "skip" {
@@ -154,7 +170,7 @@ func TestRealUSBPackageAllDefaultOffAndUninstallable(t *testing.T) {
 			}
 		}
 	}
-	if st.Dash.OkSwitch || !st.Dash.Bars {
-		t.Fatalf("expected OkSwitch=false and Bars=true by default, got OkSwitch=%v Bars=%v", st.Dash.OkSwitch, st.Dash.Bars)
+	if st.Dash.OkSwitch || !st.Dash.Bars || !st.Dash.Smooth {
+		t.Fatalf("expected OkSwitch=false, Bars=true, Smooth=true by default, got OkSwitch=%v Bars=%v Smooth=%v", st.Dash.OkSwitch, st.Dash.Bars, st.Dash.Smooth)
 	}
 }

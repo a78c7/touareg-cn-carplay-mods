@@ -1,8 +1,11 @@
-// cl_alt.so — LD_PRELOAD into dio_manager (VW MH2p P2878, libairplay 320.17.1)
-// Stage 2: log + (if /tmp/cl_alt_on) advertise a cluster display, negotiate altScreen,
-//          accept stream 111 and count/record what the phone sends (no decrypt/decode yet).
+// cl_probe.c — LD_PRELOAD into dio_manager (VW MH2p P-series, libairplay 320.x)
+// CarPlay secondary display (altScreen / stream 111) + ChaCha20-Poly1305 decrypt + Siri tap fallback.
 // Files: /tmp/cl_probe_on -> logging to /tmp/cl_probe.log ; /tmp/cl_alt_on -> injection.
-// Based on the approach of luka-dev/mib2q-carplay-rgi (GPL-3.0).
+// Safety: bypassed cleanly if /mnt/app/eso/bin/apps/cluster/safe_mode or /tmp/vw_dio_safe_mode exists.
+//
+// Copyright (c) 2026 a78c7 (https://github.com/a78c7/touareg-cn-carplay-mods)
+// Licensed under PolyForm Noncommercial License 1.0.0 + LICENSE.ADDITIONAL-TERMS.md
+// FREE & OPEN SOURCE — STRICTLY PROHIBITED FOR COMMERCIAL SALE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -167,17 +170,20 @@ static void plog_cf(const char *tag, const void *obj, size_t maxlen) {
 }
 
 #define R(v, n) v = (void *)dlsym(RTLD_DEFAULT, n)
+static int g_safe_mode;
 static void init_once(void) {
     struct stat st;
+    g_safe_mode = (stat("/mnt/app/eso/bin/apps/cluster/safe_mode", &st) == 0 ||
+                   stat("/tmp/vw_dio_safe_mode", &st) == 0);
     g_log = (stat("/tmp/cl_probe_on", &st) == 0);
-    g_alt = (stat("/tmp/cl_alt_on", &st) == 0);
-    if (g_log || g_alt) {
+    g_alt = g_safe_mode ? 0 : (stat("/tmp/cl_alt_on", &st) == 0);
+    if (g_log || g_alt || g_safe_mode) {
         g_fd = open("/tmp/cl_probe.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
         if (g_fd >= 0) fchmod(g_fd, 0666);
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v21.1 loaded pid=%d uid=%d log=%d alt=%d", getpid(), getuid(), g_log, g_alt);
+    plog("cl_alt v22.0 loaded pid=%d uid=%d log=%d alt=%d safe=%d", getpid(), getuid(), g_log, g_alt, g_safe_mode);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -305,6 +311,24 @@ static int send_cluster_night(int night) {
     cf_rel(cmd);
     plog("cluster setNightMode %d rc=%d", night, rc);
     return rc;
+}
+/* v22.0: Siri short-press fallback command over AirPlay control channel (buttonDown=1 -> buttonUp=2) */
+static int send_siri_tap(void) {
+    static fn_sendcmd_t sc; if (!sc) sc = (fn_sendcmd_t)dlsym(RTLD_DEFAULT, "AirPlayReceiverSessionSendCommand");
+    void *sess = g_session;
+    if (!sc || !sess || cf_ready <= 0) return -1;
+    int rc1 = -1, rc2 = -1;
+    for (int step = 0; step < 2; step++) {
+        void *cmd = cf_dictm(0, 0, dkey_cb, dval_cb), *p = cf_dictm(0, 0, dkey_cb, dval_cb);
+        set_str(cmd, "type", "requestSiri");
+        set_i64(p, "siriAction", step == 0 ? 1 : 2);
+        set_obj(cmd, "params", p); cf_rel(p);
+        int rc = sc(sess, cmd, (void *)cmd_done, (void *)(step == 0 ? "requestSiri(down)" : "requestSiri(up)"));
+        cf_rel(cmd);
+        if (step == 0) { rc1 = rc; usleep(120000); } else rc2 = rc;
+    }
+    plog("cmd 'siri' tap sent rc1=%d rc2=%d", rc1, rc2);
+    return (rc1 == 0 && rc2 == 0) ? 0 : -1;
 }
 static char g_cluster_url[512];      /* from the phone's suggestUI (AMap sends none) */
 static volatile int g_ui = -1;        /* runtime override ("ui N" command), else g_cfg_ui */
@@ -607,6 +631,9 @@ static void *rx_thread(void *arg) {
                             if (z) usleep(60000);
                             send_cmd_ex("changeMapZoomLevel", NULL, "zoomDirection", w[4] == 'i' ? 0 : 1, NULL, 0, 0);
                         }
+                    else if (!strcmp(w, "siri")) {
+                        send_siri_tap();
+                    }
                     else if (!strcmp(w, "replay")) {
                         if (g_gop_valid && g_gopn) {
                             uint32_t off = 0; while (off < g_gopn) { uint32_t c = g_gopn - off > 65536 ? 65536 : g_gopn - off; shm_write(g_gop + off, c); off += c; }

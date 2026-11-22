@@ -8,6 +8,7 @@ SSH_DIR=/mnt/app/root/.ssh
 AK=$SSH_DIR/authorized_keys
 
 echo "=== VW_WiFi_Dev install ($RELEASE_VERSION) ==="
+echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 
 # 1) 先确保 /mnt/app 已挂载，再校验车机基础组件（不锁死单一小版本）
 [[ ! -e "/mnt/app/eso" ]] && mount -t qnx6 /dev/mnanda0t177.1 /mnt/app
@@ -100,6 +101,7 @@ else
 fi
 
 ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/iopkt_base_cores"
+echo "v22.0" > "$D/ota_version"
 rm -f "$D/disable"
 sync
 # 注意：绝不能在此执行 mount -ur /mnt/app，上游 modkit_install.sh 后续仍需写入 /mnt/app/eso/bin/servicemgrmibhigh

@@ -1,4 +1,6 @@
 #!/bin/ksh
+# FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
+echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 # VW MH2p: Suppress the recurring Bluetooth OBEX authentication "输入用户名" popup
 # (Busrlo / BLUETOOTH_UID_SPELLER_REQ__LatinOnly, event BLUETOOTH_CONNECT_AUTH_REQUIRED).
 # - installs shared VWPopupFilter.jar (Java 1.4, version 48) as HMI bundle 98 (orthogonal to bundle 97 VWClusterNav)

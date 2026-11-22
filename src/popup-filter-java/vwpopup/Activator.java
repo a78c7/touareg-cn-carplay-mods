@@ -32,6 +32,8 @@ public final class Activator implements BundleActivator, Runnable, InvocationHan
     private static final String LOG_PATH = "/tmp/vw_popup_filter.log";
     private static final long LOG_MAX = 65536L;
     private static final String BYPASS_FLAG = "/tmp/vw_popup_filter_off";
+    private static final String SAFE_MODE_APP = "/mnt/app/eso/bin/apps/cluster/safe_mode";
+    private static final String SAFE_MODE_TMP = "/tmp/vw_hmi_safe_mode";
     private static final String FLAG_DIR = "/mnt/app/eso/hmi/lsd/config/popup_filter";
     private static final String ALT_FLAG_DIR = "/eso/hmi/lsd/config/popup_filter";
     private static final String FLAG_SIM = FLAG_DIR + "/no_sim_dataonly";
@@ -62,7 +64,11 @@ public final class Activator implements BundleActivator, Runnable, InvocationHan
 
     public void start(BundleContext ctx) throws Exception {
         try {
-            log("VWPopupFilter v1.0 Activator.start");
+            if (new File(SAFE_MODE_APP).exists() || new File(SAFE_MODE_TMP).exists()) {
+                log("VWPopupFilter v1.1: safe_mode active, bypassing hook");
+                return;
+            }
+            log("VWPopupFilter v1.1 Activator.start");
             Thread t = new Thread(this, "vw-popup-filter");
             t.setDaemon(true);
             t.start();
@@ -132,7 +138,9 @@ public final class Activator implements BundleActivator, Runnable, InvocationHan
     }
 
     private void refreshFlags() {
-        bypassed = new File(BYPASS_FLAG).exists();
+        bypassed = new File(BYPASS_FLAG).exists()
+            || new File(SAFE_MODE_APP).exists()
+            || new File(SAFE_MODE_TMP).exists();
         blockSim = new File(FLAG_SIM).exists() || new File(ALT_FLAG_SIM).exists();
         blockBtAuth = new File(FLAG_BT_AUTH).exists() || new File(ALT_FLAG_BT_AUTH).exists();
     }

@@ -1,11 +1,21 @@
 package vwcn;
 
+import java.io.File;
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 
 public class Activator implements BundleActivator {
+    private static boolean isSafeMode() {
+        return new File("/mnt/app/eso/bin/apps/cluster/safe_mode").exists()
+            || new File("/tmp/vw_hmi_safe_mode").exists();
+    }
+
     public void start(BundleContext ctx) throws Exception {
-        Log.log("VWClusterNav v21.1 Activator.start called");
+        if (isSafeMode()) {
+            Log.log("VWClusterNav v22.0: safe_mode active, bypassing all HMI hooks");
+            return;
+        }
+        Log.log("VWClusterNav v22.0 Activator.start called");
         try {
             Bridge.startThread();
             Log.log("bridge thread started");
@@ -27,6 +37,12 @@ public class Activator implements BundleActivator {
         } catch (Throwable t) {
             Log.log("keyprobe start error: " + t);
         }
+        try {
+            SiriShort.start();
+            Log.log("siri short-press thread started");
+        } catch (Throwable t) {
+            Log.log("siri short-press start error: " + t);
+        }
     }
 
     public void stop(BundleContext ctx) throws Exception {
@@ -35,6 +51,7 @@ public class Activator implements BundleActivator {
             Dash.stop = true;
             Rebind.stop = true;
             KeyProbe.stop = true;
+            SiriShort.stop = true;
             Bridge.stopThread();
         } catch (Throwable t) {
             Log.log("Activator.stop error: " + t);

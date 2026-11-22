@@ -63,3 +63,42 @@
   - 所有修改类接口先读 `/tmp/dash.state` 里的实时车速，车速 > 3 km/h 时拒绝写入，只允许停车状态改配置；
   - 写 `dash.conf`、`cl.conf`、`wpa.conf` 一律走同分区 `.new` 写入 + `fsync` + `rename` 原子替换，写完立刻把 `/mnt/app` 恢复只读挂载（`mount -ur /mnt/app`）。
 - **按需分离权限**：普通车主在「改装设置」里不勾选开发终端时，模块写入 `no_ssh` 标记，车机只开放 `8080` 网页控制台和 `5353` mDNS，不启动 `2012` 端口、也不写登录公钥；如果安装在未刷途锐仪表模块的同平台其他品牌 MH2p 车机上，网页检测到没有 `dash.conf` 会自动隐藏途锐专属仪表卡片，保留 Wi-Fi 管理、系统日志下载和车机软重启功能。
+
+## 8. 离线无线升级（OTA）与一键回滚（v22.0）
+
+已安装 `v22.0+` 无线控制台后，后续升级核心程序不再需要反复拔插 U 盘：
+
+- **流式落盘（零 `/tmp` 内存压力）**：在手机浏览器打开 `http://touareg.local:8080` → **开关运维 → 离线无线升级**，上传从官方 Release 下载的 `touareg-ota-<版本>.tar`（上限 `6 MB`）。`touareg_netd` 以 16 KB 分块流式直写至 `/mnt/app/eso/bin/apps/.ota_stage/pkg.tar`，绝不把升级包缓存在 `/tmp` 内存盘中。
+- **严格校验与白名单**：解析 POSIX `ustar` 归档时强制拒绝 `..` 路径穿越、子目录、符号链接与设备节点，仅放行 6 个白名单核心组件（`cl_render`、`clusterd`、`cl_probe.so`、`touareg_netd`、`VWClusterNav_v6.jar`、`VWPopupFilter.jar`），并逐一对照包内 `manifest.sha256` 完成纯 C FIPS 180-4 SHA-256 校验；任意一个字节不匹配即整体中止，不触碰车机任何现役文件。
+- **自动备份与一键回滚**：校验通过后先将车机现役文件复制到 `/mnt/app/eso/bin/apps/.ota_backup/`，再用同分区 `.new` → `fsync` → `rename` 原子替换并立刻把 `/mnt/app` 恢复只读。若新版异常，可在网页点 **「回滚上一版备份」** 一键还原。
+
+## 9. 一键脱敏排障诊断包（v22.0）
+
+在 `8080` 控制台 **日志导出** 页点击 **「下载脱敏诊断包」**（`GET /api/diag`），车机会在内存中即时组装 `touareg_diag_sanitized.txt`，包含：当前版本与安全模式熔断状态、全部开关位、`dash.conf`/`cl.conf`、`/mnt/crashlogs/{java,core}` 文件名列表、以及白名单内 `/tmp/*.log` 末尾 12 KB 摘要。
+
+输出前逐行经 `diag_sanitize_line()` 过滤器脱敏，自动把 `psk`、`pin`、`password`、`key`、`token`、SSH 私钥块、17 位车架号（VIN）与 11 位手机号替换为 `[REDACTED]`，方便直接发往 GitHub Issue 或车友群定位问题。
+
+## 10. 3 次崩溃零闪存损耗安全模式熔断（v22.0）
+
+为避免自定义改件或 AI 误改代码导致车机反复崩溃死循环，`v22.0` 将原本仅覆盖 `io-pkt` 的零损耗熔断机制扩展至**全链路四个核心节点**：
+
+| 保护目标 | 基线记录文件（仅安装/重置时写 1 次） | 触发条件（开机只读比对，零 eMMC 写入） | 熔断行为 |
+| :--- | :--- | :--- | :--- |
+| J9 HMI 插件（Bundle 97 / 98） | `cluster/j9_base_crashes` | `/mnt/crashlogs/java/*` 新增 ≥ 3 次 | 创建 `/tmp/vw_hmi_safe_mode`，跳过 `VWClusterNav` 与 `VWPopupFilter` |
+| CarPlay 探针（`cl_probe.so`） | `cluster/dio_base_cores` | `dio_manager*.core.gz` 新增 ≥ 3 次 | 创建 `/tmp/vw_dio_safe_mode`，探针直通原厂不做拦截 |
+| 仪表渲染守护（`clusterd` / `cl_render`） | `cluster/render_base_cores` + 运行期 30 秒计数 | 新增 ≥ 3 次 core，或 `cl_render` 30 秒内连崩 3 次 | 写 `/tmp/cl_render_fused` 并切回原车地图 `[33]` |
+| 无线网络栈（`VW_WiFi_Dev`） | `wifi_dev/iopkt_base_cores` | `io-pkt-v6-hc*.core.gz` 新增 ≥ 1 次 | 停止拉起 `bcm2`，不碰原车网络栈 |
+
+随时也可在 `8080` 网页勾选 **「手动安全模式（`safe_mode`）」** 临时退回纯原厂；排除故障后点 **「清除安全模式并刷新崩溃基线」** 即可恢复。
+
+## 11. AI 无线开发边界与车机硬件护栏（开发者与 AI 必读）
+
+无论你用 DeepSeek Harness、Claude Code、Cursor 还是安卓端 DSH Go 无线修改车机，都请把以下 5 条硬件硬边界写进工作流程，避免“AI 写得没错、但把车机拖卡或写伤闪存”：
+
+1. **内存总量仅 ~2 GB，且 `/tmp` 是内存盘（tmpfs）**：禁止往 `/tmp` 拷大文件、未截断的无限增长日志、或把多帧未压缩 `1920×639` RGBA 位图常驻堆内存；新增常驻进程内存占用应压在 20 MB 以内。
+2. **eMMC 寿命红线（禁止高频写闪存）**：`/mnt/app`、`/mnt/ota`、`/mnt/system` 均为车规 eMMC 闪存。**绝对不要**把每秒数次的传感器数据、心跳计数或状态缓存写进 `/mnt/app`（必须放 `/tmp` 内存盘）；`/mnt/app` 平时始终保持只读挂载，仅在保存配置或 OTA 时短暂 `mount -uw`，用 `.new` + `fsync` + `mv` 原子替换后立即 `sync && mount -ur /mnt/app`。
+3. **锁车休眠与电瓶寄生耗电**：熄火锁车后 MH2p 主机随整车 CAN 总线休眠彻底断电，本仓库所有后台服务均随主机一同停止，**不会产生锁车静态寄生耗电**；开发新功能时严禁尝试阻止车机电源管理（`ooc`）休眠。
+4. **渲染架构与帧率边界（CPU 软渲 vs OpenGL ES 2.0 硬件加速）**：
+   - `cl_render` 默认的 **`capture=h264`** 模式采用 **Tegra K1 NVDEC 硬解 + QNX `screen_blit` 硬件合成**，`dash.c` 仅在 CPU 上绘制两侧 `295×344` 小框。这套架构显示数字与轻量运动条极稳，配合 `v22.0` 的 `10Hz` 采样 + `smooth=1` 指数阻尼插值已足够跟手；**但千万不要让 AI 在 `dash.c` 里用 CPU 循环做全屏 `1920×639` 逐像素动画或高频大面积重绘**，否则必然掉帧发卡！
+   - 若要实现 **全屏 60fps 仪表指针、弧形转速表、发光渐变或自定义动效主题**，请使用 `v22.0` 新增的独立 OpenGL ES 2.0 硬件加速引擎 **`src/cl_render/gles60.c`**（运行参数 `capture=gles60`，同一窗口 `58`，以 `eglSwapInterval(dpy, 1)` 锁死硬件 VSync 60fps，并用 `eglGetProcAddress` 动态解析 `gl*` 符号、绝不直接链接 `-lGLESv2`）。
+5. **先本地回放预览，再上车验证**：修改信息框布局或动画参数前，先在电脑双击打开 [`tools/preview/index.html`](../tools/preview/index.html)，拖入真实 `drive_logs/*.csv` 或切换内置场景实时预览，确认观感与帧率后再上车部署，并欢迎把满意的 `dash.conf` 与截图发到仓库 **GitHub Discussions** 共享给车友。
