@@ -10,7 +10,7 @@
   <a href="#许可证"><img src="docs/img/badges/license.svg" alt="License PolyForm Noncommercial 1.0"></a>
 </p>
 
-**不拆螺丝、单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与运动信息框，支持手机 `8080` 签名 OTA 与无线开发。**
+**单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与运动信息框，支持手机 `8080` 签名 OTA 与无线开发。**
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载稳定版（v22.1）</b></a> ·

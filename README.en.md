@@ -10,7 +10,7 @@
   <a href="#license"><img src="docs/img/badges/license.svg" alt="License PolyForm Noncommercial 1.0"></a>
 </p>
 
-**Zero-disassembly single-USB unlock for full-screen / wireless CarPlay, HUD navigation, digital cluster map & sport telemetry boxes — with mobile `8080` signed OTA and wireless SSH development.**
+**Single-USB unlock for full-screen / wireless CarPlay, HUD navigation, digital cluster map & sport telemetry boxes — with mobile `8080` signed OTA and wireless SSH development.**
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Stable Release (v22.1)</b></a> ·

@@ -10,7 +10,7 @@
   <a href="#lizenz"><img src="docs/img/badges/license.svg" alt="License PolyForm Noncommercial 1.0"></a>
 </p>
 
-**Ein-USB-Stick-Modifikationspaket ohne Ausbau für Vollbild- & Wireless-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte & Sport-Infoboxen — inkl. Handy-Web-Konsole (`8080`), Ed25519-signiertem Offline-OTA und WLAN-SSH.**
+**Ein-USB-Stick-Modifikationspaket für Vollbild- & Wireless-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte & Sport-Infoboxen — inkl. Handy-Web-Konsole (`8080`), Ed25519-signiertem Offline-OTA und WLAN-SSH.**
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Stabile Version (v22.1)</b></a> ·
