@@ -15,7 +15,9 @@
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载最新版（v22.1）</b></a> ·
   <a href="#4-步免拆刷入安装"><b>⚡ 4 步安装</b></a> ·
-  <a href="#11-大可选功能全景"><b>🧩 功能清单</b></a>
+  <a href="#11-大可选功能全景"><b>🧩 功能清单</b></a> ·
+  <a href="README.en.md"><b>🇺🇸 English</b></a> ·
+  <a href="README.de.md"><b>🇩🇪 Deutsch</b></a>
 </p>
 
 <p><sub>觉得有帮助欢迎点右上角 <b>⭐ Star</b> 支持；如需第一时间收到新版发版提醒，请点 <b>👀 Watch → Custom → 勾选 Releases</b>。</sub></p>
@@ -225,34 +227,6 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 - **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)**（[官网](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)）：免拆 U 盘刷机框架及可选 `AppleCarPlay` / `AndroidAuto` 模块（[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)，其中安卓修复引用了 [fifthBro/pcm5-androidauto-connect-fix](https://github.com/fifthBro/pcm5-androidauto-connect-fix)）。
 - **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)** & **[mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**：`dio_cluster.so`（v0034）与 `cl_render` 上游基础（[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)）。
 - **[davecozens / touareg-carplay](https://github.com/davecozens/touareg-carplay)**：全屏几何数值参考；**[luka-dev](https://github.com/luka-dev)**：`jxe2jar`、`qnx65-armv7-toolchain` 编译与逆向工具链。
-
-</details>
-
-<details>
-<summary><b>🇺🇸 English Overview — VW Touareg (CN) &amp; MH2p Open Cockpit</b></summary>
-
-<br>
-
-One zero-disassembly USB flash for China-market VW Touareg P-series units (`MH2p_CN_VWG36_P*` — end-to-end verified on `P2878`, auto-probing & safe-skipping incompatible sub-patches on other CN `P*` builds, skipping non-CN/other vehicles), plus an open wireless web console, Ed25519-signed offline OTA updater, and SSH development base for **MH2p (MIB2+ High)** units across **VW, Audi, Porsche PCM 5, Bentley, and Lamborghini**:
-
-- **11 Opt-in Modules (all disabled by default under `USB/未选模块/`, independently installable & uninstallable)**: Full-screen CarPlay (38-byte in-place patch), wireless CarPlay & Android Auto (upstream LawPaul modules), HUD turn-by-turn (wireless `libesoiap2` & clean-room wired Cinemo iAP2), `1920×639` cluster map with vision-based AMap centering, `OK` double-tap stock-map toggle (`VW_HUD_4_OkMapSwitch`), steering-wheel voice short-press Siri (`VW_HUD_5_SiriShortPress`), symmetrical `295px` **46px bold telemetry boxes with 10 Hz damped sport gauge bars (`smooth=1`, 43 real DSI channels)**, **large-font navigation card** (`nav_box=1/2`), standalone **60 fps GLES2 animation engine** (`gles60.c`), `VW_Wireless5GHzFix`, and shared Bundle 98 popup filters (`VW_NoBtAuthPopup` / `VW_NoSimPopup`).
-- **Wireless Console, Signed Offline OTA & Zero-Wear Safe Mode (`VW_WiFi_Dev`)**: Connects via idle `bcm2` STA (`dhcp.client -n -R`, preserving 5 GHz RSDB wireless CarPlay and `ecm0` telematics). Open `http://touareg.local:8080` (fail-closed `X-Pin` auth with on-cluster auto-generated setup PIN, per-IP exponential backoff, parked-only lock) for live config, **Ed25519-signed & SHA-256 verified** allowlisted `.tar` offline OTA & one-click rollback (`v22.01` and earlier must upgrade to `v22.1` via USB once), one-click sanitized diagnostic bundle download, 3-crash zero-wear safe-mode management, or optional key-only **Wireless SSH (`:2012`)**. Preview layouts locally via [`tools/preview/index.html`](tools/preview/index.html).
-- **Install**: Format a ≤ 32 GB **FAT32** USB drive → extract the [latest release zip](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) (verify with `SHA256SUMS.txt`) to the USB root → **run `改装设置（Windows）.exe` or `改装设置（Mac）.command` to select modules & save (required, as all modules default to off)** → start engine, insert USB, wait for reboots, remove when prompted.
-- **Docs & License**: Full Chinese engineering docs (`01–07`) & platform reference (`R1–R5`) in [`docs/README.md`](docs/README.md). Original code under **PolyForm Noncommercial 1.0.0** + [Additional Terms](LICENSE.ADDITIONAL-TERMS.md); third-party components per [`LICENSES/THIRD_PARTY_NOTICES.md`](LICENSES/THIRD_PARTY_NOTICES.md). **Personal, non-commercial use only; strict anti-resale; use entirely at your own risk.**
-
-</details>
-
-<details>
-<summary><b>🇩🇪 Deutsch — VW Touareg &amp; MH2p Open Cockpit</b></summary>
-
-<br>
-
-Ein-USB-Stick-Modifikationspaket ohne Ausbau für den **VW Touareg III (CR)** mit **MH2p-Steuergerät (MIB2+ High)** sowie offene drahtlose Web-Konsole, Ed25519-signiertes Offline-OTA & SSH-Entwicklungsbasis für **VW, Audi, Porsche (PCM 5), Bentley und Lamborghini (LIS III)**:
-
-- **11 optionale Module (standardmäßig alle deaktiviert unter `USB/未选模块/`, einzeln installier- und deinstallierbar)**: Vollbild-CarPlay (38-Byte-In-Place-Patch), Wireless CarPlay & Android Auto (LawPaul), HUD-Abbiegehinweise (Wireless & Clean-Room Wired Cinemo), `1920×639` Kombiinstrument-Karte inkl. **OK-Doppelklick-Umschaltung (`VW_HUD_4_OkMapSwitch`)** & **Sprachtaste-Kurzdruck-Siri (`VW_HUD_5_SiriShortPress`)**, symmetrische `295px` **Großschrift-Sport-Infoboxen mit 10-Hz-gedämpften Balken (`smooth=1`, 43 echte DSI-Kanäle)**, **Großschrift-Navigationskarte** (`nav_box=1/2`), eigenständige **60-fps-GLES2-Engine (`gles60.c`)**, `VW_Wireless5GHzFix` sowie gemeinsame Bundle-98-Popup-Filter (`VW_NoBtAuthPopup` / `VW_NoSimPopup`).
-- **Drahtlose Web-Konsole, signiertes Offline-OTA & 3-Crash-Safe-Mode (`VW_WiFi_Dev`)**: Hintergrundverbindung über `bcm2` (`http://touareg.local:8080`, Fail-Closed-`X-Pin`-Auth mit Auto-PIN im Kombiinstrument, Park-Sperre > 3 km/h) mit **Ed25519-signiertem & SHA-256-geprüftem** Offline-OTA + Rollback (`v22.01` und älter erfordern einmaliges USB-Upgrade auf `v22.1`), anonymisiertem Diagnosepaket, 3-Absturz-Schutzschaltung (ohne eMMC-Verschleiß) und optionalem Key-only **WLAN-SSH (`:2012`)**.
-- **Hinweis für EU-Fahrzeuge (z. B. `P2869`)**: Touareg-UI-Skripte prüfen auf chinesische P-Stände (`MH2p_CN_VWG36_P*`) und brechen auf EU-/anderen Ständen sicher ohne Änderungen ab; Architektur, `docs/` (`01–07`, `R1–R5`), Quellcode (`src/`), `tools/preview/index.html` und `VW_WiFi_Dev` dienen direkt als Basis (siehe auch [Touareg-Freunde-Thread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)).
-- **Lizenz & Haftungsausschluss**: Eigener Code unter **PolyForm Noncommercial 1.0.0** + [Zusatzbedingungen](LICENSE.ADDITIONAL-TERMS.md); Drittkomponenten gemäß [`LICENSES/THIRD_PARTY_NOTICES.md`](LICENSES/THIRD_PARTY_NOTICES.md). **Ausschließlich für den privaten, nicht-kommerziellen Gebrauch; Weiterverkauf streng untersagt; Nutzung auf eigene Gefahr.**
 
 </details>
 
