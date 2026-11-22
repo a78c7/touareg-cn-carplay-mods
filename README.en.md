@@ -119,7 +119,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 ## Credits
 
-- **[luanqibazao0123-bot](https://github.com/luanqibazao0123-bot)** ([#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)): Inspired the `v21` bold sport gauge redesign and provided real-world `P2878` upgrade testing clues.
+- **[luanqibazao0123-bot](https://github.com/luanqibazao0123-bot)** ([#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)): Inspired the `v21` bold sport gauge redesign and the `60fps` cluster engine, and provided real-world `P2878` upgrade testing clues.
 - **International Community**: Referenced by the German Touareg-Freunde community in the [EU MH2p P2869 cluster CarPlay thread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/).
 - **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)** ([Site](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)): Zero-disassembly USB ModKit framework and optional `AppleCarPlay` / `AndroidAuto` modules ([CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md), incorporating [fifthBro/pcm5-androidauto-connect-fix](https://github.com/fifthBro/pcm5-androidauto-connect-fix)).
 - **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)** & **[mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**: Upstream `dio_cluster.so` (v0034) and `cl_render` base ([CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)).
