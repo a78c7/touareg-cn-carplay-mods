@@ -1,5 +1,5 @@
 #!/bin/ksh
-# VW Touareg CN (MH2p_CN_VWG36_P2878): Disable steering-wheel OK double-tap map switch.
+# VW Touareg CN P-series (MH2p_CN_VWG36_P*): Disable steering-wheel OK double-tap map switch.
 
 D=/mnt/app/eso/bin/apps/cluster
 

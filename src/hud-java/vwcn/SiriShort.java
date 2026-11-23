@@ -19,7 +19,7 @@ import org.dsi.ifc.base.DSIListener;
  * 1. 纯 Java 1.4 (class version 48)，全反射 + Proxy 调用，不引入任何新编译期桩类；
  * 2. 仅在 CarPlay 已连接且语音键发生短按（< 550ms，未触发长按）时触发；
  * 3. 首选反射调用原厂 org.dsi.ifc.carplay.DSICarPlay.requestSIRIAction（ButtonDown -> ButtonUp
- *    走车机原厂音频/麦克风路由），并同步发送 /tmp/cl_alt_cmd "siri" 作为兜底；
+ *    走车机原厂音频/麦克风路由），仅在 DSI 调用失败时回退发送 /tmp/cl_alt_cmd "siri" 兜底；
  * 4. 命中安全模式或开关不存在时自动退订，零开销不干扰原厂语音。
  */
 public final class SiriShort implements Runnable, InvocationHandler {

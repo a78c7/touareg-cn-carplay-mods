@@ -157,7 +157,7 @@ public final class Dash implements Runnable {
     }
 
     private void updateEstGear() {
-        // 1=P, 2=R, 3=N; 4/13=D, 5/11=S, 6/7/10/12=M, 8=E
+        // 1=P, 2=R, 3=N; 4/13=D, 5/11=S, 6/7/10/12=M, 8=E, 9=B
         if (lever < 4 || lever > 13) {
             estGear = 0;
             candGear = 0;

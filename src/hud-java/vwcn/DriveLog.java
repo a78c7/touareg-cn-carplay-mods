@@ -79,7 +79,7 @@ final class DriveLog {
         chunk = "/tmp/drv_" + session + "_" + s + ".csv";
         chunkStart = now;
         write(CUR, chunk + "\n", false);   // before the chunk exists: the copier must not take it
-        if (first) append(chunk, "# VWClusterNav v22.01 drive log, session " + session + " (head-unit clock), start t_ms=" + now
+        if (first) append(chunk, "# VWClusterNav v23.0 drive log, session " + session + " (head-unit clock), start t_ms=" + now
             + "; empty = not available; ay in g, ax in m/s2; cons_unit 0=L/100km 1=km/L 2=L/h\n" + COLUMNS + "\n");
     }
 

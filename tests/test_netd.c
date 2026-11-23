@@ -112,11 +112,24 @@ static void test_http_security_and_routing(void) {
     uint32_t ip_attacker = htonl(0xC0A82B63u); /* 192.168.43.99 */
     char resp[65536];
 
-    /* 1) Landing page "/" does not require PIN */
+    /* 1) Landing page "/" does not require PIN and serves refreshed v23.1 UI without "官方默认经典" */
     const char *req_home = "GET / HTTP/1.1\r\nHost: touareg.local\r\n\r\n";
     run_http_req(req_home, strlen(req_home), ip_owner, resp, sizeof(resp));
     assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
     assert(strstr(resp, "MH2p") != NULL);
+    assert(strstr(resp, "v23.1") != NULL);
+    assert(strstr(resp, "内置默认经典") != NULL);
+    assert(strstr(resp, "官方默认经典") == NULL);
+
+    /* 1.5) Unified dash.conf defaults: car_up=35, acc_up=55 (sum=90 <= 90) */
+    {
+        dash_cfg_t dc;
+        parse_dash_conf(&dc);
+        assert(dc.car_up == 35);
+        assert(dc.acc_up == 55);
+        assert(dc.car_up + dc.acc_up <= 90);
+        assert(dc.tank_l == 90);
+    }
 
     /* 2) Missing web.pin -> MUST fail-closed (503 pin_unconfigured), never allow access */
     pin_reset_rate_limit();

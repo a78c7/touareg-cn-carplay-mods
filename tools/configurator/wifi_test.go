@@ -31,14 +31,17 @@ func TestOpenSSHKeyGenAndWpaConf(t *testing.T) {
 		}
 	}
 
-	// 测试含英文单引号的热点双向生成与解析去重
+	// 测试含英文单引号及 5 个热点的双向生成与解析去重
 	conf := buildWpaConf([]wifiNet{
 		{SSID: "Phone's Hotspot", PSK: "12345678"},
 		{SSID: "HomeWiFi_5G", PSK: "abcdefgh99"},
+		{SSID: "Net3", PSK: "pass33333"},
+		{SSID: "Net4", PSK: "pass44444"},
+		{SSID: "Net5", PSK: "pass55555"},
 	})
 	rawNets := parseWpaNetworks(conf)
-	if len(rawNets) != 3 {
-		t.Fatalf("expected 3 raw wpa blocks (with curly apostrophe variant), got %d", len(rawNets))
+	if len(rawNets) != 6 {
+		t.Fatalf("expected 6 raw wpa blocks (5 networks + curly apostrophe variant), got %d", len(rawNets))
 	}
 
 	// 模拟 readWifi 合并回显
@@ -51,7 +54,7 @@ func TestOpenSSHKeyGenAndWpaConf(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(upDir, "web.pin"), []byte("654321\n"), 0o600)
 
 	st := p.readWifi()
-	if st.Pin != "654321" || len(st.Networks) != 2 || st.Networks[0].SSID != "Phone's Hotspot" || st.Networks[1].SSID != "HomeWiFi_5G" {
+	if st.Pin != "654321" || len(st.Networks) != 5 || st.Networks[0].SSID != "Phone's Hotspot" || st.Networks[4].SSID != "Net5" {
 		t.Fatalf("unexpected readWifi state: %+v", st)
 	}
 }

@@ -8,12 +8,12 @@
  *   - Uses the exact same cluster window ("58", layered via [58, 33] over stock map 33).
  *   - Loads all GLES2 entry points dynamically via eglGetProcAddress() (never links -lGLESv2 stub).
  *   - Runs a VSync-paced 60 fps render loop (eglSwapInterval=1) completely decoupled from CarPlay's
- *     20 fps H.264 stream, applying spring-damped interpolation to 10 Hz /tmp/dash.state telemetry.
+ *     20~30 fps H.264 stream (advertised maxFPS=30, typical ~20 fps), applying spring-damped interpolation to 10 Hz /tmp/dash.state telemetry.
  *   - Custom AI-developed cluster skins only need to modify gles60_fs_src / gles60_render_scene()
  *     for butter-smooth 60 fps GPU animations (~1.5 ms/frame on Tegra K1 Kepler 192-core GPU).
  *
  * Copyright (c) 2026 a78c7 (https://github.com/a78c7/touareg-cn-carplay-mods)
- * Licensed under PolyForm Noncommercial License 1.0.0 + LICENSE.ADDITIONAL-TERMS.md
+ * Licensed under CC BY-NC-SA 4.0 (see LICENSES/CC-BY-NC-SA-4.0.md and LICENSES/THIRD_PARTY_NOTICES.md)
  * FREE & OPEN SOURCE — STRICTLY PROHIBITED FOR COMMERCIAL SALE.
  */
 

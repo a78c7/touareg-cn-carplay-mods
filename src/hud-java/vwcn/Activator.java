@@ -12,10 +12,10 @@ public class Activator implements BundleActivator {
 
     public void start(BundleContext ctx) throws Exception {
         if (isSafeMode()) {
-            Log.log("VWClusterNav v22.01: safe_mode active, bypassing all HMI hooks");
+            Log.log("VWClusterNav v23.0: safe_mode active, bypassing all HMI hooks");
             return;
         }
-        Log.log("VWClusterNav v22.01 Activator.start called");
+        Log.log("VWClusterNav v23.0 Activator.start called");
         try {
             Bridge.startThread();
             Log.log("bridge thread started");

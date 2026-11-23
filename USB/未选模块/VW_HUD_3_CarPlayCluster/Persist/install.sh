@@ -64,7 +64,7 @@ while true; do
                 n=1; while [[ -d $m/cluster_logs/boot_$n ]]; do n=$((n + 1)); done
                 mkdir $m/cluster_logs/boot_$n 2>/dev/null && echo boot_$n > /tmp/cl_bootdir
             fi
-            [[ -f /tmp/cl_bootdir ]] && cp -f /tmp/cl_probe.log /tmp/clusterd.log /tmp/cl_render_dbg /tmp/cl_car_dbg /tmp/v23_diag.log /tmp/v23_fallback_v22 /tmp/theme_status.json $m/cluster_logs/$(cat /tmp/cl_bootdir)/ 2>/dev/null
+            [[ -f /tmp/cl_bootdir ]] && cp -f /tmp/cl_probe.log /tmp/cl_wired.log /tmp/clusterd.log /tmp/cluster_fuse.log /tmp/cl_render_dbg /tmp/cl_car_dbg /tmp/v23_diag.log /tmp/v23_fallback_v22 /tmp/theme_status.json /tmp/wifi_dev_persist.log /tmp/hostapd_bcm0.log /tmp/wpa_bcm2.log /tmp/dhcp_bcm2.log /tmp/touareg_netd.log $m/cluster_logs/$(cat /tmp/cl_bootdir)/ 2>/dev/null
             sync
         fi
     done

@@ -24,16 +24,16 @@ type feature struct {
 }
 
 var features = []feature{
-	{"fullscreen", "全屏 CarPlay", "去掉黑边，CarPlay 铺满整个中控屏", []string{"VW_FullScreenCarPlay"}},
+	{"fullscreen", "全屏 CarPlay", "去掉黑边，CarPlay 铺满整个中控屏（仅改款前 15 英寸 Discover Premium / MH2p，不含 9.2 英寸领航版及 2024+ MIB3 / 中规 2025–2026 Asterix 改款）", []string{"VW_FullScreenCarPlay"}},
 	{"carplay", "无线 CarPlay", "开启原厂未激活的无线 CarPlay（LawPaul 作品）", []string{"AppleCarPlay"}},
-	{"aa", "Android Auto", "开启原厂未激活的 Android Auto，安卓手机投屏（LawPaul 作品）", []string{"AndroidAuto"}},
-	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在抬头显示 HUD 上", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
-	{"cluster", "仪表地图 + 大字运动信息框", "手机导航地图投屏到液晶仪表中央，左右两侧自由定制 43 项真实行车数据（大号粗体 + 运动刻度条）与大字导航卡；需配合「导航上 HUD」", []string{"VW_HUD_3_CarPlayCluster"}},
-	{"mapswitch", "方向盘 OK 双击切换 CarPlay / 原车地图", "方向盘右侧 OK 键 2 秒内连按 2 下，在 CarPlay 导航地图与原车自带地图之间来回切换；需配合「导航上 HUD」与「仪表地图 + 大字运动信息框」", []string{"VW_HUD_4_OkMapSwitch"}},
-	{"siri", "方向盘语音键短按直接唤 Siri（试验）", "连接 CarPlay 时短按方向盘语音键直接唤出手机 Siri（无需长按 2 秒；原厂长按不受影响，试验功能：部分固件短按可能同时触发原车语音）；需配合「导航上 HUD」", []string{"VW_HUD_5_SiriShortPress"}},
-	{"wifi5gfix", "老固件升 P2878 无线 CarPlay 5GHz 区域修复", "仅从旧版本（如 P9832）升级 P2878 后、有线正常但无线 CarPlay 连不上时勾选：解除 5GHz 国家码校验拦截（原厂 P2878 无线正常无需勾选）", []string{"VW_Wireless5GHzFix"}},
+	{"aa", "Android Auto", "开启原厂未激活的 Android Auto，安卓手机投屏（2019–2023 中规改款前原厂不含 AA，按需解锁；LawPaul 作品）", []string{"AndroidAuto"}},
+	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在平视显示器（HUD）上（需实车配备 HUD；无 HUD 车型如领航版不投射风挡）", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
+	{"cluster", "仪表地图 + 大字运动信息框", "手机导航地图投屏到 12 英寸全液晶仪表（数字驾驶舱）中央，左右两侧自由定制 43 项真实行车数据（大号粗体 + 运动刻度条）与大字导航卡；不含 9.2 英寸指针仪表领航版，需配合「导航上 HUD」", []string{"VW_HUD_3_CarPlayCluster"}},
+	{"mapswitch", "方向盘 OK 双击切换 CarPlay / 原车地图", "方向盘右侧 OK 键双击（480 ms 判定窗）在 CarPlay 导航地图与原车自带地图之间来回切换（装本模块后，v23 多皮肤切换顺延为三连击 OK；2019–2020 为实体键、2021–2023 为触控键）；需配合「导航上 HUD」与「仪表地图 + 大字运动信息框」", []string{"VW_HUD_4_OkMapSwitch"}},
+	{"siri", "方向盘语音键短按直接唤 Siri（试验）", "连接 CarPlay 时短按方向盘语音键直接唤出手机 Siri（无需长按；原厂长按唤 Siri 不受影响，2019–2020 为实体键、2021–2023 为触控键；试验功能：部分固件短按可能并触原车语音）；需配合「导航上 HUD」", []string{"VW_HUD_5_SiriShortPress"}},
+	{"wifi5gfix", "老固件升 P2878 无线 CarPlay 5GHz 区域修复", "仅从旧版本（如 P9832）升级 P2878 后、有线正常但无线 CarPlay 连不上时勾选：解除 5GHz 国家码校验拦截（出厂即 P2878 车辆在启用本包无线 CarPlay 后连接正常，无需勾选）", []string{"VW_Wireless5GHzFix"}},
 	{"nobtauth", "去除「输入用户名」弹窗（屏蔽蓝牙 OBEX 认证）", "屏蔽蓝牙连接时反复弹出的「输入用户名」弹窗（Busrlo / BLUETOOTH_CONNECT_AUTH_REQUIRED），不影响正常蓝牙配对、通话、音乐与 CarPlay（大众 MH2p 通用）", []string{"VW_NoBtAuthPopup"}},
-	{"nosimpopup", "屏蔽「SIM 卡仅用于数据连接。」弹窗", "仅屏蔽连接 CarPlay / Android Auto 时反复弹出的 SIM 卡数据模式提示框（PHONE_SIM_DATAONLY），不影响 SIM 卡联网、蓝牙、CarPlay 与 SOS（大众 MH2p 通用）", []string{"VW_NoSimPopup"}},
+	{"nosimpopup", "屏蔽「SIM 卡仅用于数据连接。」弹窗", "仅屏蔽连接 CarPlay（及已解锁 Android Auto）时反复弹出的 SIM 卡数据模式提示框（PHONE_SIM_DATAONLY），不影响 SIM 卡联网、蓝牙、CarPlay 与 SOS（大众 MH2p 通用）", []string{"VW_NoSimPopup"}},
 	{"wifi", "手机无线控制台（可选 SSH 开发）", "连手机热点打开网页即可改信息框、调车标、无线下载行车记录（可选开启 SSH 2012 开发；同平台 MH2p 通用）", []string{"VW_WiFi_Dev"}},
 }
 
@@ -62,13 +62,13 @@ var catalogue = []item{
 	{"gmax", "最大 G 值", "g", "0.62", "性能", "车机开机以来的最大合成加速度"},
 	{"speed", "车速", "km/h", "86", "行驶", ""},
 	{"steer", "转向角", "°", "-12", "行驶", "方向盘转角（居中双向刻度条）"},
-	{"gear", "挡位", "", "D6", "行驶", "P/R/N/D1-8/S1-8/M1-8（ZF 8HP65A 实车齿比标定）"},
+	{"gear", "挡位", "", "D6", "行驶", "P/R/N/D1-8/S1-8/M1-8/E（基于 3.0TSI ZF 8HP65A 实车齿比标定；2.0TSI/eHybrid 可能有偏差）"},
 	{"oil", "机油温度", "°C", "96", "温度", "低温冰蓝 / 适温青绿 / 高温红刻度条"},
 	{"gearbox", "变速箱油温", "°C", "78", "温度", ""},
 	{"coolant", "冷却液温度", "°C", "90", "温度", ""},
 	{"outside", "车外温度", "°C", "21", "温度", ""},
 	{"cons", "当前消耗", "L/100km", "11.4", "油耗", "停车时自动切换为 L/h"},
-	{"fuel", "燃油存量", "L", "41", "油耗", "油箱剩余升数"},
+	{"fuel", "燃油存量", "L", "41", "油耗", "油箱剩余升数（中规燃油 90 L / 中规 eHybrid 76 L / 欧规标配 75 L）"},
 	{"range", "续驶里程", "km", "412", "油耗", ""},
 	{"trip", "本次油耗", "L/100km", "9.8", "自启动起", "熄火超过 2 小时后重新开始"},
 	{"tripdist", "本次里程", "km", "37", "自启动起", ""},
@@ -78,7 +78,7 @@ var catalogue = []item{
 	{"refueldist", "加油后里程", "km", "286", "自上次加油起", ""},
 	{"refuelspeed", "加油后均速", "km/h", "48", "自上次加油起", ""},
 	{"refueltime", "加油后时长", "h", "5:58", "自上次加油起", ""},
-	{"total", "累计油耗", "L/100km", "11.2", "累计", ""},
+	{"total", "累计油耗", "L/100km", "11.2", "累计", "超 19h59m/99h59m 或 1999.9/9999.9 km 自动清空，亦可手动清零"},
 	{"totaldist", "累计里程", "km", "1933", "累计", ""},
 	{"totalspeed", "累计均速", "km/h", "51", "累计", ""},
 	{"totaltime", "累计时长", "h", "37:51", "累计", ""},
@@ -88,8 +88,8 @@ var catalogue = []item{
 	{"tpfr", "右前胎压", "bar", "2.3", "胎压与越野", ""},
 	{"tprl", "左后胎压", "bar", "2.2", "胎压与越野", ""},
 	{"tprr", "右后胎压", "bar", "2.2", "胎压与越野", ""},
-	{"pitch", "俯仰角", "°", "+1.2", "胎压与越野", "车身前后俯仰坡度角（上坡 + / 下坡 -）"},
-	{"roll", "侧倾角", "°", "-0.5", "胎压与越野", "车身左右侧倾坡度角"},
+	{"pitch", "俯仰角", "°", "+1.2", "胎压与越野", "车身前后俯仰坡度角（需空气悬架，无空悬如中规 eHybrid 无上报；上坡 + / 下坡 -）"},
+	{"roll", "侧倾角", "°", "-0.5", "胎压与越野", "车身左右侧倾坡度角（需空气悬架，无空悬如中规 eHybrid 无上报）"},
 	{"alt", "海拔", "m", "68", "胎压与越野", "原车 GNSS 海拔高度"},
 }
 
@@ -132,7 +132,7 @@ func defaultDash() dashConf {
 		TankL:    90,
 		RItems:   []string{},
 		CarUp:    35,
-		AccUp:    80,
+		AccUp:    55,
 		AmapTurn: 3,
 		NavBox:   1,
 		NavSide:  "right",
@@ -750,20 +750,20 @@ steer_deg    方向盘转角 度（正负表示左右）
 yaw_dps      横摆角速度 度/秒
 ax_ms2       纵向加速度 m/s²（正 = 加速，负 = 减速）
 ay_g         横向加速度 g
-lever        换挡杆位置：1 = P，2 = R，3 = N，4 = D，5 = S，6 = M
-gear         挡位：根据 ZF 8HP65A 实车齿比标定输出 1～8 挡（P/R/N 或刚起步未锁止时可能为 0）
+lever        换挡杆位置：1 = P，2 = R，3 = N，4 = D，5 = S，6 = M，8 = E（经济模式）
+gear         挡位：根据 3.0TSI ZF 8HP65A 实车齿比标定输出 1～8 挡（2.0TSI / eHybrid 纯电段可能有偏差；P/R/N 或刚起步未锁止时可能为 0）
 gearbox_c    变速箱油温 °C
 oil_c        机油温度 °C（冷车时可能为空）
 coolant_c    冷却液温度 °C
 cons         当前消耗，单位见 cons_unit；车机报的上限是 40.9 L/100km，大于这个数时也显示 40.9
 cons_unit    0 = L/100km，1 = km/L，2 = L/h（停车时车机改用 L/h）
-tank_pct     油箱剩余 %
+tank_pct     油箱剩余 %（中规燃油 90 L / 中规 eHybrid 76 L / 欧规标配 75 L）
 outside_c    车外温度 °C
 range_km     续驶里程 km
 wheel1_kmh … wheel4_kmh  四个车轮的轮速 km/h
 acc          1 = 自适应巡航（ACC）正在控车，0 = 没有（只是待命时也是 0）
-pitch_deg    车身俯仰坡度角 度（正 = 抬头上坡，负 = 低头下坡）
-roll_deg     车身侧倾坡度角 度
+pitch_deg    车身俯仰坡度角 度（需空气悬架，无空悬如中规 eHybrid 为空；正 = 抬头上坡，负 = 低头下坡）
+roll_deg     车身侧倾坡度角 度（需空气悬架，无空悬如中规 eHybrid 为空）
 alt_m        GNSS 海拔高度 米
 tp_fl, tp_fr, tp_rl, tp_rr  左前、右前、左后、右后轮胎真实胎压 bar
 

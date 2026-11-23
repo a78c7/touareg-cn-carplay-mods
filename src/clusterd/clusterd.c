@@ -284,7 +284,7 @@ int main(int argc, char **argv) {
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
     char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate10;st", did);   /* ours on top, native 33 kept underneath */
     const char *back_seq = getenv("CL_BACKSEQ") ? getenv("CL_BACKSEQ") : "unhold;33;vis1;rate10;st";
-    logm("clusterd v23.0-beta start", getpid());
+    logm("clusterd v23.0 start", getpid());
     for (;;) {
         int safe_mode = (access("/mnt/app/eso/bin/apps/cluster/safe_mode", F_OK) == 0 ||
                          access("/tmp/vw_cluster_safe_mode", F_OK) == 0 ||
@@ -403,8 +403,7 @@ int main(int argc, char **argv) {
                     stage = 2; shown_t = time(NULL);
                     logm("renderer window ready, cluster list set (s after start)", (int)(shown_t - started));
                 } else if (time(NULL) - started >= 8) {
-                    /* v19.4: 6 s (was 12). A cold boot needed 3 renderer starts (window never created although key
-                     * frames arrived); the cause is being traced in /tmp/cl_render_dbg, meanwhile retry sooner. */
+                    /* v22+: 8 s window-ready timeout (originally 12 s, later 6 s, tuned to 8 s for v23 EGL init). */
                     kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
                     waitpid(child, NULL, 0);
                     if (v23_child) {

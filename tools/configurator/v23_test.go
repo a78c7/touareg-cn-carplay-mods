@@ -21,12 +21,17 @@ func TestV23ConfigRoundTrip(t *testing.T) {
 		t.Fatalf("expected default off, got %+v", st0)
 	}
 
-	// Reject forbidden API (eval) even outside comments
-	if err := validateV23(v23ApplyReq{
-		Enabled: true, ThemeAction: "set",
-		ThemeCode: "const THEME={id:'x'}; function render(){ eval('1'); }",
-	}); err == nil {
-		t.Fatal("expected forbidden API error")
+	// Reject forbidden API (eval / setTimeout / setInterval) even outside comments
+	for _, bad := range []string{
+		"const THEME={id:'x'}; function render(){ eval('1'); }",
+		"const THEME={id:'x'}; function render(){ setTimeout(function(){}, 10); }",
+		"const THEME={id:'x'}; function render(){ setInterval(function(){}, 10); }",
+	} {
+		if err := validateV23(v23ApplyReq{
+			Enabled: true, ThemeAction: "set", ThemeCode: bad,
+		}); err == nil {
+			t.Fatalf("expected forbidden API error for %q", bad)
+		}
 	}
 
 	// Allow comments mentioning forbidden APIs (just like my_theme.js header instructions)

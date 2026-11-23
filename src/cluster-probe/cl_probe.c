@@ -183,7 +183,7 @@ static void init_once(void) {
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v22.1 loaded pid=%d uid=%d log=%d alt=%d safe=%d", getpid(), getuid(), g_log, g_alt, g_safe_mode);
+    plog("cl_alt v23.0 loaded pid=%d uid=%d log=%d alt=%d safe=%d", getpid(), getuid(), g_log, g_alt, g_safe_mode);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -365,20 +365,42 @@ static uint8_t g_ckey[32]; static int g_have_ckey;
 static void *volatile g_pairing_sess;
 static void *volatile g_pairing_obj;
 static void *resolve(const char *name);
+EXPORT int AirPlayReceiverSessionSetHomeKitSecurityContext(void *session, void *pairing);
 
 /* Fallback only if libairplay invokes SetHomeKitSecurityContext internally (bypassing PLT):
- * inspect Thumb-2 store instruction in the real symbol to extract the exact struct offset safely. */
+ * walk the real symbol's instructions (Thumb-2 or ARM32) to extract the exact struct offset safely. */
 static int probe_pairing_offset(void) {
     void *fn = resolve("AirPlayReceiverSessionSetHomeKitSecurityContext");
-    if (!fn) fn = dlsym(RTLD_DEFAULT, "AirPlayReceiverSessionSetHomeKitSecurityContext");
+    if (!fn || fn == (void *)AirPlayReceiverSessionSetHomeKitSecurityContext) return -1;
     uintptr_t addr = (uintptr_t)fn;
-    if (!addr || !(addr & 1u)) return -1;
-    const uint16_t *p = (const uint16_t *)(addr & ~(uintptr_t)1u);
-    for (int i = 0; i < 16; i++) {
-        uint16_t hw1 = p[i];
-        if (hw1 == 0xf8c5u || hw1 == 0xf8c4u || hw1 == 0xf8c0u) {
-            unsigned off = p[i + 1] & 0x0fffu;
-            if (off >= 0x100u && off <= 0x0ff0u && (off & 3u) == 0u) return (int)off;
+    if (addr & 1u) {
+        const uint16_t *p = (const uint16_t *)(addr & ~(uintptr_t)1u);
+        for (int i = 0; i < 24; ) {
+            uint16_t hw1 = p[i];
+            if ((hw1 >> 11) >= 0x1Du) {
+                if (i + 1 >= 24) break;
+                /* 32-bit Thumb-2 instruction: STR.W Rt, [Rn, #imm12] (Rn = r0..r12) */
+                if ((hw1 & 0xfff0u) == 0xf8c0u && (hw1 & 0x000fu) <= 12u) {
+                    unsigned off = p[i + 1] & 0x0fffu;
+                    if (off >= 0x100u && off <= 0x0ff0u && (off & 3u) == 0u) return (int)off;
+                }
+                i += 2;
+            } else {
+                /* Stop at function return (POP {..., pc} or BX LR) */
+                if ((hw1 & 0xff00u) == 0xbd00u || hw1 == 0x4770u) break;
+                i += 1;
+            }
+        }
+    } else if ((addr & 3u) == 0u) {
+        const uint32_t *p = (const uint32_t *)addr;
+        for (int i = 0; i < 16; i++) {
+            uint32_t insn = p[i];
+            /* ARM32: STR Rt, [Rn, #+imm12] (Rn = r0..r12) */
+            if ((insn & 0x0ff00000u) == 0x05800000u && ((insn >> 16) & 0xfu) <= 12u) {
+                unsigned off = insn & 0x0fffu;
+                if (off >= 0x100u && off <= 0x0ff0u && (off & 3u) == 0u) return (int)off;
+            }
+            if (insn == 0xe12fff1eu || (insn & 0x0fff8000u) == 0x08bd8000u) break;
         }
     }
     return -1;

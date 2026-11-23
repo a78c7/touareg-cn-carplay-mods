@@ -1,4 +1,4 @@
-# 途锐 MH2p v23 纯文本 `.js` 60fps 仪表皮肤规范（V1 草案）
+# 途锐 MH2p v23.0 纯文本 `.js` 60fps 仪表皮肤规范（v23.0 正式版）
 
 本规范是 **车机端（QuickJS + OpenGL ES 2.0）** 与 **浏览器端（1:1 模拟器）** 的唯一共同契约。
 一套皮肤就是一个独立的纯文本 `.js` 文件（建议 ≤ 64 KB，不含任何外部图片），复制粘贴即可在车友群或 GitHub Discussions 分享。
@@ -19,7 +19,7 @@ const THEME = {
   shader: ""
 };
 
-// 每帧 60fps 调用一次（单帧脚本预算 <= 10ms，超时/报错自动回退官方默认皮肤）
+// 每帧 60fps 调用一次（建议单帧脚本预算 <= 10ms，车机硬中断 35ms×3 帧；超时/报错自动回退内置默认皮肤）
 // ctx: 显卡高速画笔（逻辑坐标系固定 1920x639）
 // bus: 统一 60fps 数据总线（已做好 10Hz -> 60fps 平滑插值）
 // state: 皮肤私有的持久化状态对象（可用于拖尾、粒子、过渡动画）
@@ -36,7 +36,7 @@ function render(ctx, bus, state) {
 
 ---
 
-## 2. 途锐实车 1920×639 精确安全可视区（实车正面像素标定，详见 [`docs/reference/CLUSTER_LAYOUT_SPEC.md`](../../docs/reference/CLUSTER_LAYOUT_SPEC.md)）
+## 2. 途锐实车 1920×639 精确安全可视区（实车正面像素标定，详见本目录 `CLUSTER_LAYOUT_SPEC.md` / 仓库路径 [`docs/reference/CLUSTER_LAYOUT_SPEC.md`](../../docs/reference/CLUSTER_LAYOUT_SPEC.md)；官方物理屏 12 英寸 `1920×720`，车机 Display 4 逻辑上报 `1920×722`）
 
 | 区域 | 精确坐标范围 | 说明 |
 | :--- | :--- | :--- |
@@ -45,7 +45,7 @@ function render(ctx, bus, state) {
 | 左下原车挡位斜梯形 | `(0,518) → (314,518) → (468,639) → (0,639)` | 顶边 `y = 518`，斜边扩至底边 `x = 468` |
 | 右下原车车速斜梯形 | `(1612,518) → (1920,518) → (1920,639) → (1458,639)` | 顶边 `y = 518`，斜边扩至底边 `x = 1458` |
 | **底部正中原车小路（常驻！）** | `(890,580) → (1035,580) → (1130,639) → (795,639)` | **挂 P 挡/关 ACC 也常驻**，`y = 580..639` 居中区全天候禁放文字或进度条 |
-| **底部正中 ACC 扩展区** | `x = 760 .. 1160, y = 495 .. 639` | `bus.sys.acc === true` 时向上扩大（车标自动上移 80px），底部居中组件需避让 |
+| **底部正中 ACC 扩展区** | `x = 760 .. 1160, y = 495 .. 639` | `bus.sys.acc === true` 时向上扩大（实车按 `dash.conf` 的 `car_up=35 + acc_up=55 = 90px` 上限，开 ACC 相对常态再上移 55px），底部居中组件需避让 |
 | **左 / 右翼黄金标准框** | 左 `x = 5..300` / 右 `x = 1620..1915`，`y = 164..508`（`295×344`） | 与原车卡片和下方斜梯形严丝合缝（留 10px 呼吸缝）；加宽圆盘建议宽 ≤ `340` 且底边 `y <= 508` |
 | **中央全天候主舞台 / 底部夹缝** | 主区 `x = 312..1608, y = 164..512`；底槽 `x = 476..1448, y = 518..576` | 主区宽 `1296px`；底部细长槽同时避开左右斜梯形与正中常驻小路（ACC 开时避开 `x=760..1160`） |
 
@@ -54,8 +54,8 @@ function render(ctx, bus, state) {
 ## 3. 统一数据总线 `bus`（60fps 平滑值 + 原始值）
 
 ### 3.1 动态车辆数据（连续量均已做 60fps 阻尼平滑；加 `Raw` 后缀可取 10Hz 原始准确值）
-- 动力：`bus.rpm` (0..7000), `bus.rpmPeak` (峰值滞留), `bus.power` (kW), `bus.torque` (Nm), `bus.pedal` (0..100%), `bus.brake` (bar)
-- 速度与挡位：`bus.speed` (km/h), `bus.gear` (如 `"D4"`, `"M6"`, `"P"`), `bus.gearNum` (0..8), `bus.steer` (° 左负右正)
+- 动力：`bus.rpm` (0..7000，按车型动力而异：2.0T/3.0T 最大功率上限 6400–6500 rpm，eHybrid 2.0T 为 6000 rpm), `bus.rpmPeak` (峰值滞留), `bus.power` (kW), `bus.torque` (Nm), `bus.pedal` (0..100%), `bus.brake` (bar)
+- 速度与挡位：`bus.speed` (km/h), `bus.gear` (如 `"D4"`, `"M6"`, `"E4"`, `"P"`), `bus.gearNum` (0..8), `bus.steer` (° 左负右正)
 - 车身动态：`bus.g` (带符号合 G), `bus.glong` (纵向 g), `bus.glat` (横向 g), `bus.pitch` (俯仰 °), `bus.roll` (侧倾 °), `bus.alt` (海拔 m)
 - 温度与油量：`bus.oil` (°C), `bus.gearbox` (°C), `bus.coolant` (°C), `bus.outside` (°C), `bus.cons` (L/100km), `bus.fuel` (L 或 %), `bus.range` (km)
 - 四轮胎压：`bus.tpfl`, `bus.tpfr`, `bus.tprl`, `bus.tprr` (bar), `bus.tires` (前后均值串)
@@ -100,6 +100,6 @@ function render(ctx, bus, state) {
 ---
 
 ## 5. 安全红线（车机端强制执行）
-1. 禁止访问外部网络、文件系统或 DOM；
-2. 禁止死循环或超大数组分配（单帧超 **35ms** 硬中断、连续 3 帧或内存超限即刻熔断，0 黑屏补画默认皮肤并在 `y = 162` 弹报错行号）；
+1. 禁止访问外部网络、文件系统、DOM 或定时器：`window`、`document`、`fetch`、`XMLHttpRequest`、`WebSocket`、`localStorage`、`sessionStorage`、`eval`、`Function`、`importScripts`、`setTimeout`、`setInterval`；
+2. 禁止死循环或超大数组分配（建议单帧脚本预算 ≤ **10ms**，单帧超 **35ms** 硬中断、连续 3 帧或持续 > 25ms 或内存超限即刻熔断，0 黑屏补画内置默认皮肤并在 `y = 162` 弹报错行号）；
 3. 自定义 `shader` 长度 ≤ 8 KB；编译失败仅跳过光效层，不影响主画面。

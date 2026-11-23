@@ -6,10 +6,12 @@
  *   2. Built-in V23_DEFAULT_CLASSIC_JS (CarPlay live + idle mode)
  *   3. Multi-skin THEMES[] single-file parsing & switching + 72KB payload + 140KB oversize reject
  *   4. Cold-start NaN/-999 sanitization + bus.ready.* flags (.toFixed() never throws)
- *   5. 6 safety fuses: syntax error, ReferenceError, 10ms infinite loop kill,
+ *   5. 6 safety fuses: syntax error, ReferenceError, 35ms infinite loop kill,
  *      4MB memory bomb OOM kill, 256KB stack overflow kill, blocked eval()/Function()
  *   6. Same-frame zero-black-screen fallback recovery
  *   7. CarPlay RGBX luminance auto day/night hysteresis
+ *   8. VW OEM gear decoding (incl. Eco E / Hybrid B / unready "-"), iAP2 maneuver mapping & arrow ops,
+ *      fuel litres conversion, 13 board-computer fields, ETA/remMin rounding, per-wheel tire summary
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +24,7 @@ typedef struct {
     int ticks_n, needle_n, seg_n, bi_n, range_n, text_n, dash_n, nav_n, arrow_n;
     float last_r, last_g, last_b, last_a;
     char last_text[128];
+    char last_arrow[32];
 } mock_rec_t;
 
 static void m_clear(void *u, float r, float g, float b, float a) { mock_rec_t *m = (mock_rec_t *)u; m->clear_n++; m->last_r = r; m->last_g = g; m->last_b = b; m->last_a = a; }
@@ -40,7 +43,7 @@ static void m_rng(void *u, float x, float y, float w, float h, float f, const v2
 static void m_text(void *u, const char *s, float x, float y, const v23_text_opts_t *o) { (void)x;(void)y;(void)o; mock_rec_t *m = (mock_rec_t *)u; m->text_n++; snprintf(m->last_text, sizeof(m->last_text), "%s", s); }
 static void m_dash(void *u, float x, float y, float w, int side) { (void)x;(void)y;(void)w;(void)side; ((mock_rec_t *)u)->dash_n++; }
 static void m_nav(void *u, float x, float y, float w, float h, int a) { (void)x;(void)y;(void)w;(void)h;(void)a; ((mock_rec_t *)u)->nav_n++; }
-static void m_arrow(void *u, float x, float y, float sz, const char *tp, v23_rgba_t c) { (void)x;(void)y;(void)sz;(void)tp;(void)c; ((mock_rec_t *)u)->arrow_n++; }
+static void m_arrow(void *u, float x, float y, float sz, const char *tp, v23_rgba_t c) { (void)x;(void)y;(void)sz;(void)c; mock_rec_t *m = (mock_rec_t *)u; m->arrow_n++; snprintf(m->last_arrow, sizeof(m->last_arrow), "%s", tp ? tp : ""); }
 
 static v23_draw_ops_t make_ops(mock_rec_t *m) {
     v23_draw_ops_t ops = {
@@ -252,6 +255,158 @@ int main(void) {
         }
     }
 
-    if (fails == 0) printf("test_v23_theme: ALL PASSED (17 ctx ops + 7 fuses + cold-start + 72KB/140KB + night hysteresis)\n");
+    /* 8. OEM gear decoding (P/R/N/D/S/M/E/B and unready "-") + JS empty gear fallback "-" */
+    {
+        char gbuf[12];
+        v23_format_gear(1, 0, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "P") != 0)  { fprintf(stderr, "FAIL gear P: %s\n", gbuf); fails++; }
+        v23_format_gear(2, 0, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "R") != 0)  { fprintf(stderr, "FAIL gear R: %s\n", gbuf); fails++; }
+        v23_format_gear(3, 0, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "N") != 0)  { fprintf(stderr, "FAIL gear N: %s\n", gbuf); fails++; }
+        v23_format_gear(4, 5, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "D5") != 0) { fprintf(stderr, "FAIL gear D5: %s\n", gbuf); fails++; }
+        v23_format_gear(13, 3, gbuf, sizeof(gbuf));    if (strcmp(gbuf, "D3") != 0) { fprintf(stderr, "FAIL gear D3: %s\n", gbuf); fails++; }
+        v23_format_gear(5, 4, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "S4") != 0) { fprintf(stderr, "FAIL gear S4: %s\n", gbuf); fails++; }
+        v23_format_gear(11, 2, gbuf, sizeof(gbuf));    if (strcmp(gbuf, "S2") != 0) { fprintf(stderr, "FAIL gear S2: %s\n", gbuf); fails++; }
+        v23_format_gear(6, 6, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "M6") != 0) { fprintf(stderr, "FAIL gear M6: %s\n", gbuf); fails++; }
+        v23_format_gear(10, 8, gbuf, sizeof(gbuf));    if (strcmp(gbuf, "M8") != 0) { fprintf(stderr, "FAIL gear M8: %s\n", gbuf); fails++; }
+        v23_format_gear(8, 4, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "E4") != 0) { fprintf(stderr, "FAIL gear E4: %s\n", gbuf); fails++; }
+        v23_format_gear(8, 0, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "E") != 0)  { fprintf(stderr, "FAIL gear E: %s\n", gbuf); fails++; }
+        v23_format_gear(9, 3, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "B3") != 0) { fprintf(stderr, "FAIL gear B3: %s\n", gbuf); fails++; }
+        v23_format_gear(9, 0, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "B") != 0)  { fprintf(stderr, "FAIL gear B: %s\n", gbuf); fails++; }
+        v23_format_gear(-999, 0, gbuf, sizeof(gbuf));  if (strcmp(gbuf, "-") != 0)  { fprintf(stderr, "FAIL gear unready: %s\n", gbuf); fails++; }
+        v23_format_gear(0, 5, gbuf, sizeof(gbuf));     if (strcmp(gbuf, "-") != 0)  { fprintf(stderr, "FAIL gear unknown: %s\n", gbuf); fails++; }
+
+        mock_rec_t rec; memset(&rec, 0, sizeof(rec));
+        v23_draw_ops_t ops = make_ops(&rec);
+        v23_sandbox_t sb;
+        v23_sandbox_init(&sb, &ops);
+        const char *gjs = "const THEME={id:'g'}; function render(ctx,bus){ ctx.text(bus.gear, 0, 0); }\n";
+        v23_bus_t bus = make_bus(1, 0);
+        bus.gear[0] = '\0';
+        if (v23_sandbox_load_code(&sb, "g.js", gjs, strlen(gjs)) != 0 ||
+            v23_sandbox_render_frame(&sb, &bus, NULL, NULL) != 0 ||
+            strcmp(rec.last_text, "-") != 0) {
+            fprintf(stderr, "FAIL empty gear fallback: got '%s' err=%s\n", rec.last_text, sb.last_err); fails++;
+        }
+        v23_format_gear(8, 5, bus.gear, sizeof(bus.gear));
+        if (v23_sandbox_render_frame(&sb, &bus, NULL, NULL) != 0 || strcmp(rec.last_text, "E5") != 0) {
+            fprintf(stderr, "FAIL JS E5 gear: got '%s'\n", rec.last_text); fails++;
+        }
+        v23_sandbox_destroy(&sb);
+    }
+
+    /* 9. iAP2 maneuverType mapping + uturn/roundabout turn arrow dispatch */
+    {
+        if (strcmp(v23_map_turn_type(4, 0, 0), "uturn") != 0 ||
+            strcmp(v23_map_turn_type(18, 0, 0), "uturn") != 0 ||
+            strcmp(v23_map_turn_type(26, 0, 0), "uturn") != 0 ||
+            strcmp(v23_map_turn_type(6, 0, 0), "roundabout") != 0 ||
+            strcmp(v23_map_turn_type(7, 0, 0), "roundabout") != 0 ||
+            strcmp(v23_map_turn_type(19, 1, 0), "roundabout") != 0 ||
+            strcmp(v23_map_turn_type(30, 1, 0), "roundabout") != 0 ||
+            strcmp(v23_map_turn_type(0, 1, 0), "roundabout") != 0 ||
+            strcmp(v23_map_turn_type(8, 0, 0), "slight_right") != 0 ||
+            strcmp(v23_map_turn_type(8, 0, 1), "slight_left") != 0 ||
+            strcmp(v23_map_turn_type(1, 0, 0), "left") != 0 ||
+            strcmp(v23_map_turn_type(2, 0, 0), "right") != 0 ||
+            strcmp(v23_map_turn_type(13, 0, 0), "slight_left") != 0 ||
+            strcmp(v23_map_turn_type(14, 0, 0), "slight_right") != 0 ||
+            strcmp(v23_map_turn_type(3, 0, 0), "straight") != 0) {
+            fprintf(stderr, "FAIL iAP2 maneuverType mapping\n"); fails++;
+        }
+
+        mock_rec_t rec; memset(&rec, 0, sizeof(rec));
+        v23_draw_ops_t ops = make_ops(&rec);
+        v23_sandbox_t sb;
+        v23_sandbox_init(&sb, &ops);
+        const char *ajs =
+            "const THEME={id:'arr'};\n"
+            "function render(ctx,bus){\n"
+            "  ctx.drawTurnArrow(100,100,64,'uturn',{color:'#fff'});\n"
+            "  ctx.drawTurnArrow(200,100,64,'roundabout',{color:'#22d3ee'});\n"
+            "}\n";
+        v23_bus_t bus = make_bus(1, 0);
+        if (v23_sandbox_load_code(&sb, "arr.js", ajs, strlen(ajs)) != 0 ||
+            v23_sandbox_render_frame(&sb, &bus, NULL, NULL) != 0 ||
+            rec.arrow_n != 2 || strcmp(rec.last_arrow, "roundabout") != 0) {
+            fprintf(stderr, "FAIL uturn/roundabout arrow dispatch (n=%d last=%s)\n", rec.arrow_n, rec.last_arrow); fails++;
+        }
+        v23_sandbox_destroy(&sb);
+    }
+
+    /* 10. Fuel litres conversion, 13 board-computer fields, ETA/remMin, per-wheel tires */
+    {
+        int r = -1;
+        double f90 = v23_calc_fuel(50, 90, &r);
+        if (r != 1 || fabs(f90 - 45.0) > 1e-6) { fprintf(stderr, "FAIL fuel 90L: %.2f r=%d\n", f90, r); fails++; }
+        double f76 = v23_calc_fuel(50, 76, &r);
+        if (r != 1 || fabs(f76 - 38.0) > 1e-6) { fprintf(stderr, "FAIL fuel 76L: %.2f r=%d\n", f76, r); fails++; }
+        double fpct = v23_calc_fuel(64, 0, &r);
+        if (r != 1 || fabs(fpct - 64.0) > 1e-6) { fprintf(stderr, "FAIL fuel pct: %.2f r=%d\n", fpct, r); fails++; }
+        double fbad = v23_calc_fuel(-999, 90, &r);
+        if (r != 0 || fbad != 0.0) { fprintf(stderr, "FAIL fuel invalid: %.2f r=%d\n", fbad, r); fails++; }
+
+        if (v23_calc_rem_min(61) != 2 || v23_calc_rem_min(60) != 1 || v23_calc_rem_min(0) != 0 || v23_calc_rem_min(-5) != 0) {
+            fprintf(stderr, "FAIL rem_min ceiling\n"); fails++;
+        }
+
+        char eta[16];
+        /* 1700000000 UTC = 2023-11-14 22:13:20 UTC -> +8h = 06:13:20; +29s=06:13, +30s=06:14 */
+        v23_format_eta(1700000000U, 0, 8, 1700000000L, eta, sizeof(eta));
+        if (strcmp(eta, "06:13") != 0) { fprintf(stderr, "FAIL eta 06:13: %s\n", eta); fails++; }
+        v23_format_eta(1700000010U, 0, 8, 1700000000L, eta, sizeof(eta)); /* 22:13:30 UTC -> rounds to 06:14 */
+        if (strcmp(eta, "06:14") != 0) { fprintf(stderr, "FAIL eta +30s round 06:14: %s\n", eta); fails++; }
+        /* Fallback when eta_ts < 1577836800 (1970 clock / missing ETA) */
+        v23_format_eta(0U, 600, 8, 1700000000L, eta, sizeof(eta)); /* +10 min -> 06:23 */
+        if (strcmp(eta, "06:23") != 0) { fprintf(stderr, "FAIL eta fallback 06:23: %s\n", eta); fails++; }
+        v23_format_eta(0U, 600, 8, 100L, eta, sizeof(eta));
+        if (strcmp(eta, "--:--") != 0) { fprintf(stderr, "FAIL eta invalid --:--: %s\n", eta); fails++; }
+
+        char tbuf[24]; int tr = -1;
+        /* Missing FL wheel must not gate ready_tires or pull front average down to 1.2 */
+        v23_calc_tires(NAN, 2.4, 2.6, 2.8, &tr, tbuf, sizeof(tbuf));
+        if (tr != 1 || strcmp(tbuf, "2.4·2.7") != 0) { fprintf(stderr, "FAIL tires partial: tr=%d %s\n", tr, tbuf); fails++; }
+        v23_calc_tires(NAN, NAN, NAN, NAN, &tr, tbuf, sizeof(tbuf));
+        if (tr != 0 || strcmp(tbuf, "--·--") != 0) { fprintf(stderr, "FAIL tires all-nan: tr=%d %s\n", tr, tbuf); fails++; }
+        v23_calc_tires(2.5, 2.5, NAN, NAN, &tr, tbuf, sizeof(tbuf));
+        if (tr != 1 || strcmp(tbuf, "2.5") != 0) { fprintf(stderr, "FAIL tires front-only: tr=%d %s\n", tr, tbuf); fails++; }
+
+        /* 13 board-computer fields end-to-end through QuickJS marshal */
+        v23_bus_t bus = make_bus(1, 0);
+        bus.fuel = v23_calc_fuel(60, 90, &r);
+        float avg[3]  = { 9.8f, 10.4f, 11.2f };
+        float dist[3] = { 42.5f, 310.0f, 4560.0f };
+        float bspd[3] = { 52.0f, 48.0f, 39.0f };
+        int btime[3]  = { 49, 390, 7015 };
+        v23_fill_board_computer(&bus, avg, dist, bspd, btime, 12345.6, 12000.0);
+
+        mock_rec_t rec; memset(&rec, 0, sizeof(rec));
+        v23_draw_ops_t ops = make_ops(&rec);
+        v23_sandbox_t sb;
+        v23_sandbox_init(&sb, &ops);
+        const char *bcjs =
+            "const THEME={id:'bc'};\n"
+            "function render(ctx,b){\n"
+            "  var s = [b.fuel.toFixed(0), b.trip.toFixed(1), b.tripdist.toFixed(1), b.tripspeed.toFixed(0), b.triptime,\n"
+            "           b.refuel.toFixed(1), b.refueldist.toFixed(0), b.refuelspeed.toFixed(0), b.refueltime,\n"
+            "           b.total.toFixed(1), b.totaldist.toFixed(0), b.totalspeed.toFixed(0), b.totaltime, b.tripkm.toFixed(1)].join('|');\n"
+            "  ctx.text(s, 0, 0);\n"
+            "}\n";
+        const char *want = "54|9.8|42.5|52|0:49|10.4|310|48|6:30|11.2|4560|39|116:55|345.6";
+        if (v23_sandbox_load_code(&sb, "bc.js", bcjs, strlen(bcjs)) != 0 ||
+            v23_sandbox_render_frame(&sb, &bus, NULL, NULL) != 0 ||
+            strcmp(rec.last_text, want) != 0) {
+            fprintf(stderr, "FAIL 13 BC fields: got '%s' want '%s' err=%s\n", rec.last_text, want, sb.last_err); fails++;
+        }
+        /* Verify invalid BC inputs degrade safely to 0 / "--:--" */
+        float bad_f[3] = { NAN, -1.0f, 1500.0f };
+        int bad_t[3] = { -999, -1, -999 };
+        v23_fill_board_computer(&bus, bad_f, bad_f, bad_f, bad_t, NAN, 100.0);
+        if (bus.trip != 0.0 || bus.refuel != 0.0 || bus.total != 0.0 || bus.tripkm != 0.0 ||
+            strcmp(bus.triptime, "--:--") != 0 || strcmp(bus.refueltime, "--:--") != 0 || strcmp(bus.totaltime, "--:--") != 0) {
+            fprintf(stderr, "FAIL invalid BC sanitize\n"); fails++;
+        }
+        v23_sandbox_destroy(&sb);
+    }
+
+    if (fails == 0) printf("test_v23_theme: ALL PASSED (17 ctx ops + 7 fuses + cold-start + 72KB/140KB + night + gear/iAP2/fuel/13-BC/ETA/tires)\n");
     return fails;
 }

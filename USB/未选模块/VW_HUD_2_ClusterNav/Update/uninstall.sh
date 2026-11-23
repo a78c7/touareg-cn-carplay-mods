@@ -1,6 +1,6 @@
 #!/bin/ksh
 # Orthogonally remove VWClusterNav (bundle 97) from bundles.properties and delete VWClusterNav jar,
-# preserving any other installed bundles (such as bundle 98 VWNoSimPopup).
+# preserving any other installed bundles (such as bundle 98 VWPopupFilter).
 B=/mnt/app/eso/hmi/lsd/config/bundles.properties
 BID=97
 BNAME=VWClusterNav

@@ -31,7 +31,7 @@ type v23ApplyReq struct {
 var (
 	reV23BlockCmt = regexp.MustCompile(`(?s)/\*.*?\*/`)
 	reV23LineCmt  = regexp.MustCompile(`//[^\n]*`)
-	reV23Forbid   = regexp.MustCompile(`\b(window|document|fetch|XMLHttpRequest|WebSocket|localStorage|sessionStorage|eval|Function|importScripts)\b`)
+	reV23Forbid   = regexp.MustCompile(`\b(window|document|fetch|XMLHttpRequest|WebSocket|localStorage|sessionStorage|eval|Function|importScripts|setTimeout|setInterval)\b`)
 	reV23Name     = regexp.MustCompile(`\bname\s*:\s*["']([^"']{1,60})["']`)
 )
 
@@ -111,7 +111,7 @@ func (p pkg) writeV23(r v23ApplyReq) ([]string, error) {
 			}
 		}
 		_ = os.Remove(userDir)
-		logs = append(logs, "已清除 U 盘自定义皮肤（恢复使用内置官方默认 60fps 经典版）")
+		logs = append(logs, "已清除 U 盘自定义皮肤（恢复使用内置默认 60fps 经典版）")
 	}
 
 	flagPath := filepath.Join(dir, "v23_mode")
@@ -123,7 +123,7 @@ func (p pkg) writeV23(r v23ApplyReq) ([]string, error) {
 		if isFile(offPath) {
 			_ = os.Remove(offPath)
 		}
-		logs = append(logs, "v23 60fps 皮肤引擎（Beta）：已启用（异常自动退回 v22.1 经典通道）")
+		logs = append(logs, "v23.0 60fps 皮肤引擎：已启用（可选，异常自动退回 v22.1 经典通道）")
 	} else {
 		if isFile(flagPath) {
 			if err := os.Remove(flagPath); err != nil {
@@ -137,7 +137,7 @@ func (p pkg) writeV23(r v23ApplyReq) ([]string, error) {
 		} else if isFile(offPath) {
 			_ = os.Remove(offPath)
 		}
-		logs = append(logs, "v23 60fps 皮肤引擎（Beta）：关闭（默认稳跑 v22.1 经典通道）")
+		logs = append(logs, "v23.0 60fps 皮肤引擎：关闭（默认稳跑 v22.1 经典通道）")
 	}
 	return logs, nil
 }

@@ -80,8 +80,8 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 			Alpha:    200,
 			TankL:    90,
 			LatFlip:  0,
-			CarUp:    40,
-			AccUp:    80,
+			CarUp:    35,
+			AccUp:    55,
 			AmapTurn: 3,
 			NavBox:   2,
 			NavSide:  "right",
@@ -172,5 +172,8 @@ func TestRealUSBPackageAllDefaultOffAndUninstallable(t *testing.T) {
 	}
 	if st.Dash.OkSwitch || !st.Dash.Bars || !st.Dash.Smooth {
 		t.Fatalf("expected OkSwitch=false, Bars=true, Smooth=true by default, got OkSwitch=%v Bars=%v Smooth=%v", st.Dash.OkSwitch, st.Dash.Bars, st.Dash.Smooth)
+	}
+	if st.Dash.CarUp != 35 || st.Dash.AccUp != 55 || st.Dash.CarUp+st.Dash.AccUp > 90 {
+		t.Fatalf("expected CarUp=35 AccUp=55 (sum<=90) by default, got CarUp=%d AccUp=%d", st.Dash.CarUp, st.Dash.AccUp)
 	}
 }

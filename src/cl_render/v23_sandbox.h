@@ -10,7 +10,7 @@
  *   - 所有冷车未就绪信号（NaN / -999）强制兜底为有限数字 0 并提供 bus.ready.*，杜绝 .toFixed() 崩溃。
  *
  * Copyright (c) 2026 a78c7 (https://github.com/a78c7/touareg-cn-carplay-mods)
- * Licensed under PolyForm Noncommercial License 1.0.0 + LICENSE.ADDITIONAL-TERMS.md
+ * Licensed under CC BY-NC-SA 4.0 (see LICENSES/CC-BY-NC-SA-4.0.md and LICENSES/THIRD_PARTY_NOTICES.md)
  * FREE & OPEN SOURCE — STRICTLY PROHIBITED FOR COMMERCIAL SALE.
  */
 #ifndef V23_SANDBOX_H
@@ -199,11 +199,11 @@ typedef struct {
     double     last_compile_ms;
 } v23_sandbox_t;
 
-/* 内置官方唯一默认皮肤（100% 沿用老用户 dash.conf 43 项勾选与大字导航卡） */
+/* 内置唯一默认皮肤（100% 沿用老用户 dash.conf 43 项勾选与大字导航卡） */
 static const char V23_DEFAULT_CLASSIC_JS[] =
     "const THEME = {\n"
     "  id: 'default_classic',\n"
-    "  name: '官方默认 60fps 经典版',\n"
+    "  name: '内置默认 60fps 经典版',\n"
     "  author: 'touareg-cn-carplay-mods',\n"
     "  version: '23.0',\n"
     "  shader: ''\n"
@@ -243,6 +243,126 @@ static inline double v23_sanitize_num(double v, int *ready_out) {
     }
     if (ready_out) *ready_out = 1;
     return v;
+}
+
+/* ---- 纯可移植遥测/导航格式化函数（v23_gles.c 与主机单测共用单一实现） ---- */
+
+/* 对齐 dash.c:744-760：完整支持大众原厂换挡杆模式码（含经济 E 挡与混动 B 挡），未就绪输出 "-" */
+static inline void v23_format_gear(int gm, int gc, char *out, size_t sz) {
+    char m = 0;
+    switch (gm) {
+    case 1: snprintf(out, sz, "P"); return;
+    case 2: snprintf(out, sz, "R"); return;
+    case 3: snprintf(out, sz, "N"); return;
+    case 4: case 13: m = 'D'; break;
+    case 5: case 11: m = 'S'; break;
+    case 6: case 7: case 10: case 12: m = 'M'; break;
+    case 8: m = 'E'; break;
+    case 9: m = 'B'; break;
+    default: snprintf(out, sz, "-"); return;
+    }
+    if (gc >= 1 && gc <= 10) snprintf(out, sz, "%c%d", m, gc);
+    else snprintf(out, sz, "%c", m);
+}
+
+/* 对齐 Mapper.java / navbox.c / clusterd.c 的 iAP2 ManeuverType 映射 */
+static inline const char *v23_map_turn_type(int mt, int junction, int driving_side) {
+    if (junction == 1 || mt == 6 || mt == 7 || mt == 19 || (mt >= 28 && mt <= 46))
+        return "roundabout";
+    if (mt == 4 || mt == 18 || mt == 26)
+        return "uturn";
+    if (mt == 8)
+        return (driving_side == 1) ? "slight_left" : "slight_right";
+    if (mt == 1 || mt == 20 || mt == 47)
+        return "left";
+    if (mt == 2 || mt == 21 || mt == 48)
+        return "right";
+    if (mt == 13 || mt == 22 || mt == 49 || mt == 52)
+        return "slight_left";
+    if (mt == 14 || mt == 23 || mt == 50 || mt == 53)
+        return "slight_right";
+    return "straight";
+}
+
+/* 对齐 navbox.c:1499 & Bridge.java:356：剩余分钟向上取整 */
+static inline int v23_calc_rem_min(int time_remaining) {
+    return time_remaining >= 0 ? (time_remaining + 59) / 60 : 0;
+}
+
+/* 对齐 navbox.c:1150-1169：+30s 四舍五入 + 1970 车机时钟兜底 */
+static inline void v23_format_eta(uint32_t eta_ts, int time_remaining, int tz_offset,
+                                  time_t now_utc, char *out, size_t sz) {
+    if (eta_ts < 1577836800U) {
+        if (now_utc > 1577836800L && time_remaining >= 0) {
+            eta_ts = (uint32_t)((unsigned long)now_utc + (unsigned long)time_remaining);
+        } else {
+            snprintf(out, sz, "--:--");
+            return;
+        }
+    }
+    int64_t local_s = (int64_t)eta_ts + (int64_t)tz_offset * 3600 + 30;
+    uint32_t sod = (uint32_t)(((local_s % 86400) + 86400) % 86400);
+    snprintf(out, sz, "%02u:%02u", (unsigned)(sod / 3600U), (unsigned)((sod % 3600U) / 60U));
+}
+
+/* 对齐 dash.c:796-800 & THEME_API_SPEC.md：按 tank_l 将油量百分比折算为升数（tank_l=0 保留百分比） */
+static inline double v23_calc_fuel(int tank_pct, int tank_l, int *ready_out) {
+    if (tank_pct == -999 || tank_pct < 0 || tank_pct > 100) {
+        if (ready_out) *ready_out = 0;
+        return 0.0;
+    }
+    if (ready_out) *ready_out = 1;
+    if (tank_l > 0) return ((double)tank_pct * (double)tank_l) / 100.0;
+    return (double)tank_pct;
+}
+
+/* 对齐 dash.c:814-821：逐轮判有效，缺轮不拉低均值，任一有效轮即置 ready_tires=1 */
+static inline void v23_calc_tires(double tpfl, double tpfr, double tprl, double tprr,
+                                  int *ready_out, char *out, size_t sz) {
+    int ok_fl = isfinite(tpfl) && tpfl > -900.0;
+    int ok_fr = isfinite(tpfr) && tpfr > -900.0;
+    int ok_rl = isfinite(tprl) && tprl > -900.0;
+    int ok_rr = isfinite(tprr) && tprr > -900.0;
+    int ok_f = ok_fl || ok_fr;
+    int ok_r = ok_rl || ok_rr;
+    double f = (ok_fl && ok_fr) ? 0.5 * (tpfl + tpfr) : (ok_fl ? tpfl : tpfr);
+    double r = (ok_rl && ok_rr) ? 0.5 * (tprl + tprr) : (ok_rl ? tprl : tprr);
+    if (!ok_f && !ok_r) {
+        if (ready_out) *ready_out = 0;
+        snprintf(out, sz, "--·--");
+    } else if (ok_f && ok_r) {
+        if (ready_out) *ready_out = 1;
+        snprintf(out, sz, "%.1f·%.1f", f, r);
+    } else {
+        if (ready_out) *ready_out = 1;
+        snprintf(out, sz, "%.1f", ok_f ? f : r);
+    }
+}
+
+/* 对齐 dash.c:809-813,831-837：填充 13 项行车电脑字段（自启动起 / 自上次加油后 / 累计 / Trip） */
+static inline void v23_format_bc_time(int mins, char *out, size_t sz) {
+    if (mins == -999 || mins < 0) snprintf(out, sz, "--:--");
+    else snprintf(out, sz, "%d:%02d", mins / 60, mins % 60);
+}
+
+static inline void v23_fill_board_computer(v23_bus_t *bus,
+                                           const float avg[3], const float dist[3],
+                                           const float bspd[3], const int btime[3],
+                                           double odo, double trip_base) {
+    double a[3], d[3], sp[3];
+    for (int m = 0; m < 3; m++) {
+        a[m]  = (isfinite(avg[m])  && avg[m]  >= 0.0f && avg[m]  <= 999.0f) ? (double)avg[m]  : 0.0;
+        d[m]  = (isfinite(dist[m]) && dist[m] >= 0.0f)                      ? (double)dist[m] : 0.0;
+        sp[m] = (isfinite(bspd[m]) && bspd[m] >= 0.0f)                      ? (double)bspd[m] : 0.0;
+    }
+    bus->trip        = a[0];  bus->tripdist   = d[0];  bus->tripspeed   = sp[0];
+    bus->refuel      = a[1];  bus->refueldist = d[1];  bus->refuelspeed = sp[1];
+    bus->total       = a[2];  bus->totaldist  = d[2];  bus->totalspeed  = sp[2];
+    v23_format_bc_time(btime[0], bus->triptime,   sizeof(bus->triptime));
+    v23_format_bc_time(btime[1], bus->refueltime, sizeof(bus->refueltime));
+    v23_format_bc_time(btime[2], bus->totaltime,  sizeof(bus->totaltime));
+    double tk = odo - trip_base;
+    bus->tripkm = (isfinite(odo) && trip_base > 0.0 && tk >= 0.0 && tk < 100000.0) ? tk : 0.0;
 }
 
 /* 纯多项式 exp(-x)（x >= 0，避免某些旧工具链引入额外 libm float 私有符号） */
@@ -925,7 +1045,7 @@ static JSValue v23_marshal_bus(JSContext *ctx, const v23_bus_t *in) {
     JS_SetPropertyStr(ctx, b, "pedal",       JS_NewFloat64(ctx, in->pedal));
     JS_SetPropertyStr(ctx, b, "brake",       JS_NewFloat64(ctx, in->brake));
     JS_SetPropertyStr(ctx, b, "steer",       JS_NewFloat64(ctx, in->steer));
-    JS_SetPropertyStr(ctx, b, "gear",        JS_NewString(ctx, in->gear[0] ? in->gear : "D1"));
+    JS_SetPropertyStr(ctx, b, "gear",        JS_NewString(ctx, in->gear[0] ? in->gear : "-"));
     JS_SetPropertyStr(ctx, b, "gearNum",     JS_NewInt32(ctx, in->gear_num));
     JS_SetPropertyStr(ctx, b, "g",           JS_NewFloat64(ctx, in->g));
     JS_SetPropertyStr(ctx, b, "glong",       JS_NewFloat64(ctx, in->glong));

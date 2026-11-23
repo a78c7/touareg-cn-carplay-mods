@@ -13,7 +13,7 @@ import org.osgi.framework.BundleContext;
 /**
  * VW MH2p HMI 弹窗过滤插件（Bundle ID 98），由可选模块按开关文件独立启用：
  * - /mnt/app/eso/hmi/lsd/config/popup_filter/no_sim_dataonly
- *     屏蔽连接 CarPlay / Android Auto 时的「SIM 卡仅用于数据连接。」弹窗
+ *     屏蔽连接 CarPlay（及欧版/解锁后的 Android Auto；中规改款前原厂不含 AA）时的「SIM 卡仅用于数据连接。」弹窗
  *     (ASLPhoneSystemEventConstants.PHONE_SIM_DATAONLY，P2878 上为 1410020)
  * - /mnt/app/eso/hmi/lsd/config/popup_filter/no_bt_auth
  *     屏蔽蓝牙 OBEX 认证触发的「输入用户名」弹窗 (Busrlo / BLUETOOTH_UID_SPELLER_REQ__LatinOnly)

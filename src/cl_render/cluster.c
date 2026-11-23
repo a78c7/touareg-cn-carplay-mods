@@ -93,9 +93,10 @@ typedef struct {
 } cpvc_shm_t;
 
 /* Default cluster display size — auto-detected at startup from displayable 33
- * via QNX screen API; the hardcoded values below are only the fallback used
- * if the auto-detection fails. 1280x860 = MH2P cluster. Macan is ~540x480.
- * Can also be explicitly overridden with xres=/yres= args. */
+ * via QNX screen API; the hardcoded values below are upstream Porsche PCM 5
+ * fallback defaults (1280x860 = Porsche MH2p cluster; Macan is ~540x480).
+ * VW Touareg CR7 Digital Cockpit is officially 1920x720 (displayable 33/58 map
+ * viewport 1920x639), always passed explicitly via xres=1920 yres=639. */
 #define DISP_W_DEFAULT  1280
 #define DISP_H_DEFAULT   860
 #define DISP_ID_TARGET  33
@@ -567,38 +568,28 @@ static int daemon_run(int argc, char **argv) {
              * daemon-level flags (e.g. verbose=2) flow into every child.
              * cluster.c arg parsing is last-wins, so extra overrides
              * default_args on conflicts. */
-            /* If the per-boot splash has already been shown (e.g. previous
-             * AA session this boot, or earlier mirror session), pass
-             * skip_boot_splash=1 so the new h264 child won't re-fire it. */
-            const char *skip_arg = boot_splash_shown ? " skip_boot_splash=1" : "";
             int n;
             if (*extra && *default_args)
-                n = snprintf(cmdline, sizeof(cmdline), "%s %s%s prepare", default_args, extra, skip_arg);
+                n = snprintf(cmdline, sizeof(cmdline), "%s %s prepare", default_args, extra);
             else if (*extra)
-                n = snprintf(cmdline, sizeof(cmdline), "%s%s prepare", extra, skip_arg);
+                n = snprintf(cmdline, sizeof(cmdline), "%s prepare", extra);
             else
-                n = snprintf(cmdline, sizeof(cmdline), "%s%s prepare", default_args, skip_arg);
+                n = snprintf(cmdline, sizeof(cmdline), "%s prepare", default_args);
             if (n < 0 || n >= (int)sizeof(cmdline)) cmdline[sizeof(cmdline)-1] = '\0';
 
-            /* No boot_splash on prepare — h264 child paints its own fifthBro
-             * on first resume via the in-child splash path (apply_stage_signals).
-             * Spawning boot_splash here would override disp 33 too early. */
+            /* No boot_splash on prepare — embedded boot_canim_data.h splash was removed
+             * for instant map startup; spawning boot_splash here would override disp 33 too early. */
 
             if (child_pid > 0) {
                 kill(child_pid, SIGTERM);
                 waitpid(child_pid, NULL, 0);
                 child_pid = -1;
             }
-            /* Do NOT kill canim_splash here. h264 child spawns in PREPARE
-             * with post_win VISIBLE=0 — it doesn't claim disp 33 until
-             * resume. Leaving canim_splash alive across PREPARE keeps the
-             * Porsche image on screen during the gap between phone reconnect
-             * and user focus, instead of going BLACK. Resume kills it. The
-             * earlier in-child-splash binding race that broke first focus
-             * here is suppressed on reconnect via skip_boot_splash=1. */
+            /* Do NOT kill canim_splash here (upstream Porsche PCM 5 daemon path). h264 child
+             * spawns in PREPARE with post_win VISIBLE=0 — it doesn't claim disp 33 until
+             * resume. Leaving canim_splash alive across PREPARE avoids a black gap; resume kills it. */
             child_pid = daemon_start_mirror(self, cmdline);
-            /* Mark per-boot splash as consumed so future prepares (e.g. after
-             * disconnect+reconnect) don't replay it. */
+            /* Mark per-boot splash as consumed so future start commands don't spawn boot_splash. */
             boot_splash_shown = 1;
             printf("[daemon] prepare: pid=%d args='%s'\n", (int)child_pid, cmdline);
 
@@ -887,7 +878,8 @@ int main(int argc, char **argv) {
 
 
     /* ------------------------------------------------------------------ */
-    /* [2] Find HMI display (1920×720)                                    */
+    /* [2] Find HMI display (upstream Porsche PCM 5: 1920×720;            */
+    /*     VW Touareg 15" Discover Premium: 1920×1020)                    */
     /* ------------------------------------------------------------------ */
     int ndisplays = 0;
     screen_get_context_property_iv(ctx_mgr, SCREEN_PROPERTY_DISPLAY_COUNT, &ndisplays);
@@ -1087,10 +1079,10 @@ int main(int argc, char **argv) {
     const void *px = use_shmem ? (const void *)(g_shm->data + (size_t)init_slot * CPVC_SLOT_BYTES)
                                 : (tight ? cap_ptr : upload_buf);
 
-    /* YV12 SHM: 3 GL_LUMINANCE textures. Offsets in data[]:
-     *   Y: [0 .. cap_w*cap_h)  (1920×720)
-     *   V: [cap_w*cap_h .. cap_w*cap_h + (cap_w/2)*(cap_h/2))  (960×360)
-     *   U: [cap_w*cap_h + (cap_w/2)*(cap_h/2) .. )              (960×360) */
+    /* YV12 SHM (upstream Porsche PCM 5 1920×720 example; actual size is cap_w×cap_h):
+     *   Y: [0 .. cap_w*cap_h)
+     *   V: [cap_w*cap_h .. cap_w*cap_h + (cap_w/2)*(cap_h/2))
+     *   U: [cap_w*cap_h + (cap_w/2)*(cap_h/2) .. ) */
     GLuint tex_y = 0, tex_v = 0, tex_u = 0;
     if (shm_yuv) {
         int uv_w = cap_w / 2, uv_h = cap_h / 2;
@@ -1384,7 +1376,9 @@ static int g_post_w = 0, g_post_h = 0;
  * car icon sits. The Java plug-in writes acc=0/1 into /tmp/dash.state; we then show rows acc_up lower in the tall
  * frame (= the whole map moves up by acc_up), stepping a few rows per frame. Works for every app because it only
  * changes which rows of the phone's frame are shown. cl.conf: acc_up=<rows> (0 = off). */
-static int g_crop_base = 0, g_crop_target = 0, g_acc_up = 80, g_car_up = 0, g_acc_on = 0;
+/* Note: in-binary fallback defaults below (car_up=0, acc_up=55) are overridden by
+ * dash.conf / touareg_netd unified defaults (car_up=35, acc_up=55; sum=90 <= 90 max rows). */
+static int g_crop_base = 0, g_crop_target = 0, g_acc_up = 55, g_car_up = 0, g_acc_on = 0;
 /* v19.5: wide stream (cl.conf wide= in cl_probe): the phone draws on a canvas wider than the cluster, the 1920 layout
  * sits in its middle (g_x0 = (W-1920)/2). We show a window of it: anchored so canvas point (g_x0+959+pan, croptop+
  * g_anchor_y) lands on the cluster target (959, g_anchor_y); view=<percent> shows the canvas at that size (85 =
@@ -1477,7 +1471,7 @@ static void on_sigusr1(int sig) { (void)sig; g_resume_requested = 1; }
 static void on_sigusr2(int sig) { (void)sig; g_pause_requested  = 1; }
 
 /* Heartbeat re-post: when the decoder goes idle (phone stops sending H.264,
- * e.g. AA loading splash → wait for user nav), cb_display_picture stops
+ * e.g. CarPlay / overseas AA loading splash → wait for user nav), cb_display_picture stops
  * firing, no new posts arrive, and the compositor releases post_win's buffer
  * → cluster goes BLACK. Track the last-posted pidx and re-post it from the
  * decode loop's idle path every ~50ms so the compositor stays active. */
@@ -1833,8 +1827,8 @@ static int setup_screen(int width, int height) {
         id_rc, vis_rc, idbuf, got_vis, MAX_SURFACES,
         g_dec.post_bufs[0], g_dec.post_bufs[1]);
 
-    /* --- canim_pixmap: CPU-writable pixmap holding the Porsche splash at
-     * post_win buffer dimensions. On pause, screen_blit copies it into the
+    /* --- canim_pixmap (upstream Porsche PCM 5 path; unused on Touareg):
+     * CPU-writable pixmap holding an optional .canim splash at post_win buffer dimensions. On pause, screen_blit copies it into the
      * next post_buf — same screen API mechanism the mixer-output path uses
      * (USE_SCREEN_BLIT) every frame. Single window (post_win) owns disp 33
      * throughout; no second-window competition, no VISIBLE flip, no z-order. */
@@ -4026,11 +4020,10 @@ int run_idle_logo(int argc, char **argv, int default_duration_s) {
 }
 
 /* ------------------------------------------------------------------------
- * canim splash — reads the on-target Porsche .canim file, decompresses
- * (zlib), parses the format, and posts the first contained image to
- * displayable 33. Source image is 1920x720 RGB; we center-crop horizontally
- * to 1280 columns and center-pad vertically with black to fit the 1280x860
- * cluster window.
+ * canim splash (upstream Porsche PCM 5 path; unused on VW Touareg) — reads
+ * an on-target Porsche .canim file, decompresses (zlib), parses the format,
+ * and posts the first contained image to displayable 33. Porsche PCM 5 source
+ * image is 1920x720 RGB, center-cropped to 1280x860 for the Porsche cluster.
  *
  * Format (from jilleb/mib2-toolbox extract-canim.py):
  *   - whole file = zlib-compressed stream

@@ -1,7 +1,8 @@
 #!/bin/ksh
 # FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
 echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
-# VW Touareg CN P-series (MH2p_CN_VWG36_P*) full-screen CarPlay, skin3 only - patched on the car.
+# VW Touareg CN P-series (MH2p_CN_VWG36_P*, pre-facelift 15" Discover Premium skin3 only;
+# excludes 9.2" Discover Pro & MIB3/Asterix facelift) full-screen CarPlay - patched on the car.
 # No VW file is shipped: vhpatch changes 38 bytes (listed in fullscreen.patch) in the unit's own
 # skin3/viewhandler.zip after checking that every entry is exactly the stock version, and info.txt gets its
 # CarPlay canvas size changed (1152x592 -> 1673x748). If a P-series firmware has a different skin3 viewhandler.zip,

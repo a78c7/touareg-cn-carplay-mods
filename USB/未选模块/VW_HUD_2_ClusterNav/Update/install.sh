@@ -1,7 +1,7 @@
 #!/bin/ksh
 # VW Touareg CN P-series (MH2p_CN_VWG36_P*): CarPlay route guidance -> instrument cluster + HUD, step 2.
 # FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
-# The jar keeps the file name VWClusterNav_v6.jar; content is v22.0 (also used by VW_HUD_3_CarPlayCluster).
+# The jar keeps the file name VWClusterNav_v6.jar; content is v23.0 (also used by VW_HUD_3_CarPlayCluster).
 echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 # Needs step 1 (VW_HUD_1_RouteGuidance: dio_cluster.so preloaded into dio_manager) already installed.
 # - copies VWClusterNav_v6.jar (Java 1.4 class files, version 48) to /mnt/app/eso/hmi/lsd/jars/, removes older versions
@@ -14,7 +14,7 @@ SI=/mnt/system/etc/eso/production/smartphone_integrator.json
 BID=97
 BNAME=VWClusterNav
 BACT=vwcn.Activator
-BCMT="# VWClusterNav: CarPlay route guidance -> cluster/HUD (USB mod VW_ClusterNav)"
+BCMT="# VWClusterNav: CarPlay route guidance -> cluster/HUD (USB mod VW_HUD_2_ClusterNav)"
 
 case "$RELEASE_VERSION" in
     MH2p_CN_VWG36_P*) ;;
@@ -54,7 +54,7 @@ if [[ ! -e $MOD_PATH/backup/bundles.properties ]]; then
     cp -v $B $MOD_PATH/backup/bundles.properties
 fi
 
-# 2) build updated bundles.properties orthogonally (preserves any other custom bundle like 98 VWNoSimPopup)
+# 2) build updated bundles.properties orthogonally (preserves any other custom bundle like 98 VWPopupFilter)
 OTHER_CNT=$(awk -v bid="$BID" '
 /^Bundle\./ {
     if ($0 ~ ("^Bundle\\.(Name|Activator)\\." bid "[ \t]*=")) next

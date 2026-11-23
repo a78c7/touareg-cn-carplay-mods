@@ -95,6 +95,7 @@ while true; do
             pidin -p j9 env > $D/pidin_j9_env.txt 2>&1
             ls -lR /mnt/crashlogs/java > $D/crash_java.txt 2>&1
             ls -l /mnt/crashlogs > $D/crash_list.txt 2>&1
+            ls -l /mnt/crashlogs/core >> $D/crash_list.txt 2>&1
             sloginfo > $D/slog.txt 2>&1
             echo "t=$t" > $D/last_copy.txt
             date >> $D/last_copy.txt

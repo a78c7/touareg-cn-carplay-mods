@@ -2,7 +2,7 @@
  * dash.c - cluster info box for cl_render (VW Touareg MH2p, v21 inline sport-gauge & large-font edition).
  *
  * Translucent dark cards on the left/right of the CarPlay map on the instrument cluster, aligned flush with
- * the cluster's lower gear/speed trapezoid corners (left x=5..300, right x=1592..1915).
+ * the cluster's lower gear/speed trapezoid corners (left x=5..300, right x=1620..1915, both 295px wide).
  * Features:
  *   - Bold pre-rendered Noto Sans CJK SC glyphs (up to 46px value digits) across all 43 telemetry items;
  *   - Inline sport gauges beneath dynamic rows (bars=1 default, bars=0 to disable):
@@ -13,9 +13,9 @@
  *       4) Crisp subtle row dividers across all rows.
  *   - Independent font sizing per box (left and right boxes never force each other into a smaller font).
  *
- * Original code by a78c7 (https://github.com/a78c7/touareg-cn-carplay-mods),
- * licensed under PolyForm Noncommercial 1.0.0 + LICENSE.ADDITIONAL-TERMS.md
- * (and CC BY-NC-SA 4.0 when compiled into cl_render).
+ * Copyright (c) 2026 a78c7 (https://github.com/a78c7/touareg-cn-carplay-mods)
+ * Licensed under CC BY-NC-SA 4.0 (see LICENSES/CC-BY-NC-SA-4.0.md and LICENSES/THIRD_PARTY_NOTICES.md)
+ * FREE & OPEN SOURCE — STRICTLY PROHIBITED FOR COMMERCIAL SALE.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -698,8 +698,9 @@ static void dash_draw_row_bar(int it, const dash_vals_t *v, int x0, int y0, int 
         }
         int ok = !DASH_NAN(p);
         int low = warn || (ok && p < 1.95f);
-        dash_draw_range_bar(x0, y0, w, h, ok ? ((p - 1.5f) / 1.7f) : 0.0f, ok,
-                            (2.1f - 1.5f) / 1.7f, (2.7f - 1.5f) / 1.7f,
+        /* 1.5..3.4 bar 视区：低红警 <1.95 bar，高红刻度放宽至 3.1 bar 避免满载冷胎压 2.8~3.0 bar 及热胎误显红区 */
+        dash_draw_range_bar(x0, y0, w, h, ok ? ((p - 1.5f) / 1.9f) : 0.0f, ok,
+                            (2.1f - 1.5f) / 1.9f, (3.1f - 1.5f) / 1.9f,
                             low ? 255 : 68, low ? 72 : 228, low ? 72 : 152);
         break;
     }

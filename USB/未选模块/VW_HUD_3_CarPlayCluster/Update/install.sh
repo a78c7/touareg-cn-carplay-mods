@@ -34,6 +34,9 @@ done
 [[ ! -f $DIO ]] && { echo "abort: $DIO not found - install VW_HUD_1_RouteGuidance first"; exit 0; }
 if ! grep -q "LD_PRELOAD=$DIO" $SI; then echo "abort: dio_cluster.so not preloaded in $SI - install VW_HUD_1_RouteGuidance first"; exit 0; fi
 echo "step 1 present: OK"
+JAR=/mnt/app/eso/hmi/lsd/jars/VWClusterNav_v6.jar
+[[ ! -f $JAR ]] && { echo "abort: $JAR not found - install VW_HUD_2_ClusterNav first"; exit 0; }
+echo "step 2 present: OK"
 
 mkdir -p $MOD_PATH/backup
 [[ ! -e $MOD_PATH/backup/smartphone_integrator.json ]] && cp -v $SI $MOD_PATH/backup/smartphone_integrator.json
@@ -72,7 +75,7 @@ if [ "$HAD_CLUSTER" = "0" ]; then
         rm -f $D/switch_off
     fi
 fi
-# v23 60fps AI custom theme engine (opt-in via configurator; absent -> stay on battle-tested v22.1 path)
+# v23.0 60fps AI custom theme engine (opt-in via configurator; absent -> stay on battle-tested v22.1 path)
 # Auto-enables v23_mode if a non-empty themes_user/my_theme.js is deployed without an explicit v23_off marker.
 if [[ -f $MOD_PATH/themes_user/my_theme.js ]]; then
     mkdir -p $D/themes_user
@@ -80,7 +83,7 @@ if [[ -f $MOD_PATH/themes_user/my_theme.js ]]; then
 fi
 if [[ -f $MOD_PATH/v23_mode ]]; then
     : > $D/v23_mode && chmod 644 $D/v23_mode
-    echo "v23_mode: enabled (Beta opt-in, 3-layer fuse active)"
+    echo "v23_mode: enabled (v23.0 opt-in, 3-layer fuse active)"
 elif [[ -s $MOD_PATH/themes_user/my_theme.js && ! -f $MOD_PATH/v23_off ]]; then
     : > $D/v23_mode && chmod 644 $D/v23_mode
     echo "v23_mode: auto-enabled (custom themes_user/my_theme.js present, 3-layer fuse active)"

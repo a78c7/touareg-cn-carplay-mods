@@ -23,7 +23,7 @@ cppcheck --enable=warning,performance,portability \
 
 echo "=== [4/5] Telemetry alignment, HTML DOM, USB script safety & repo hygiene ==="
 python3 - <<'PY'
-import os, re, sys
+import json, os, re, sys
 
 def read(p):
     with open(p, encoding='utf-8') as f:
@@ -87,6 +87,15 @@ m = re.search(r'WEB_UI_HTML_LEN\s*=\s*(\d+)', h_txt)
 actual_len = os.path.getsize('src/touareg_netd/web_ui.html')
 if not m or int(m.group(1)) != actual_len:
     errors.append(f'web_ui_data.h out of sync (header={m.group(1) if m else None}, html={actual_len})')
+for a, b in [
+    ('tools/preview/my_theme.js', 'tools/configurator/web/my_theme.js'),
+    ('tools/preview/index.html', 'tools/configurator/web/v23_preview.html'),
+]:
+    if open(a, 'rb').read() != open(b, 'rb').read():
+        errors.append(f'{a} != {b} (preview/configurator embedded copy out of sync)')
+tpl_m = re.search(r'^window\.MY_THEME_TEMPLATE\s*=\s*(".*");$', read('tools/preview/index.html'), re.M)
+if not tpl_m or json.loads(tpl_m.group(1)) != read('tools/preview/my_theme.js'):
+    errors.append('tools/preview/index.html window.MY_THEME_TEMPLATE out of sync with tools/preview/my_theme.js')
 if not os.path.isfile('LICENSE.ADDITIONAL-TERMS.md'):
     errors.append('missing LICENSE.ADDITIONAL-TERMS.md')
 
@@ -95,7 +104,7 @@ if errors:
     for e in errors:
         print('  -', e)
     sys.exit(1)
-print(f'ALL PYTHON CHECKS PASSED ({len(c_items)} telemetry items, DOM IDs, USB scripts, web_ui sync, repo hygiene)')
+print(f'ALL PYTHON CHECKS PASSED ({len(c_items)} telemetry items, DOM IDs, USB scripts, web_ui & preview sync, repo hygiene)')
 PY
 
 echo "=== [5/5] POSIX / Bash shell syntax checks ==="

@@ -144,7 +144,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
     <p class="hint">所有模块默认均为「不处理」（默认不开启）。按需把要开启或升级的模块点为「安装」，需要恢复原车的点为「卸载」，不改动的保持「不处理」（车上已装功能保持原样）。单独勾选需要前置模块配合的功能时，会自动弹窗提醒并帮您一并勾选。</p>
     <div class="presets" style="margin:0 0 8px">
       <span class="hint" style="margin:6px 4px 0 0">快捷选装：</span>
-      <button class="btn" type="button" data-fpreset="base">基础四件套（全屏 + 无线CarPlay + HUD + 仪表地图）</button>
+      <button class="btn" type="button" data-fpreset="base">基础四件套（全屏 + 无线 CarPlay + HUD + 仪表地图）</button>
       <button class="btn" type="button" data-fpreset="full">驾驶推荐全套（四件套 + 方向盘 OK 双击切地图）</button>
       <button class="btn" type="button" data-fpreset="none">全部恢复「不处理」</button>
     </div>
@@ -198,17 +198,17 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
       </div>
       <div class="wbox" style="margin-top:12px;border-color:#93c5fd;background:#f8fbff">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
-          <b style="font-size:15px">✨ v23 60fps AI 自定义皮肤（Beta 尝鲜 · 可选，U 盘一次写入，无需连 8080）</b>
+          <b style="font-size:15px">✨ v23.0 60fps AI 自定义皮肤（正式版 · 可选，U 盘一次写入，无需连 8080）</b>
           <span id="v23status" style="font-size:12.5px;color:var(--sub)">当前：未勾选（默认稳跑 v22.1 经典通道）</span>
         </div>
         <label class="switch" style="margin-bottom:8px">
           <input type="checkbox" id="v23mode">
-          <span><b>启用 v23 60fps 皮肤引擎（尝鲜开关）</b>（默认关闭，未勾选时车机 100% 跑稳如老狗的 v22.1 经典通道；想退回时取消勾选重刷一次 U 盘即可）</span>
+          <span><b>启用 v23.0 60fps 皮肤引擎（可选开关）</b>（默认关闭，未勾选时车机 100% 跑稳定的 v22.1 经典通道；想退回时取消勾选重刷一次 U 盘即可）</span>
         </label>
         <div class="msg ok" style="margin:8px 0;font-size:12.5px;line-height:1.6">
-          <b>🛡️ 车机三层自动保险丝保障（普通车主放心勾选尝鲜与导入 AI 皮肤，无需 8080 救砖）</b><br>
-          • <b>第 1 层（防坏皮肤）</b>：AI 皮肤写错语法、死循环或爆内存 → 当帧 0 黑屏自动退回官方默认经典皮肤，仪表顶栏弹出报错原因；<br>
-          • <b>第 2 层（防显卡/渲染异常）</b>：<code>v23</code> 渲染进程异常 → 车机守护进程 <code>clusterd</code> 自动秒切回稳定的 <code>v22.1</code> 经典通道，本次行车照常看导航地图；<br>
+          <b>🛡️ 车机三层自动保险丝保障（普通车主放心勾选与导入 AI 皮肤，无需 8080 救砖）</b><br>
+          • <b>第 1 层（防坏皮肤）</b>：AI 皮肤写错语法、死循环或爆内存 → 当帧 0 黑屏自动退回内置默认经典皮肤，仪表顶栏弹出报错原因；<br>
+          • <b>第 2 层（防显卡/渲染异常）</b>：<code>v23.0</code> 渲染进程异常 → 车机守护进程 <code>clusterd</code> 自动秒切回稳定的 <code>v22.1</code> 经典通道，本次行车照常看导航地图；<br>
           • <b>第 3 层（防极端崩溃）</b>：连续崩溃 3 次 → 自动熔断回大众原车地图 <code>[33]</code>；<br>
           • <b>🎛️ 方向盘盲切多皮肤</b>：默认<b>双击 <code>OK</code> 键</b>零延迟切换下一套皮肤；若同时选装了「切原车地图」模块，则<b>双击 <code>OK</code> 切原车地图、三连击 <code>OK</code> 切下一套皮肤</b>（亦可在手机 <code>8080</code> 控制台一键点选）。
         </div>
@@ -218,7 +218,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
           <a class="btn" href="/v23-preview.html" target="_blank" rel="noopener" style="text-decoration:none;border-color:#2563eb;color:#1d4ed8">🏎️ 打开 1:1 浏览器试驾模拟器</a>
           <button class="btn" type="button" id="v23pick">📂 导入 AI 写好的 my_theme.js 到 U 盘</button>
           <input type="file" id="v23file" accept=".js,.txt" style="display:none">
-          <button class="btn" type="button" id="v23clear">清除自定义皮肤（恢复默认经典）</button>
+          <button class="btn" type="button" id="v23clear">清除自定义皮肤（恢复内置默认经典）</button>
         </div>
       </div>
       <details>
@@ -227,14 +227,14 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
           <label>左边距 x（仪表画面像素）<input type="number" id="x" min="0" max="1500"></label>
           <label>上边距 y（默认 164，刚好在导航条和挡位框之间）<input type="number" id="y" min="0" max="600"></label>
           <label>背景不透明度 <span id="alphav"></span><input type="range" id="alpha" min="0" max="255"></label>
-          <label>油箱容积（升，"燃油存量"用；0 = 显示百分比）<input type="number" id="tank" min="0" max="200"></label>
+          <label>油箱容积（升，"燃油存量"用；中规燃油 90 / eHybrid 76 / 欧规标配 75；0 = 百分比）<input type="number" id="tank" min="0" max="200"></label>
           <label>预计到达时间时区偏移（北京时间默认 8）<input type="number" id="navtz" min="-12" max="14"></label>
           <label class="cb"><input type="checkbox" id="latflip"> 横向 G 正负号反过来</label>
         </div>
       </details>
       <details id="carpos">
         <summary>仪表地图的车标位置（被仪表底部的图标挡住时调这里）</summary>
-        <p class="hint" style="margin:8px 0 0">地图上移：车标被仪表底部的驾驶辅助图案挡住时调大。两项加起来最多 90 行。高德车标位置（只对高德生效）："看画面自动居中"每秒识别仪表画面里的车标，偏了自动挪回时钟下方。</p>
+        <p class="hint" style="margin:8px 0 0">地图上移：车标被仪表底部的驾驶辅助图案挡住时调大。两项加起来最多 90 行（默认 35 + 55 = 90）。高德车标位置（只对高德生效）："看画面自动居中"每秒识别仪表画面里的车标，偏了自动挪回时钟下方。</p>
         <div class="adv">
           <label>地图上移 <span id="carupv"></span> 行<input type="range" id="carup" min="0" max="90" step="5"></label>
           <label>开 ACC（自适应巡航）时再上移 <span id="accupv"></span> 行<input type="range" id="accup" min="0" max="90" step="5"></label>
@@ -250,7 +250,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
     <div class="msg info dash-off-msg">要启用手机无线控制台，先在上面第 1 步把「手机无线控制台（可选 SSH 开发）」选为「安装」。</div>
     <div class="dash-body">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <b>常用手机热点 / Wi-Fi（至少填 1 个，最多 3 个）</b>
+        <b>常用手机热点 / Wi-Fi（至少填 1 个，最多 5 个）</b>
         <label style="font-size:13px;color:var(--sub);cursor:pointer"><input type="checkbox" id="wshowpw"> 显示密码</label>
       </div>
       <p class="hint" style="margin:4px 0 8px">iPhone 请打开「最大兼容性」，首次连接车机时停留在「设置 → 个人热点」页面亮屏 3～5 秒；含英文单引号的名称（如 <code>Phone's Hotspot</code>）保存时会自动兼容 iOS 弯撇号；安卓热点请选 WPA2（密码 8～63 位）。</p>
@@ -261,6 +261,10 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
         <input class="winput wpw" type="password" id="wpsk1" placeholder="热点 2 密码（选填）">
         <input class="winput" id="wssid2" placeholder="热点 3 名称（选填）">
         <input class="winput wpw" type="password" id="wpsk2" placeholder="热点 3 密码（选填）">
+        <input class="winput" id="wssid3" placeholder="热点 4 名称（选填）">
+        <input class="winput wpw" type="password" id="wpsk3" placeholder="热点 4 密码（选填）">
+        <input class="winput" id="wssid4" placeholder="热点 5 名称（选填）">
+        <input class="winput wpw" type="password" id="wpsk4" placeholder="热点 5 密码（选填）">
       </div>
       <div class="wbox">
         <div class="row">
@@ -291,7 +295,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
   <section class="card" id="usbcard">
     <details id="usbadv" style="margin-top:0">
       <summary style="font-size:15px;font-weight:600;color:var(--ink)">进阶工具（可选）：U 盘用途切换 — 刷机 / 行车记录 U 盘（绝大多数车主无需操作）</summary>
-      <p class="hint" style="margin:10px 0 8px">绝大多数车主刷完直接拔走 U 盘即可，不需要行车记录功能。仅当你想采集 34 项物理传感器 CSV 给 AI 分析（或配合电脑端 <code>tools/preview/index.html</code> 回放预览仪表布局）时，才需将刷机 U 盘切为「行车记录 U 盘」（需车上已装「导航上 HUD」，每小时约 5 MB）。<b>长期插车记录时请务必选用品牌正品 U 盘（如闪迪/三星/铠侠），避免车辆突然断电导致杂牌 U 盘 FAT32 文件系统损坏。</b></p>
+      <p class="hint" style="margin:10px 0 8px">绝大多数车主刷完直接拔走 U 盘即可，不需要行车记录功能。仅当你想采集 34 项物理传感器 CSV 给 AI 分析（或配合发版 U 盘内 <code>v23皮肤模板/preview.html</code> / 仓库源码 <code>tools/preview/index.html</code> 回放预览仪表布局）时，才需将刷机 U 盘切为「行车记录 U 盘」（需车上已装「导航上 HUD」，每小时约 5 MB）。<b>长期插车记录时请务必选用品牌正品 U 盘（如闪迪/三星/铠侠），避免车辆突然断电导致杂牌 U 盘 FAT32 文件系统损坏。</b></p>
       <div class="summary" id="usbnow"></div>
       <button class="btn" id="torecord">改成行车记录 U 盘</button>
       <button class="btn" id="toflash">改回刷机 U 盘</button>
@@ -300,9 +304,9 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
   </section>
 
   <footer>
-    <b>开源免费声明</b>：本项目代码与工具按 PolyForm Noncommercial 1.0.0 + 附加条款开源发布于 <code>github.com/a78c7/touareg-cn-carplay-mods</code>，仅供个人非商业学习与研究，严禁任何形式的售卖、付费代刷或商业捆绑。<br>
-    本程序只修改这个 U 盘里的文件：不选的功能文件夹移到「未选模块」（车机不会刷它），卸载的功能里放一个 uninstall.txt，信息框设置写进 dash.conf，并删掉 Mac 自动生成的隐藏文件（._ 开头的文件和 .DS_Store）。不联网、不上传任何东西。<br>
-    全屏 CarPlay、HUD、仪表地图、OK 键切换、语音键短按唤 Siri 与 5GHz 区域修复支持国行途锐 P 版车机通刷（MH2p_CN_VWG36_P*，P2878 已全功能实车验证；其余 P 版自动探测适配，皮肤不一致时全屏补丁自动安全跳过不改文件，非国行途锐 P 版自动跳过）；蓝牙与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。
+    <b>开源免费与非官方关联声明</b>：本项目为独立开源社区技术研究，与大众汽车（Volkswagen）、Apple、Google、百度（Baidu）无任何官方关联、授权或背书；按 PolyForm Noncommercial 1.0.0 + 附加条款开源发布于 <code>github.com/a78c7/touareg-cn-carplay-mods</code>，仅供个人非商业学习与研究，严禁售卖、付费代刷或商业捆绑。Volkswagen / Touareg / 4MOTION 为大众汽车集团注册商标；CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.<br>
+    <b>适用与排除清单</b>：全屏 CarPlay、HUD、仪表地图、OK 键切换、语音键短按唤 Siri 与 5GHz 区域修复仅适用于第三代途锐改款前（CR7，2019–2023 款中规进口版）配备 <b>15 英寸 Discover Premium（MH2p / MIB2+ High）+ 12 英寸数字驾驶舱</b> 的 P 版车机（<code>MH2p_CN_VWG36_P*</code>，<code>P2878</code> 已全功能实车验证；其余 P 版自动探测适配，皮肤不一致时全屏补丁自动安全跳过不改文件）；<b>不适用</b>改款前低配 9.2 英寸 Discover Pro 领航（特别）版（机械指针仪表、无 HUD）、欧版 MY2024+ MIB3（Discover Pro Max）及中规 2025–2026 改款新途锐（15.05 英寸 Asterix 系统）。蓝牙与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。<br>
+    本程序只修改这个 U 盘里的文件：不选的功能文件夹移到「未选模块」（车机不会刷它），卸载的功能里放一个 uninstall.txt，信息框设置写进 dash.conf，并删掉 Mac 自动生成的隐藏文件（._ 开头的文件和 .DS_Store）。不联网、不上传任何东西。
   </footer>
 </div>
 
@@ -556,7 +560,7 @@ function renderDash(){
 
 function collectWifi(){
   const nets = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     const ssid = ($('wssid' + i).value || '').trim(), psk = $('wpsk' + i).value || '';
     if (ssid || psk) nets.push({ssid, psk});
   }
@@ -606,7 +610,7 @@ function renderSummary(){
                     : `<div>手机无线控制台：热点 <b>${esc(w.networks.map(n => n.ssid).join('、'))}</b> · 口令 <b>${esc(w.pin)}</b> · ${w.enableSSH ? '<b>开启 8080 网页 + SSH 2012</b>' : '仅 8080 网页控制台'}</div>`);
   }
   if (sel.cluster === 'install') {
-    lines.push(`<div>v23 60fps 皮肤引擎（Beta）：<b>${v23Cfg.enabled ? '已勾选启用（异常自动退回 v22.1）' : '未勾选（默认稳跑 v22.1 经典通道）'}</b>${v23Cfg.themeAction === 'set' ? ' · 写入新皮肤 <b>' + esc(v23Cfg.themeName || 'my_theme.js') + '</b>' : (v23Cfg.themeAction === 'clear' ? ' · 清除自定义皮肤' : (v23Cfg.hasTheme ? ' · 保留 U 盘皮肤 <b>' + esc(v23Cfg.themeName || 'my_theme.js') + '</b>' : ''))}</div>`);
+    lines.push(`<div>v23.0 60fps 皮肤引擎：<b>${v23Cfg.enabled ? '已勾选启用（异常自动退回 v22.1）' : '未勾选（默认稳跑 v22.1 经典通道）'}</b>${v23Cfg.themeAction === 'set' ? ' · 写入新皮肤 <b>' + esc(v23Cfg.themeName || 'my_theme.js') + '</b>' : (v23Cfg.themeAction === 'clear' ? ' · 清除自定义皮肤' : (v23Cfg.hasTheme ? ' · 保留 U 盘皮肤 <b>' + esc(v23Cfg.themeName || 'my_theme.js') + '</b>' : ''))}</div>`);
   }
   $('summary').innerHTML = lines.join('');
   $('save').disabled = !!(S.errors && S.errors.length) || !!werr || (sel.cluster === 'install' && ((dash.show && !dash.items.length) || (dash.r_show && !dash.r_items.length)));
@@ -628,11 +632,11 @@ $('torecord').onclick = () => usbMode('record');
 $('toflash').onclick = () => usbMode('flash');
 function renderV23(){
   $('v23mode').checked = !!v23Cfg.enabled;
-  let txt = v23Cfg.enabled ? '已启用 v23 60fps（尝鲜）' : '未勾选（稳跑 v22.1 经典通道）';
+  let txt = v23Cfg.enabled ? '已启用 v23.0 60fps 皮肤引擎' : '未勾选（稳跑 v22.1 经典通道）';
   if (v23Cfg.themeAction === 'set') txt += ` · 待写入新皮肤：${v23Cfg.themeName || 'my_theme.js'} (${(v23Cfg.themeCode.length/1024).toFixed(1)} KB)`;
-  else if (v23Cfg.themeAction === 'clear') txt += ' · 保存后清除自定义皮肤（用默认经典）';
+  else if (v23Cfg.themeAction === 'clear') txt += ' · 保存后清除自定义皮肤（用内置默认经典）';
   else if (v23Cfg.hasTheme) txt += ` · U 盘已有皮肤：${v23Cfg.themeName || 'my_theme.js'} (${(v23Cfg.themeSize/1024).toFixed(1)} KB)`;
-  else txt += ' · 皮肤：官方默认 60fps 经典版';
+  else txt += ' · 皮肤：内置默认 60fps 经典版';
   $('v23status').textContent = txt;
 }
 function renderAll(){ renderFeats(); renderDash(); renderV23(); renderWifi(); renderSummary(); renderUsb(); }
@@ -694,7 +698,7 @@ $('v23clear').addEventListener('click', () => {
   v23Cfg.themeName = '';
   renderV23(); renderSummary();
 });
-['wssid0','wpsk0','wssid1','wpsk1','wssid2','wpsk2','wpin'].forEach(id => $(id).addEventListener('input', renderSummary));
+['wssid0','wpsk0','wssid1','wpsk1','wssid2','wpsk2','wssid3','wpsk3','wssid4','wpsk4','wpin'].forEach(id => $(id).addEventListener('input', renderSummary));
 $('wssh').addEventListener('change', () => { renderWifi(); renderSummary(); });
 $('wshowpw').addEventListener('change', e => { document.querySelectorAll('.wpw').forEach(el => el.type = e.target.checked ? 'text' : 'password'); });
 $('wrandpin').addEventListener('click', () => {
@@ -728,7 +732,7 @@ $('save').addEventListener('click', async () => {
       ${sshBanner}
       ${hasAction ? `<b>接下来：</b><ol class="steps">
         <li>${canEject ? '点下方<b>「一键安全弹出 U 盘并退出」</b>（或手动安全弹出 U 盘），待系统 U 盘图标消失后再拔下来。' : (S.os === 'darwin' ? '在访达左侧点 U 盘旁边的 ⏏ 推出 U 盘' : '在任务栏右下角「安全删除硬件」里弹出 U 盘') + '，再拔下来。'}</li>
-        <li>到车上<b>发动车辆</b>，插入 U 盘。约 10 秒后车机自动重启并开始刷机，过程几分钟，会重启几次、可能出现红色工程界面，<b>期间不要操作车机</b>。</li>
+        <li>到车上<b>发动车辆</b>，插入前排带数据传输功能的 USB 口（中控台下储物格或扶手箱内，后排 USB 仅充电，勿用延长线/集线器）。约 10 秒后车机自动重启并开始刷机，过程几分钟，会重启几次、可能出现红色工程界面，<b>期间不要操作车机</b>。</li>
         <li>屏幕提示移除介质时拔出 U 盘，车机重启后就生效了。</li>
       </ol>
       ${keepNote ? '<p class="hint" style="margin-top:8px">刷机时会把原厂文件备份到这个 U 盘，建议保留这个 U 盘，平时不要插在车上（插着会再次进入刷机）。</p>' : ''}` : `<div class="msg warn">当前所有模块均设为「不处理」（已全部归位到「未选模块」文件夹，默认不开启任何功能）。如需上车安装或卸载模块，请在上方第 1 步点选「安装」或「卸载」后再次保存。</div>`}
@@ -773,7 +777,7 @@ document.addEventListener('click', async e => {
     v23Cfg = {enabled: !!S.v23.enabled, themeAction: 'keep', themeCode: '', themeName: S.v23.themeName || '', hasTheme: !!S.v23.hasTheme, themeSize: S.v23.themeSize || 0};
   }
   if (S.wifi) {
-    (S.wifi.networks || []).slice(0, 3).forEach((n, i) => { $('wssid' + i).value = n.ssid || ''; $('wpsk' + i).value = n.psk || ''; });
+    (S.wifi.networks || []).slice(0, 5).forEach((n, i) => { $('wssid' + i).value = n.ssid || ''; $('wpsk' + i).value = n.psk || ''; });
     $('wpin').value = S.wifi.pin || '';
     $('wssh').checked = !!S.wifi.enableSSH;
   }

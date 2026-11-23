@@ -3,9 +3,9 @@
 # and SHA256SUMS.txt.
 #
 # usage:
-#   OTA_SIGNING_KEY_FILE=~/.config/touareg-ota-signing/ota_signing_key.pem sh tools/make_release.sh v22.02
-#   OTA_SIGNING_KEY_PEM="..." sh tools/make_release.sh v22.02
-#   sh tools/make_release.sh v22.02 --unsigned-dev   (local dev testing only; rejected on head unit unless allow_unsigned_ota exists)
+#   OTA_SIGNING_KEY_FILE=~/.config/touareg-ota-signing/ota_signing_key.pem sh tools/make_release.sh v23.1
+#   OTA_SIGNING_KEY_PEM="..." sh tools/make_release.sh v23.1
+#   sh tools/make_release.sh v23.1 --unsigned-dev   (local dev testing only; rejected on head unit unless allow_unsigned_ota exists)
 #
 # outputs:
 #   -> touareg-cn-carplay-mods-<version>.zip
@@ -124,26 +124,34 @@ quick_guide = f"""途锐 MH2p CarPlay 改装包 {v} — 必看说明与免费开
 - 如果您是花钱买到本压缩包或付费代刷的，请立即申请退款并举报倒卖者！
 官方免费仓库与完整源码：https://github.com/a78c7/touareg-cn-carplay-mods
 
+【适用车型与排除清单（刷机前必看）】
+- 仅适用：第三代大众途锐（CR7）改款前 15 英寸 Discover Premium（MH2p，配备 12 英寸全液晶数字驾驶舱；中规约 2019–2023 款、欧版 2018–2023.05；其中中规固件 MH2p_CN_VWG36_P2878 经端到端全功能实测）。
+- 不适用：9.2 英寸 Discover Pro + 模拟机械仪表（中规领航版）、欧版 MY2024+ 改款 MIB3（Discover Pro Max）、中规 2025–2026 改款 15.05 英寸 Asterix 车机、第二代途锐（7P）。
+- 部分功能受实车硬件制约：HUD 导航投射需原车配备 HUD；俯仰/侧倾角仅在配备空气悬架且总线上报时有数据（中规 eHybrid 无此上报）；油箱容积因版本而异（中规燃油 90 L / 中规 eHybrid 76 L / 欧规标配 75 L），请在配置器中按实车设置。
+
 【4 步首次 U 盘安装（注意：第 3 步必做！）】
 1. 准备 32GB 以内 U 盘，格式化为 FAT32（Mac：磁盘工具 -> 抹掉 -> MS-DOS (FAT)）。
 2. 把本压缩包内的全部文件和文件夹直接解压到 U 盘根目录（确保 Data、Meta、Mods 在第一层）。
 3. 【必做】双击 U 盘根目录的「改装设置（Windows）.exe」或「改装设置（Mac）.command」：
    - 所有模块默认在「未选模块」中未开启！请先在网页里勾选要安装/卸载的功能（可直接点快捷选装），再点「保存到 U 盘」。
    - 不运行「改装设置」直接插车会空刷，不会安装任何模块。
-4. 点击界面里的「一键安全弹出 U 盘并退出」（或手动安全弹出 U 盘）后再拔出 -> 发动车辆 -> 插入扶手箱 USB 口，等待自动刷机重启几次（期间切勿操作车机），提示移除介质后拔出即可。
+4. 点击界面里的「一键安全弹出 U 盘并退出」（或手动安全弹出 U 盘）后再拔出 -> 发动车辆 -> 插入前排数据 USB 口（中控台下方储物格或扶手箱内均可；后排接口仅供电不支持数据，切勿使用 USB 集线器或延长线），等待自动刷机重启几次（期间切勿操作车机），提示移除介质后拔出即可。
 
-【v23 60fps AI 自定义皮肤（Beta 尝鲜 · 可选，无需连 8080）】
-- 普通车主最省心流程：在「改装设置」里一站式勾选 v23 60fps 尝鲜开关（默认关闭，不勾稳跑 v22.1）-> 下载空白模板 my_theme.js 发给 AI 写皮肤 -> 打开内置 1:1 浏览器试驾模拟器预览 -> 导入写好的 my_theme.js -> 点「保存到 U 盘」并点「一键安全弹出 U 盘」，上车插 U 盘一次写入即生效。
+【v23.0 60fps AI 自定义皮肤（默认关闭 · 可选，无需连 8080）】
+- 普通车主最省心流程：在「改装设置」里一站式勾选 v23.0 60fps 开关（默认关闭，不勾稳跑 v22.1 通道）-> 下载空白模板 my_theme.js 发给 AI 写皮肤 -> 打开内置 1:1 浏览器试驾模拟器预览 -> 导入写好的 my_theme.js -> 点「保存到 U 盘」并点「一键安全弹出 U 盘」，上车插 U 盘一次写入即生效。
+- 方向盘切皮肤手势：默认双击方向盘 OK 键零延迟轮切皮肤；若同时勾选「双击 OK 切原车地图」模块，则在 480 ms 判定窗内双击 OK 切原车地图 [33]、三连击 OK 切皮肤。
 - 进阶玩家直接把 U 盘交给本地 AI（Claude Code / Cursor / Codex / Antigravity 等）文字部署时：U 盘根目录已内置 AGENTS.md / CLAUDE.md 规范，且「改装设置」内置无界面命令行模式（--deploy-theme / --verify / --eject），AI 可自动校验皮肤、补齐依赖、清理隐藏文件并安全弹出；切勿写完未弹出直接热拔 U 盘。
-- 本压缩包「v23皮肤模板/」目录也额外附带了独立离线版 preview.html 与 my_theme.js，方便分享给朋友。
-- 车机内置三层自动保险丝（坏皮肤当帧 0 黑屏退回默认经典 / 渲染异常秒退回 v22.1 / 3 次崩溃退回原车地图 [33]），无需依赖 8080 救砖。
+- 本压缩包「v23皮肤模板/」目录额外附带了独立离线版 preview.html、my_theme.js、THEME_API_SPEC.md 与 CLUSTER_LAYOUT_SPEC.md，方便分享与本地查阅。
+- 车机内置三层自动保险丝（坏皮肤当帧 0 黑屏退回内置默认经典 / 渲染异常秒退回 v22.1 / 3 次崩溃退回原车地图 [33]），无需依赖 8080 救砖。
 
 【离线无线升级 (OTA)（进阶可选）】
-- 若车机为 v22.01 及更早版本：首次升级到 v22.1 请使用本 U 盘包覆盖刷入（旧版尚未内置 Ed25519 公钥，会安全拒绝新版签名 .tar 包）；刷入时原有 web.pin 与 cl.conf 自动保留。
-- 刷入 v22.1 及以后版本：后续升级无需再插拔 U 盘，手机下载 Release 中的 touareg-ota-<版本>.tar，连接车机打开 http://touareg.local:8080 -> 开关运维 -> 离线无线升级（先校验官方 Ed25519 签名再解包、逐文件 SHA-256 校验，支持自动备份与一键回滚）。
+- 若车机为 v22.01 及更早版本：首次升级到 v23.1 请使用本 U 盘包覆盖刷入一次（v22.01 及更早版本尚未内置 Ed25519 公钥，会安全拒绝新版签名 .tar 包）；刷入时原有 web.pin 与 cl.conf 自动保留。
+- 已装 v22.1 及以后版本的车机：后续升级无需再插拔 U 盘，手机下载 Release 中的 touareg-ota-<版本>.tar，连接车机打开 http://touareg.local:8080 -> 开关运维 -> 离线无线升级（先校验官方 Ed25519 签名再解包、逐文件 SHA-256 校验，支持自动备份与一键回滚）。
 
-【许可证】
-本包内附 LICENSE、LICENSE.ADDITIONAL-TERMS.md 与 LICENSES/ 目录；详细适用边界与免责声明见仓库 README.md。
+【非官方关联、商标与许可证声明】
+- 本项目为独立车主社区开源研究项目，与大众汽车集团（Volkswagen AG）、苹果公司（Apple Inc.）、谷歌公司（Google LLC）及百度公司（Baidu, Inc.）无任何关联、背书或赞助关系。
+- Volkswagen、Touareg、4MOTION 为 Volkswagen AG 的注册商标；CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.；Android Auto 为 Google LLC 商标；百度地图为百度公司商标。
+- 本包内附 LICENSE、LICENSE.ADDITIONAL-TERMS.md 与 LICENSES/ 目录；详细适用边界与免责声明见仓库 README.md。
 """
 
 def add_bytes(z, arc, data, mode=0o644):

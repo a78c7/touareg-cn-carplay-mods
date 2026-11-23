@@ -15,7 +15,7 @@
  *     并弹出顶部红条提示，坏 Shader 仅关光效层，绝不黑屏。
  *
  * Copyright (c) 2026 a78c7 (https://github.com/a78c7/touareg-cn-carplay-mods)
- * Licensed under PolyForm Noncommercial License 1.0.0 + LICENSE.ADDITIONAL-TERMS.md
+ * Licensed under CC BY-NC-SA 4.0 (see LICENSES/CC-BY-NC-SA-4.0.md and LICENSES/THIRD_PARTY_NOTICES.md)
  * FREE & OPEN SOURCE — STRICTLY PROHIBITED FOR COMMERCIAL SALE.
  */
 
@@ -1227,27 +1227,56 @@ static void v23_op_nav_card(void *u, float x, float y, float w, float h, int alp
 }
 
 static void v23_op_turn_arrow(void *u, float x, float y, float sz, const char *tp, v23_rgba_t col) {
+    if (!tp) tp = "straight";
     float cx = x + sz * 0.5f, cy = y + sz * 0.5f, s = sz / 64.0f;
     v23_line_opts_t lo = { col, col, 7.0f * s, 0.0f, 1 };
+    v23_rgba_t none = {0,0,0,0,0};
+    v23_circle_opts_t co = { col, none, col, 0.0f, 0.0f };
     if (strcmp(tp, "right") == 0) {
         v23_op_line(u, cx - 10 * s, cy + 22 * s, cx - 10 * s, cy - 4 * s, &lo);
         v23_op_line(u, cx - 10 * s, cy - 4 * s, cx + 10 * s, cy - 4 * s, &lo);
         float tri[6] = { cx + 24*s, cy - 4*s, cx + 8*s, cy - 16*s, cx + 8*s, cy + 8*s };
-        v23_rgba_t none = {0,0,0,0,0};
-        v23_circle_opts_t co = { col, none, col, 0.0f, 0.0f };
         v23_op_poly(u, tri, 3, &co);
     } else if (strcmp(tp, "left") == 0) {
         v23_op_line(u, cx + 10 * s, cy + 22 * s, cx + 10 * s, cy - 4 * s, &lo);
         v23_op_line(u, cx + 10 * s, cy - 4 * s, cx - 10 * s, cy - 4 * s, &lo);
         float tri[6] = { cx - 24*s, cy - 4*s, cx - 8*s, cy - 16*s, cx - 8*s, cy + 8*s };
-        v23_rgba_t none = {0,0,0,0,0};
-        v23_circle_opts_t co = { col, none, col, 0.0f, 0.0f };
+        v23_op_poly(u, tri, 3, &co);
+    } else if (strcmp(tp, "slight_right") == 0) {
+        v23_op_line(u, cx - 8 * s, cy + 22 * s, cx - 8 * s, cy + 2 * s, &lo);
+        v23_op_line(u, cx - 8 * s, cy + 2 * s, cx + 8 * s, cy - 14 * s, &lo);
+        float tri[6] = { cx + 18*s, cy - 24*s, cx + 1*s, cy - 19*s, cx + 13*s, cy - 7*s };
+        v23_op_poly(u, tri, 3, &co);
+    } else if (strcmp(tp, "slight_left") == 0) {
+        v23_op_line(u, cx + 8 * s, cy + 22 * s, cx + 8 * s, cy + 2 * s, &lo);
+        v23_op_line(u, cx + 8 * s, cy + 2 * s, cx - 8 * s, cy - 14 * s, &lo);
+        float tri[6] = { cx - 18*s, cy - 24*s, cx - 1*s, cy - 19*s, cx - 13*s, cy - 7*s };
+        v23_op_poly(u, tri, 3, &co);
+    } else if (strcmp(tp, "uturn") == 0) {
+        /* 中国右行默认左掉头：右侧直行上升 -> 顶部半圆弧 -> 左侧下行箭头 */
+        v23_arc_opts_t ao = { col, col, 7.0f * s, 0.0f, 1 };
+        v23_op_line(u, cx + 12 * s, cy + 22 * s, cx + 12 * s, cy - 8 * s, &lo);
+        v23_op_arc(u, cx, cy - 8 * s, 12.0f * s, 180.0f, 360.0f, &ao);
+        v23_op_line(u, cx - 12 * s, cy - 8 * s, cx - 12 * s, cy + 8 * s, &lo);
+        float tri[6] = { cx - 12*s, cy + 22*s, cx - 22*s, cy + 6*s, cx - 2*s, cy + 6*s };
+        v23_op_poly(u, tri, 3, &co);
+    } else if (strcmp(tp, "roundabout") == 0) {
+        /* 环岛：淡色完整圆环 + 底部入口 + 右行逆时针高亮弧 + 右上出口箭头 */
+        v23_rgba_t dim = col;
+        dim.a *= 0.35f;
+        v23_arc_opts_t ao_dim = { dim, dim, 5.5f * s, 0.0f, 0 };
+        v23_arc_opts_t ao_hi  = { col, col, 6.5f * s, 0.0f, 1 };
+        v23_line_opts_t lo_rb = { col, col, 6.5f * s, 0.0f, 1 };
+        float rcy = cy - 2.0f * s, rr = 13.0f * s;
+        v23_op_arc(u, cx, rcy, rr, 0.0f, 360.0f, &ao_dim);
+        v23_op_line(u, cx, cy + 24 * s, cx, rcy + rr, &lo_rb);
+        v23_op_arc(u, cx, rcy, rr, -30.0f, 90.0f, &ao_hi);
+        v23_op_line(u, cx + 11.3f * s, rcy - 6.5f * s, cx + 18.2f * s, rcy - 10.5f * s, &lo_rb);
+        float tri[6] = { cx + 25.0f*s, rcy - 14.5f*s, cx + 13.5f*s, rcy - 14.7f*s, cx + 19.5f*s, rcy - 4.3f*s };
         v23_op_poly(u, tri, 3, &co);
     } else {
         v23_op_line(u, cx, cy + 22 * s, cx, cy - 10 * s, &lo);
         float tri[6] = { cx, cy - 24*s, cx + 12*s, cy - 6*s, cx - 12*s, cy - 6*s };
-        v23_rgba_t none = {0,0,0,0,0};
-        v23_circle_opts_t co = { col, none, col, 0.0f, 0.0f };
         v23_op_poly(u, tri, 3, &co);
     }
 }
@@ -1312,7 +1341,7 @@ static void v23_write_status_json(const v23_sandbox_t *cur_sb, const v23_gl_ctx_
     char id_e[128], name_e[192], err_e[512], sh_e[384], src_e[64];
     int idx = fallback ? -1 : ((cur_sb && cur_sb->entry_count > 0) ? cur_sb->active_idx : 0);
     const char *tid = (!fallback && cur_sb && cur_sb->entry_count > 0) ? cur_sb->metas[idx].id : "default_classic";
-    const char *tnm = (!fallback && cur_sb && cur_sb->entry_count > 0) ? cur_sb->metas[idx].name : "官方默认 60fps 经典版";
+    const char *tnm = (!fallback && cur_sb && cur_sb->entry_count > 0) ? cur_sb->metas[idx].name : "内置默认 60fps 经典版";
     v23_json_escape(tid, id_e, sizeof(id_e));
     v23_json_escape(tnm, name_e, sizeof(name_e));
     v23_json_escape(err_msg ? err_msg : "", err_e, sizeof(err_e));
@@ -1397,22 +1426,14 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
                 bus->nav_live = ns.live ? 1 : 0;
                 bus->nav_dist_m = ns.dist_to_maneuver >= 0 ? ns.dist_to_maneuver : 0;
                 bus->nav_rem_dist_km = ns.dist_remaining >= 0 ? (double)ns.dist_remaining / 1000.0 : 0.0;
-                bus->nav_rem_min = ns.time_remaining >= 0 ? (ns.time_remaining + 30) / 60 : 0;
+                bus->nav_rem_min = v23_calc_rem_min(ns.time_remaining);
                 snprintf(bus->nav_road, sizeof(bus->nav_road), "%s", ns.s0_road[0] ? ns.s0_road : ns.cur_road);
                 snprintf(bus->nav_next_road, sizeof(bus->nav_next_road), "%s", ns.s1_road);
                 snprintf(bus->nav_action, sizeof(bus->nav_action), "%s", ns.s0_desc);
-                int mt = ns.s0_type;
-                const char *tt = "straight";
-                if (mt == 1 || mt == 4 || mt == 13 || mt == 20 || mt == 22) tt = "left";
-                else if (mt == 2 || mt == 14 || mt == 21 || mt == 23) tt = "right";
-                else if (mt == 6 || mt == 7 || mt == 8) tt = "uturn";
-                else if (ns.s0_junction == 1) tt = "roundabout";
-                snprintf(bus->nav_turn_type, sizeof(bus->nav_turn_type), "%s", tt);
-                if (ns.eta > 0) {
-                    time_t et = (time_t)ns.eta + (time_t)g_nav_conf.tz_offset * 3600;
-                    struct tm *tmv = gmtime(&et);
-                    if (tmv) snprintf(bus->nav_eta, sizeof(bus->nav_eta), "%02d:%02d", tmv->tm_hour, tmv->tm_min);
-                }
+                snprintf(bus->nav_turn_type, sizeof(bus->nav_turn_type), "%s",
+                         v23_map_turn_type(ns.s0_type, ns.s0_junction, ns.s0_driving_side));
+                v23_format_eta(ns.eta, ns.time_remaining, g_nav_conf.tz_offset,
+                               time(NULL), bus->nav_eta, sizeof(bus->nav_eta));
             }
         }
     }
@@ -1432,7 +1453,7 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
     double r_oil = v23_sanitize_num((double)raw_v.oil, &bus->ready_oil);
     double r_gb  = v23_sanitize_num((double)raw_v.gbt, &bus->ready_gearbox);
     double r_alt = v23_sanitize_num((double)raw_v.alt, &bus->ready_alt);
-    double r_tpfl = v23_sanitize_num((double)raw_v.tpfl, &bus->ready_tires);
+    double r_tpfl = v23_sanitize_num((double)raw_v.tpfl, &dummy);
     double r_tpfr = v23_sanitize_num((double)raw_v.tpfr, &dummy);
     double r_tprl = v23_sanitize_num((double)raw_v.tprl, &dummy);
     double r_tprr = v23_sanitize_num((double)raw_v.tprr, &dummy);
@@ -1468,25 +1489,21 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
     bus->coolant = v23_sanitize_num((double)raw_v.cool, &dummy);
     bus->outside = v23_sanitize_num((double)raw_v.out, &dummy);
     bus->cons    = v23_sanitize_num((double)raw_v.cv, &dummy);
-    bus->fuel    = v23_sanitize_num((double)raw_v.tank, &dummy);
+    bus->fuel    = v23_calc_fuel(raw_v.tank, g_dash_conf.tank_l, &dummy);
     bus->range   = v23_sanitize_num((double)raw_v.rng, &dummy);
     bus->pitch = sm_pitch; bus->roll = sm_roll;
     bus->tpfl = r_tpfl; bus->tpfr = r_tpfr; bus->tprl = r_tprl; bus->tprr = r_tprr;
-    if (bus->ready_tires) snprintf(bus->tires, sizeof(bus->tires), "%.1f·%.1f", (r_tpfl + r_tpfr) * 0.5, (r_tprl + r_tprr) * 0.5);
-    else snprintf(bus->tires, sizeof(bus->tires), "--·--");
+    v23_calc_tires((double)raw_v.tpfl, (double)raw_v.tpfr, (double)raw_v.tprl, (double)raw_v.tprr,
+                   &bus->ready_tires, bus->tires, sizeof(bus->tires));
     bus->t100 = v23_sanitize_num((double)raw_v.t1, &bus->ready_t100);
     bus->t100_running = (!DASH_NAN(raw_v.t1r) && raw_v.t1r > 0.0f) ? 1 : 0;
     bus->pmax = v23_sanitize_num((double)raw_v.pmx, &dummy);
     bus->tqmax = v23_sanitize_num((double)raw_v.tqx, &dummy);
     bus->gmax = v23_sanitize_num((double)raw_v.gmx, &dummy);
-    bus->gear_num = (raw_v.gc >= 0 && raw_v.gc <= 8) ? raw_v.gc : 0;
-    if (raw_v.gm == 1) snprintf(bus->gear, sizeof(bus->gear), "P");
-    else if (raw_v.gm == 2) snprintf(bus->gear, sizeof(bus->gear), "R");
-    else if (raw_v.gm == 3) snprintf(bus->gear, sizeof(bus->gear), "N");
-    else if (raw_v.gm == 5 && bus->gear_num > 0) snprintf(bus->gear, sizeof(bus->gear), "S%d", bus->gear_num);
-    else if (raw_v.gm == 6 && bus->gear_num > 0) snprintf(bus->gear, sizeof(bus->gear), "M%d", bus->gear_num);
-    else if (bus->gear_num > 0) snprintf(bus->gear, sizeof(bus->gear), "D%d", bus->gear_num);
-    else snprintf(bus->gear, sizeof(bus->gear), "D");
+    v23_fill_board_computer(bus, raw_v.avg, raw_v.dist, raw_v.bspd, raw_v.btime,
+                            raw_v.odo, g_dash_conf.trip_base);
+    bus->gear_num = (raw_v.gc >= 1 && raw_v.gc <= 10) ? raw_v.gc : 0;
+    v23_format_gear(raw_v.gm, bus->gear_num, bus->gear, sizeof(bus->gear));
 
     bus->sys_map_live = map_live;
     bus->sys_night = auto_night;
@@ -1706,7 +1723,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
     gl_TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gc->nav_w, gc->nav_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_nav_px);
     v23_diag("[9] dash/nav tex ok (dash0=%dx%d nav=%dx%d)", gc->dash_w[0], gc->dash_h[0], gc->nav_w, gc->nav_h);
 
-    /* 初始化双沙盒：fb_sb 永久持有官方默认皮肤保底；user_sb 运行用户/热重载皮肤 */
+    /* 初始化双沙盒：fb_sb 永久持有内置默认皮肤保底；user_sb 运行用户/热重载皮肤 */
     v23_draw_ops_t ops = {
         gc, v23_op_clear, v23_op_draw_map, v23_op_draw_shader, v23_op_rect, v23_op_circle,
         v23_op_line, v23_op_poly, v23_op_arc, v23_op_ticks, v23_op_needle, v23_op_seg_bar,
@@ -1738,7 +1755,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
     int skip_persisted_on_boot = (access("/tmp/v23_theme_loading", F_OK) == 0);
     if (skip_persisted_on_boot) {
         unlink("/tmp/v23_theme_loading");
-        snprintf(cur_err, sizeof(cur_err), "检测到上次启动用户皮肤异常崩溃，已自动降级为官方默认经典版");
+        snprintf(cur_err, sizeof(cur_err), "检测到上次启动用户皮肤异常崩溃，已自动降级为内置默认经典版");
         v23_set_banner(gc, cur_err, 2, 8);
         fallback_active = 1;
     }
@@ -1802,7 +1819,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                     if (!fcode) {
                         fallback_active = 1;
                         snprintf(cur_err, sizeof(cur_err), "读取皮肤失败或超过 128KB 上限");
-                        v23_set_banner(gc, "皮肤读取失败或超 128KB，已自动回退官方默认经典版", 2, 7);
+                        v23_set_banner(gc, "皮肤读取失败或超 128KB，已自动回退内置默认经典版", 2, 7);
                         v23_diag("theme load failed: read error (%s)", load_path);
                     } else if (v23_sandbox_init(user_sb, &ops) != 0 ||
                                v23_sandbox_load_code(user_sb, load_path, fcode, flen) != 0) {
@@ -1810,7 +1827,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                         snprintf(cur_err, sizeof(cur_err), "%s", user_sb->last_err[0] ? user_sb->last_err : "皮肤加载失败");
                         v23_sandbox_destroy(user_sb);
                         char bm[320];
-                        snprintf(bm, sizeof(bm), "AI 皮肤加载报错（%.180s）· 已自动回退官方默认皮肤", cur_err);
+                        snprintf(bm, sizeof(bm), "AI 皮肤加载报错（%.180s）· 已自动回退内置默认皮肤", cur_err);
                         v23_set_banner(gc, bm, 2, 8);
                         v23_diag("theme load error: %s", cur_err);
                     } else {
@@ -1824,7 +1841,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                     if (fcode) free(fcode);
                 } else {
                     v23_compile_user_shader(gc, NULL);
-                    v23_set_banner(gc, "已切回官方默认 60fps 经典版", 0, 3);
+                    v23_set_banner(gc, "已切回内置默认 60fps 经典版", 0, 3);
                 }
                 v23_write_status_json(using_user ? user_sb : fb_sb, gc, cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
             }
@@ -1847,7 +1864,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                             } else if (user_sb->entry_count > 1) {
                                 want = (user_sb->active_idx + 1) % user_sb->entry_count;
                             } else {
-                                want = -1; /* 单皮肤包时在自定义皮肤 ↔ 官方默认经典间往返 */
+                                want = -1; /* 单皮肤包时在自定义皮肤 ↔ 内置默认经典间往返 */
                             }
                         } else if (strncmp(sb_txt, "prev", 4) == 0) {
                             if (fallback_active) {
@@ -1864,7 +1881,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                             /* -1 表示暂时切回默认经典 */
                             fallback_active = 1;
                             v23_compile_user_shader(gc, NULL);
-                            v23_set_banner(gc, "已切回官方默认 60fps 经典版", 0, 3);
+                            v23_set_banner(gc, "已切回内置默认 60fps 经典版", 0, 3);
                         } else if (want < user_sb->entry_count) {
                             fallback_active = 0; slow_frames = 0; timeout_streak = 0; cur_err[0] = '\0';
                             user_sb->active_idx = want;
@@ -1964,11 +1981,11 @@ static int v23_run_gl_loop(int with_carplay_map) {
                     fallback_active = 1;
                     snprintf(cur_err, sizeof(cur_err), "%s", user_sb->last_err);
                     char bm[320];
-                    snprintf(bm, sizeof(bm), "AI 皮肤运行异常（%.180s）· 已自动回退官方默认皮肤", cur_err);
+                    snprintf(bm, sizeof(bm), "AI 皮肤运行异常（%.180s）· 已自动回退内置默认皮肤", cur_err);
                     v23_set_banner(gc, bm, 2, 8);
                     v23_write_status_json(user_sb, gc, cur_source, 1, cur_err, meas_fps, meas_map_fps);
                     v23_diag("theme runtime error: %s", cur_err);
-                    /* 同帧立即用官方默认经典版补画，0 黑帧！ */
+                    /* 同帧立即用内置默认经典版补画，0 黑帧！ */
                     v23_sandbox_render_frame(fb_sb, &gc->cur_bus, NULL, NULL);
                 }
             } else {

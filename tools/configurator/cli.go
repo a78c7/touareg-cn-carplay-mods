@@ -564,10 +564,10 @@ func printVerifyText(rep verifyReport) {
 		if rep.V23.HasTheme {
 			fmt.Printf("  v23 60fps 皮肤引擎：已启用 · 自定义皮肤「%s」（%.1f KB）\n", rep.V23.ThemeName, float64(rep.V23.ThemeSize)/1024.0)
 		} else {
-			fmt.Println("  v23 60fps 皮肤引擎：已启用 · 官方默认经典皮肤")
+			fmt.Println("  v23.0 60fps 皮肤引擎：已启用 · 内置默认 60fps 经典版")
 		}
 	} else {
-		fmt.Println("  v23 60fps 皮肤引擎：未启用（稳跑 v22.1 经典通道）")
+		fmt.Println("  v23.0 60fps 皮肤引擎：未启用（稳跑 v22.1 经典通道）")
 	}
 	if len(rep.Warnings) > 0 {
 		fmt.Println("【提示】")

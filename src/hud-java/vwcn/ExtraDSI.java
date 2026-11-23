@@ -13,6 +13,7 @@ import org.dsi.ifc.base.DSIListener;
  * 1) de.vw.mib.dsi.carcomfort.DSICarComfort（回退 org.dsi.ifc.carcomfort.DSICarComfort）：
  *    直读 65 模块（J502）四轮真实胎压与低压告警位
  * 2) DSICarDrivingCharacteristics：直读越野俯仰角（pitch）与侧倾角（roll）
+ *    （需实车配备空气悬架底盘；无空悬车型如中规 2021–2022 eHybrid 无上报）
  * 3) DSINavigation：直读 GNSS 海拔高度（alt）
  */
 final class ExtraDSI {

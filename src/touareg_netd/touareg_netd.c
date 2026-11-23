@@ -673,7 +673,7 @@ static void parse_dash_conf(dash_cfg_t *c) {
     memset(c, 0, sizeof(*c));
     snprintf(c->items, sizeof(c->items), "%s", "power,torque,g,rpm,oil,gearbox");
     snprintf(c->nav_side, sizeof(c->nav_side), "%s", "right");
-    c->show = 1; c->r_show = 0; c->bars = 1; c->smooth = 1; c->car_up = 35; c->acc_up = 80;
+    c->show = 1; c->r_show = 0; c->bars = 1; c->smooth = 1; c->car_up = 35; c->acc_up = 55;
     c->amap_turn = 3; c->alpha = 200; c->tank_l = 90; c->lat_flip = 0;
     c->nav_box = 1; c->nav_tz = 8;
     c->trip_base = 0.0;
@@ -751,7 +751,7 @@ static int save_dash_conf(const char *body) {
     int bars = clamp_int(form_get(body, "bars", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
     int smooth = clamp_int(form_get(body, "smooth", bufv, sizeof(bufv)) ? bufv : "1", 0, 1, 1);
     int car_up = clamp_int(form_get(body, "car_up", bufv, sizeof(bufv)) ? bufv : "35", 0, 90, 35);
-    int acc_up = clamp_int(form_get(body, "acc_up", bufv, sizeof(bufv)) ? bufv : "80", 0, 90, 80);
+    int acc_up = clamp_int(form_get(body, "acc_up", bufv, sizeof(bufv)) ? bufv : "55", 0, 90, 55);
     int amap_turn = clamp_int(form_get(body, "amap_turn", bufv, sizeof(bufv)) ? bufv : "3", 0, 3, 3);
     int alpha = clamp_int(form_get(body, "alpha", bufv, sizeof(bufv)) ? bufv : "200", 0, 255, 200);
     int tank_l = clamp_int(form_get(body, "tank_l", bufv, sizeof(bufv)) ? bufv : "90", 0, 200, 90);
@@ -1029,12 +1029,12 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], ota_ver[48];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.1");
 
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v23.0 ota_version=%s bcm2_ip=%s\n"
+        "netd_version=v23.1 ota_version=%s bcm2_ip=%s\n"
         "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d v23_fallback=%d\n"
         "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d v23_mode=%d\n\n",
         ota_ver, ipstr,
@@ -1118,7 +1118,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], esc1[320], esc2[320], ota_ver[48], esc_ov[64];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.1");
     json_escape(ota_ver, esc_ov, sizeof(esc_ov));
     double spd = -1.0, odo = -1.0;
     read_dash_state(&spd, &odo);
@@ -1136,7 +1136,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     refresh_proc_flags(&p_cld, &p_ren, &p_dio);
 
     l += (size_t)snprintf(j + l, 32768 - l,
-        "{\"ok\":true,\"version\":\"v23.0\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
+        "{\"ok\":true,\"version\":\"v23.1\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
         "\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
@@ -1572,7 +1572,7 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
                 mount_app_rw();
                 unlink(CLUSTER_DIR "/themes_user/my_theme.js");
                 mount_app_ro();
-                send_json(cfd, 200, 1, "已清除自定义皮肤，切回官方默认 60fps 经典版");
+                send_json(cfd, 200, 1, "已清除自定义皮肤，切回内置默认 60fps 经典版");
             } else {
                 int fd_sel = open("/tmp/v23_theme_select", O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 if (fd_sel >= 0) {
@@ -1693,7 +1693,7 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v22.1 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
+    nlog("touareg_netd v23.1 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
 
     int pin_init_rc = ensure_web_pin_boot();
     if (pin_init_rc == 1) {

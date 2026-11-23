@@ -1,10 +1,11 @@
 #!/bin/ksh
 # VW Touareg CN P-series (MH2p_CN_VWG36_P*): Enable short press of steering-wheel voice key to trigger Siri (step 5).
 # FREE & OPEN SOURCE: https://github.com/a78c7/touareg-cn-carplay-mods (PolyForm Noncommercial 1.0.0 - DO NOT SELL)
-# Needs VW_HUD_2_ClusterNav (VWClusterNav_v6.jar v22.0+) installed.
+# Needs VW_HUD_2_ClusterNav (VWClusterNav_v6.jar v22.0+ / v23.0) installed.
 
 echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 D=/mnt/app/eso/bin/apps/cluster
+JAR=/mnt/app/eso/hmi/lsd/jars/VWClusterNav_v6.jar
 
 case "$RELEASE_VERSION" in
     MH2p_CN_VWG36_P*) ;;
@@ -12,6 +13,7 @@ case "$RELEASE_VERSION" in
 esac
 
 [[ ! -e "/mnt/app/eso" ]] && mount -t qnx6 /dev/mnanda0t177.1 /mnt/app
+[[ ! -f "$JAR" ]] && { echo "abort: $JAR not found - install VW_HUD_2_ClusterNav first"; exit 0; }
 mount -uw /mnt/app
 mkdir -p "$D"
 : > "$D/siri_short" && chmod 644 "$D/siri_short"

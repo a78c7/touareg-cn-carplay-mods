@@ -71,7 +71,7 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
 <div class="foss-bar"><b>免费开源项目 · 严禁倒卖</b>｜官方源码 github.com/a78c7/touareg-cn-carplay-mods｜如花钱购买本程序或改装包请立即退款</div>
 <header>
   <h1>
-    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v22.1</span></span>
+    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v23.1</span></span>
     <span id="spdBadge" class="badge">连接中...</span>
   </h1>
   <div class="meta">
@@ -150,11 +150,11 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
             <option value="2">2 · 收到车道信息时不补偿</option>
           </select>
         </div>
-        <div class="row"><label>地图常驻上移 (0~90)<span class="sub">车标被底部驾驶辅助图案挡住时调大</span></label><input type="number" id="car_up" min="0" max="90"></div>
-        <div class="row"><label>开 ACC 时再上移 (0~90)<span class="sub">car_up + acc_up 最多 90</span></label><input type="number" id="acc_up" min="0" max="90"></div>
+        <div class="row"><label>地图常驻上移 (0~90)<span class="sub">默认 35；车标被底部驾驶辅助图案挡住时调大</span></label><input type="number" id="car_up" min="0" max="90"></div>
+        <div class="row"><label>开 ACC 时再上移 (0~90)<span class="sub">默认 55；car_up + acc_up 合计最多 90</span></label><input type="number" id="acc_up" min="0" max="90"></div>
         <div class="row"><label>预计到达时区偏移 (nav_tz)<span class="sub">北京时间填 8</span></label><input type="number" id="nav_tz" min="-12" max="14"></div>
         <div class="row"><label>背景不透明度 (0~255)</label><input type="number" id="alpha" min="0" max="255"></div>
-        <div class="row"><label>油箱容积 (升，0=百分比)</label><input type="number" id="tank_l" min="0" max="200"></div>
+        <div class="row"><label>油箱容积 (升，0=百分比)<span class="sub">中规燃油 90 / 中规 eHybrid 76 / 欧规标配 75</span></label><input type="number" id="tank_l" min="0" max="200"></div>
         <div class="row"><label>横向 G 符号反转</label><input type="checkbox" id="lat_flip"></div>
         <div class="row">
           <label>Trip 起点总里程 (km)<span class="sub">Trip = 总里程 - 起点</span></label>
@@ -186,27 +186,27 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
       <h2>仪表功能开关</h2>
       <div class="row"><label>停用仪表地图 (disable)<span class="sub">勾上后下次重启生效，不卸载模块</span></label><input type="checkbox" id="tg_disable" onchange="doToggle('disable',this.checked)"></div>
       <div class="row"><label>关闭切原车界面保活 (ka_off)<span class="sub">建议保持关闭，防止切收音机 30 秒断联</span></label><input type="checkbox" id="tg_ka_off" onchange="doToggle('ka_off',this.checked)"></div>
-      <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放方向反转</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
+      <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">仪表 CarPlay 地图上下键缩放方向反转（苹果/高德/百度均生效）</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
       <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">v21 默认由 VW_HUD_4 模块开启；取消勾选即允许连按 2 下 OK 键切换地图</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
       <div class="row"><label>方向盘语音键短按唤 Siri（试验，siri_short）<span class="sub">CarPlay 在线时短按方向盘语音键直接唤出 Siri（原厂长按不受影响；部分固件短按可能同时触发原车语音）</span></label><input type="checkbox" id="tg_siri_short" onchange="doToggle('siri_short',this.checked)"></div>
-      <div class="row"><label>v23 60fps AI 皮肤引擎（Beta 尝鲜，v23_mode）<span class="sub">默认关闭（稳跑 v22.1 经典通道）；开启后支持 CarPlay 地图与 60fps 皮肤同屏（实车零拷贝 55~59fps），方向盘默认双击 OK 盲切风格（同时开启切原车地图时为双击切图、三连击切皮肤），异常自动秒退回 v22.1</span></label><input type="checkbox" id="tg_v23_mode" onchange="doToggle('v23_mode',this.checked)"></div>
+      <div class="row"><label>v23 60fps AI 皮肤引擎 (v23_mode)<span class="sub">默认关闭（稳跑 v22.1 经典通道）；开启后支持 CarPlay 地图与 60fps 皮肤同屏（实车零拷贝 55~59fps），方向盘默认双击 OK 盲切风格（同时开启切原车地图时为双击切图、三连击切皮肤），异常自动秒退回经典通道</span></label><input type="checkbox" id="tg_v23_mode" onchange="doToggle('v23_mode',this.checked)"></div>
       <div class="row"><label>独立 60fps GLES2 动画仪表（试验，gles60_mode）<span class="sub">无 CarPlay 地图流时启用独立 OpenGL ES 2.0 60fps 仪表；有 CarPlay 地图流时自动切回地图模式</span></label><input type="checkbox" id="tg_gles60_mode" onchange="doToggle('gles60_mode',this.checked)"></div>
       <div class="row"><label>手动安全模式 (safe_mode)<span class="sub">勾选后下次重启跳过全部改装插件，快速回归纯原厂状态排障</span></label><input type="checkbox" id="tg_safe_mode" onchange="doToggle('safe_mode',this.checked)"></div>
     </div>
     <div class="card">
-      <h2>进阶（可选）：v23 60fps AI 皮肤热调试与切换（Beta）</h2>
+      <h2>进阶（可选）：v23 60fps AI 皮肤热调试与切换</h2>
       <div id="v23NetStatus" class="sub" style="margin-bottom:8px">普通车主推荐直接在电脑「改装设置」导入 my_theme.js 随 U 盘一次写入；这里供手机现场停车热调试与一键切换多套皮肤（最大 128 KB；行车中方向盘默认双击 OK 盲切皮肤，若同时启用切原车地图则为三连击 OK）。</div>
       <div id="v23ThemeBar" class="actions" style="margin:0 0 10px;display:none"></div>
       <input type="file" id="v23ThemeFile" accept=".js,.txt">
       <div class="actions">
         <button class="btn pri write-act" type="button" id="btnThemeLive">内存热试跑（0写闪存）</button>
         <button class="btn write-act" type="button" id="btnThemeSave">固化保存到车机</button>
-        <button class="btn dan write-act" type="button" id="btnThemeReset">恢复官方默认经典</button>
+        <button class="btn dan write-act" type="button" id="btnThemeReset">恢复内置默认经典</button>
       </div>
       <div id="v23ThemeMsg" class="sub" style="margin-top:8px"></div>
     </div>
     <div class="card">
-      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v22.1</span></h2>
+      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v23.1</span></h2>
       <div class="sub" style="margin-bottom:8px">上传从官方 GitHub Release 下载的 <code>touareg-ota-*.tar</code>（最大 6 MB）。流式直写 eMMC 暂存区，强制校验官方 Ed25519 数字签名与逐文件 SHA-256 并按严格白名单落盘，写入前自动备份当前版本；升级后点下方「软重启车机」生效。</div>
       <input type="file" id="otaFile" accept=".tar">
       <div class="actions">
@@ -273,8 +273,9 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
 </main>
 
 <div class="foss-foot">
-  本固件与控制台完全免费开源（PolyForm Noncommercial 1.0.0 + 附加条款）· 官方仓库：github.com/a78c7/touareg-cn-carplay-mods<br>
-  严禁任何形式的售卖、付费代刷或商业捆绑；如花钱购买本程序或改装包，请立即申请退款并举报倒卖者。
+  本固件与控制台完全免费开源（PolyForm Noncommercial 1.0.0 + 附加条款）· 项目仓库：github.com/a78c7/touareg-cn-carplay-mods<br>
+  严禁任何形式的售卖、付费代刷或商业捆绑；如花钱购买本程序或改装包，请立即申请退款并举报倒卖者。<br>
+  免责声明：本项目为第三方社区开源改装，与大众汽车（Volkswagen AG）、Apple Inc.、高德软件及百度无任何官方关联或背书；仅适用于改款前 15 英寸 Discover Premium（MH2p）途锐。CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.
 </div>
 
 <div id="pinModal" class="modal">
@@ -403,6 +404,11 @@ function renderEditor(){
   });
   groups.forEach(g=>{
     const t=document.createElement('div');t.className='grp-title';t.textContent=g.name;wrap.appendChild(t);
+    if(g.name==='胎压与越野'){
+      const h=document.createElement('div');h.className='sub';h.style.margin='0 0 6px';
+      h.textContent='注：俯仰角/侧倾角需空气悬架，无空悬车型（如中规 eHybrid）无上报';
+      wrap.appendChild(h);
+    }
     const p=document.createElement('div');p.className='pool';
     g.list.forEach(([k,nm])=>{
       const c=document.createElement('span');
@@ -479,8 +485,8 @@ function updateHeaderStatus(j){
   document.querySelectorAll('.write-act').forEach(btn=>{btn.disabled=driving||busy;});
   const rb=document.getElementById('btnOtaRollback');
   if(rb)rb.disabled=driving||busy||!j.has_ota_backup;
-  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v22.1';
-  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v22.1');
+  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v23.1';
+  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v23.1');
   document.getElementById('ipTxt').textContent='地址: touareg.local ('+(j.bcm2_ip||'--')+')';
   document.getElementById('procTxt').textContent='进程: clusterd='+(j.clusterd?'开':'关')+' render='+(j.cl_render?'开':'关');
   document.getElementById('odoTxt').textContent=j.odo>0?('总里程: '+j.odo.toFixed(1)+' km'):'';
@@ -582,7 +588,7 @@ async function loadStatus(){
     const v23s=S.v23||{};
     document.getElementById('v23NetStatus').textContent=
       (tg.v23_mode?(v23s.fallback_v22?'⚠️ 本次行车触发第 2 层保险丝，已自动回退 v22.1 经典通道':'✅ v23 60fps 引擎已启用'):'当前未启用 v23（稳跑 v22.1 经典通道）')+
-      (v23s.has_live?' · 内存热试跑中':(v23s.has_saved?' · 已固化自定义皮肤 my_theme.js':' · 官方默认经典皮肤'));
+      (v23s.has_live?' · 内存热试跑中':(v23s.has_saved?' · 已固化自定义皮肤 my_theme.js':' · 内置默认经典皮肤'));
     loadV23ThemeStatus();
 
     renderFileList('driveList',S.drive_logs,'drive','未检测到 U 盘 drive_logs 目录或暂无 CSV');
@@ -716,7 +722,7 @@ async function loadV23ThemeStatus(){
     if(j.mode==='v23_gles60'){
       const zc=j.map_zero_copy?'零拷贝':'兼容拷贝';
       const fpsTxt=(j.fps?(' · '+j.fps+'fps（'+zc+'）'):'')+(j.night?' · 夜间':' · 白天');
-      const curTxt=j.fallback?(' · 当前回退官方默认'+(j.error?'（'+j.error+'）':'')):(' · 当前：'+(j.theme_name||'官方默认经典'));
+      const curTxt=j.fallback?(' · 当前回退内置默认'+(j.error?'（'+j.error+'）':'')):(' · 当前：'+(j.theme_name||'内置默认经典'));
       stEl.textContent=(j.ok?'✅ v23 60fps 运行中':'⚠️ v23 皮肤异常已保底')+fpsTxt+curTxt;
     }
     const list=Array.isArray(j.themes)?j.themes:[];
@@ -737,9 +743,9 @@ async function loadV23ThemeStatus(){
     const defBtn=document.createElement('button');
     defBtn.type='button';
     defBtn.className='btn sm write-act'+(j.fallback?' pri':'');
-    defBtn.textContent='官方默认经典';
+    defBtn.textContent='内置默认经典';
     defBtn.disabled=driving||busy;
-    defBtn.onclick=()=>selectV23Theme(-1,'官方默认经典');
+    defBtn.onclick=()=>selectV23Theme(-1,'内置默认经典');
     bar.appendChild(defBtn);
   }catch(_){}
 }
