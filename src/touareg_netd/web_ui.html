@@ -189,13 +189,14 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
       <div class="row"><label>方向盘缩放键反向 (zoom_flip)<span class="sub">高德仪表地图上下键缩放方向反转</span></label><input type="checkbox" id="tg_zoom_flip" onchange="doToggle('zoom_flip',this.checked)"></div>
       <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">v21 默认由 VW_HUD_4 模块开启；取消勾选即允许连按 2 下 OK 键切换地图</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
       <div class="row"><label>方向盘语音键短按唤 Siri（试验，siri_short）<span class="sub">CarPlay 在线时短按方向盘语音键直接唤出 Siri（原厂长按不受影响；部分固件短按可能同时触发原车语音）</span></label><input type="checkbox" id="tg_siri_short" onchange="doToggle('siri_short',this.checked)"></div>
-      <div class="row"><label>v23 60fps AI 皮肤引擎（Beta 尝鲜，v23_mode）<span class="sub">默认关闭（稳跑 v22.1 经典通道）；开启后支持 CarPlay 地图与 60fps 皮肤同屏，异常自动秒退回 v22.1（普通车主在电脑「改装设置」里也能一站式配置 U 盘写入）</span></label><input type="checkbox" id="tg_v23_mode" onchange="doToggle('v23_mode',this.checked)"></div>
+      <div class="row"><label>v23 60fps AI 皮肤引擎（Beta 尝鲜，v23_mode）<span class="sub">默认关闭（稳跑 v22.1 经典通道）；开启后支持 CarPlay 地图与 60fps 皮肤同屏（实车零拷贝 55~59fps），方向盘默认双击 OK 盲切风格（同时开启切原车地图时为双击切图、三连击切皮肤），异常自动秒退回 v22.1</span></label><input type="checkbox" id="tg_v23_mode" onchange="doToggle('v23_mode',this.checked)"></div>
       <div class="row"><label>独立 60fps GLES2 动画仪表（试验，gles60_mode）<span class="sub">无 CarPlay 地图流时启用独立 OpenGL ES 2.0 60fps 仪表；有 CarPlay 地图流时自动切回地图模式</span></label><input type="checkbox" id="tg_gles60_mode" onchange="doToggle('gles60_mode',this.checked)"></div>
       <div class="row"><label>手动安全模式 (safe_mode)<span class="sub">勾选后下次重启跳过全部改装插件，快速回归纯原厂状态排障</span></label><input type="checkbox" id="tg_safe_mode" onchange="doToggle('safe_mode',this.checked)"></div>
     </div>
     <div class="card">
-      <h2>进阶（可选）：v23 60fps AI 皮肤热调试（Beta）</h2>
-      <div id="v23NetStatus" class="sub" style="margin-bottom:8px">普通车主推荐直接在电脑「改装设置」导入 my_theme.js 随 U 盘一次写入；这里供极客/手机 AI 现场停车热调试（最大 128 KB）。</div>
+      <h2>进阶（可选）：v23 60fps AI 皮肤热调试与切换（Beta）</h2>
+      <div id="v23NetStatus" class="sub" style="margin-bottom:8px">普通车主推荐直接在电脑「改装设置」导入 my_theme.js 随 U 盘一次写入；这里供手机现场停车热调试与一键切换多套皮肤（最大 128 KB；行车中方向盘默认双击 OK 盲切皮肤，若同时启用切原车地图则为三连击 OK）。</div>
+      <div id="v23ThemeBar" class="actions" style="margin:0 0 10px;display:none"></div>
       <input type="file" id="v23ThemeFile" accept=".js,.txt">
       <div class="actions">
         <button class="btn pri write-act" type="button" id="btnThemeLive">内存热试跑（0写闪存）</button>
@@ -582,6 +583,7 @@ async function loadStatus(){
     document.getElementById('v23NetStatus').textContent=
       (tg.v23_mode?(v23s.fallback_v22?'⚠️ 本次行车触发第 2 层保险丝，已自动回退 v22.1 经典通道':'✅ v23 60fps 引擎已启用'):'当前未启用 v23（稳跑 v22.1 经典通道）')+
       (v23s.has_live?' · 内存热试跑中':(v23s.has_saved?' · 已固化自定义皮肤 my_theme.js':' · 官方默认经典皮肤'));
+    loadV23ThemeStatus();
 
     renderFileList('driveList',S.drive_logs,'drive','未检测到 U 盘 drive_logs 目录或暂无 CSV');
     renderFileList('logList',S.sys_logs,'log','暂无日志');
@@ -703,6 +705,58 @@ document.getElementById('btnOtaRollback').onclick=async()=>{
   }finally{busy=false;if(S)updateHeaderStatus(S);}
 };
 
+async function loadV23ThemeStatus(){
+  const bar=document.getElementById('v23ThemeBar');
+  const stEl=document.getElementById('v23NetStatus');
+  if(!bar)return;
+  try{
+    const r=await fetch('/api/theme/status',{headers:{'X-Pin':PIN}});
+    if(!r.ok)return;
+    const j=await r.json();
+    if(j.mode==='v23_gles60'){
+      const zc=j.map_zero_copy?'零拷贝':'兼容拷贝';
+      const fpsTxt=(j.fps?(' · '+j.fps+'fps（'+zc+'）'):'')+(j.night?' · 夜间':' · 白天');
+      const curTxt=j.fallback?(' · 当前回退官方默认'+(j.error?'（'+j.error+'）':'')):(' · 当前：'+(j.theme_name||'官方默认经典'));
+      stEl.textContent=(j.ok?'✅ v23 60fps 运行中':'⚠️ v23 皮肤异常已保底')+fpsTxt+curTxt;
+    }
+    const list=Array.isArray(j.themes)?j.themes:[];
+    const hasCustom=list.length>0&&(j.source==='live_ram'||j.source==='saved_user');
+    bar.textContent='';
+    if(!hasCustom){bar.style.display='none';return;}
+    bar.style.display='flex';
+    const driving=S&&S.speed>3;
+    list.forEach((t,i)=>{
+      const b=document.createElement('button');
+      b.type='button';
+      b.className='btn sm write-act'+(!j.fallback&&j.active_idx===i?' pri':'');
+      b.textContent=(i+1)+'. '+(t.name||t.id||('皮肤'+(i+1)));
+      b.disabled=driving||busy;
+      b.onclick=()=>selectV23Theme(i,t.name||('皮肤'+(i+1)));
+      bar.appendChild(b);
+    });
+    const defBtn=document.createElement('button');
+    defBtn.type='button';
+    defBtn.className='btn sm write-act'+(j.fallback?' pri':'');
+    defBtn.textContent='官方默认经典';
+    defBtn.disabled=driving||busy;
+    defBtn.onclick=()=>selectV23Theme(-1,'官方默认经典');
+    bar.appendChild(defBtn);
+  }catch(_){}
+}
+async function selectV23Theme(idx,label){
+  if(busy)return;
+  busy=true;if(S)updateHeaderStatus(S);
+  const msgEl=document.getElementById('v23ThemeMsg');
+  try{
+    const j=await postForm('/api/theme/select',{idx:String(idx)});
+    msgEl.textContent='✓ 已切换至：'+label;
+    toast('已切换：'+label);
+    setTimeout(loadV23ThemeStatus,600);
+  }catch(e){
+    msgEl.textContent='✗ 切换失败：'+e.message;
+    toast('切换失败: '+e.message);
+  }finally{busy=false;if(S)updateHeaderStatus(S);}
+}
 async function uploadV23Theme(endpoint,label){
   if(busy)return;
   const f=document.getElementById('v23ThemeFile').files[0];
@@ -722,6 +776,7 @@ async function uploadV23Theme(endpoint,label){
     msgEl.textContent='✓ '+(j.msg||'成功');
     toast(j.msg||'操作成功');
     loadStatus();
+    setTimeout(loadV23ThemeStatus,1100);
   }catch(e){
     msgEl.textContent='✗ 失败：'+e.message;
     toast('失败: '+e.message);
@@ -737,6 +792,7 @@ document.getElementById('btnThemeReset').onclick=async()=>{
     document.getElementById('v23ThemeMsg').textContent='✓ '+(j.msg||'已恢复默认经典皮肤');
     toast(j.msg||'已恢复默认');
     loadStatus();
+    setTimeout(loadV23ThemeStatus,800);
   }catch(e){toast('恢复失败: '+e.message);}
   finally{busy=false;if(S)updateHeaderStatus(S);}
 };

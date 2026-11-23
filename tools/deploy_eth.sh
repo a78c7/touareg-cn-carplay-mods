@@ -304,10 +304,12 @@ if [ "$HAS_PER3" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
     chk_sz "$PER3_DST.new" "$PER3_SZ"
     chmod 755 "$PER3_DST.new" && mv -f "$PER3_DST.new" "$PER3_DST"
 fi
-# 同步刷新 v22.0 崩溃计数基线
-ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > "$D/j9_base_crashes"
-ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/dio_base_cores"
-ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/render_base_cores"
+# 同步刷新 v22.0 崩溃计数基线（车机 QNX 默认 PATH 不含 /mnt/app/armle/bin，显式补齐避免裸 awk 报错）
+export PATH="/mnt/app/armle/bin:/mnt/app/armle/usr/bin:$PATH"
+count_glob() { n=0; for x in "$@"; do [ -e "$x" ] && n=$((n + 1)); done; echo "$n"; }
+count_glob /mnt/crashlogs/java/* > "$D/j9_base_crashes"
+count_glob /mnt/crashlogs/core/dio_manager*.core.gz > "$D/dio_base_cores"
+count_glob /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz > "$D/render_base_cores"
 
 sync
 mount -ur /mnt/app 2>/dev/null || true

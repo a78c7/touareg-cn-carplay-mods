@@ -465,7 +465,40 @@ static void dash_fill_bg(void) {
     for (int x = R; x < W - R; x++) dash_blend_rgb(x, 0, 180, 210, 240, 38);
 }
 
-/* 1) Anti-aliased segmented slanted sport blocks (matching Touareg Sport HMI: cyan/teal -> amber -> redline tail) */
+/* Smooth 4-stop dynamic heat color for segmented sport bars:
+ *   <= 22% : base cool cyan/teal (idle / light cruise)
+ *      34% : bright yellow  (~2200 rpm / ~153 Nm / ~85 kW)
+ *      56% : vivid orange   (~3640 rpm / ~252 Nm / ~140 kW)
+ *   >= 80% : crimson red    (~5200 rpm / ~360 Nm / ~200 kW) */
+static void dash_seg_heat_color(float frac, int ar, int ag, int ab, int *or_, int *og, int *ob) {
+    if (frac <= 0.22f) {
+        *or_ = ar; *og = ag; *ob = ab;
+        return;
+    }
+    int r0, g0, b0, r1, g1, b1;
+    float t;
+    if (frac < 0.34f) {
+        t = (frac - 0.22f) / 0.12f;
+        r0 = ar;  g0 = ag;  b0 = ab;
+        r1 = 250; g1 = 218; b1 = 42;
+    } else if (frac < 0.56f) {
+        t = (frac - 0.34f) / 0.22f;
+        r0 = 250; g0 = 218; b0 = 42;
+        r1 = 255; g1 = 134; b1 = 28;
+    } else if (frac < 0.80f) {
+        t = (frac - 0.56f) / 0.24f;
+        r0 = 255; g0 = 134; b0 = 28;
+        r1 = 255; g1 = 48;  b1 = 66;
+    } else {
+        *or_ = 255; *og = 48; *ob = 66;
+        return;
+    }
+    *or_ = (int)((float)r0 + (float)(r1 - r0) * t + 0.5f);
+    *og  = (int)((float)g0 + (float)(g1 - g0) * t + 0.5f);
+    *ob  = (int)((float)b0 + (float)(b1 - b0) * t + 0.5f);
+}
+
+/* 1) Anti-aliased segmented slanted sport blocks (whole-bar smooth 4-stop heat color: cyan -> yellow -> orange -> red) */
 static void dash_draw_seg_bar(int x0, int y0, int w, int h, float frac, int nseg, int red_segs, int ar, int ag, int ab) {
     if (w < 40 || h < 4) return;
     if (frac < 0.0f) frac = 0.0f;
@@ -476,23 +509,21 @@ static void dash_draw_seg_bar(int x0, int y0, int w, int h, float frac, int nseg
     if (seg_w < 3.0f) seg_w = 3.0f;
     float lit_pos = frac * (float)nseg;
 
+    /* All lit segments share a single smooth dynamic heat color based on current load */
+    int lr, lg, lb;
+    dash_seg_heat_color(frac, ar, ag, ab, &lr, &lg, &lb);
+
     for (int s = 0; s < nseg; s++) {
         int is_red = (s >= nseg - red_segs);
-        int is_warn = (!is_red && red_segs >= 3 && s >= nseg - red_segs - 2);
         float fill = lit_pos - (float)s;
         if (fill < 0.0f) fill = 0.0f;
         if (fill > 1.0f) fill = 1.0f;
 
-        /* Unlit background block color (redline tail stays visible in dim crimson even at idle, just like the photo) */
+        /* Unlit background block color (redline tail stays visible in dim crimson even at idle) */
         int br = is_red ? 138 : 42;
         int bg = is_red ? 32  : 56;
         int bb = is_red ? 48  : 70;
         int ba = is_red ? 205 : 155;
-
-        /* Lit block color */
-        int lr = is_red ? 255 : (is_warn ? 255 : ar);
-        int lg = is_red ? 56  : (is_warn ? 188 : ag);
-        int lb = is_red ? 72  : (is_warn ? 52  : ab);
 
         int cr = (int)(br + (lr - br) * fill + 0.5f);
         int cg = (int)(bg + (lg - bg) * fill + 0.5f);
@@ -574,12 +605,12 @@ static void dash_draw_row_bar(int it, const dash_vals_t *v, int x0, int y0, int 
         break;
     }
     case IT_POWER: {
-        float f = (!DASH_NAN(v->p) && v->p > 0.0f) ? (v->p / 260.0f) : 0.0f;
+        float f = (!DASH_NAN(v->p) && v->p > 0.0f) ? (v->p / 250.0f) : 0.0f;
         dash_draw_seg_bar(x0, y0, w, h, f, 18, 3, 56, 212, 255);
         break;
     }
     case IT_TORQUE: {
-        float f = (v->tq > 0) ? ((float)v->tq / 460.0f) : 0.0f;
+        float f = (v->tq > 0) ? ((float)v->tq / 450.0f) : 0.0f;
         dash_draw_seg_bar(x0, y0, w, h, f, 18, 3, 46, 228, 186);
         break;
     }
@@ -590,7 +621,7 @@ static void dash_draw_row_bar(int it, const dash_vals_t *v, int x0, int y0, int 
     }
     case IT_BRAKE: {
         float f = (!DASH_NAN(v->brk) && v->brk > 0.0f) ? (v->brk / 60.0f) : 0.0f;
-        dash_draw_seg_bar(x0, y0, w, h, f, 18, 4, 255, 148, 56);
+        dash_draw_seg_bar(x0, y0, w, h, f, 18, 4, 64, 204, 255);
         break;
     }
     case IT_G: {

@@ -6,6 +6,7 @@
 # 2) Background loop: keep it 0666, cap the RAM logs, restart dio_manager once (only in the first
 #    3 minutes after boot) if the hook still reports the open failure, copy logs to a USB drive
 #    that has a "cluster_logs" folder.
+export PATH=/sbin:/usr/sbin:/bin:/usr/bin:/mnt/app/armle/sbin:/mnt/app/armle/usr/sbin:/mnt/app/armle/bin:/mnt/app/armle/usr/bin:$PATH
 ST=/tmp/cluster_cp.state
 PL=/tmp/vwcn_persist.log
 D_APP=/mnt/app/eso/bin/apps/cluster

@@ -1,5 +1,32 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v23.0-beta.5
+> **Pre-release 实车满血 59fps 零拷贝 + 方向盘 OK 盲切皮肤 + 四色动态运动条 + `1920×639` 实车标定几何规范版**：基于 2023 款国行途锐真机全流程实测（`EGL_KHR_image_pixmap` 零拷贝、4 套复杂皮肤与 GLSL 光效切换、方向盘 NavBAP 按键探针、35 ms 保险丝与 `y=162` 横幅避让、正面像素标定照），一次性落地 7 项核心体验与底层升级。已装 `v22.1+` 与 `8080` 无线控制台的车主直接上传 `touareg-ota-v23.0-beta.5.tar`（约 1.6 MB）并点「软重启车机」即可生效（因为本次同时更新了 `VWClusterNav_v6.jar`）。
+
+- **默认开启实车验通的 `EGL_KHR_image_pixmap` 硬件零拷贝（`v23_gles.c`，帧率直接翻倍至 `55～59 fps`）**：
+  - 途锐 Tegra K1 真机实测带 `17 fps` 实时高德地图全屏监控 HUD 跑满 **`59 fps`**、GT 双炮筒 **`56 fps`**、赛博真 GLSL 显卡光效 **`55 fps`**，全程 0 反色 / 0 花屏 / 0 超时毛刺；
+  - 现改为默认开启零拷贝，遇到不兼容驱动自动无缝退回 `glTexSubImage2D` 紧致上传（仍保留 `/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy` 手动强制降级开关）。
+- **方向盘 `OK` 键盲切多皮肤 + `8080` 控制台一键切换皮肤（`NavZoom.java` + `v23_gles.c` + `touareg_netd`）**：
+  - **方向盘零延迟智能手势（方案 A）**：
+    - 未选装「切原车地图」模块（默认态）且 `v23` 启用时：**双击 `OK` 键**零延迟立刻切换下一套皮肤（0.8 秒短冷却；单皮肤包在自定义皮肤 ↔ 官方默认经典间往返）；
+    - 同时选装了「切原车地图」模块（`VW_HUD_4_OkMapSwitch`）且 `v23` 启用时：**双击 `OK` 切 CarPlay ↔ 原车地图**（480 ms 判定窗）、**三连击 `OK` 切下一套 v23 皮肤**，零冲突共存；
+  - **`8080` 无线控制台多皮肤切换 UI**：`v23` 面板自动从 `/api/theme/status` 拉取实时 `FPS / 零拷贝状态 / 昼夜 / 当前皮肤` 并渲染多皮肤一键切换按钮及「官方默认经典」按钮；底层切换指令升级为内容 + 递增序号比对并自动 `chmod 0666`，彻底消除 QNX 1 秒 `st_mtime` 粒度与 `root/java` 跨用户写权限隐患。
+- **信息框运动条升级为「整条平滑四色热力渐变」（`dash.c` + 浏览器 1:1 模拟器同步）**：
+  - 转速（满 `6500`）、扭矩（满 `450`）、功率（满 `250`）、油门（`100%`）与制动（满 `60 bar`）斜切分段运动条不再前 70% 单调纯绿，改为已点亮格子随当前负载整条线性平滑变色：**`≤22%` 冰青绿 → `34%` 明黄（约 2200 rpm / 153 Nm）→ `56%` 亮橙（约 3640 rpm / 252 Nm）→ `≥80%` 烈红（约 5200 rpm / 360 Nm）**，兼顾 2.0T 与 3.0T 驾驶体感，未亮槽继续保留暗红红线提示；经典 `v22.1` 通道与 `v23` 默认经典皮肤均直接受益。
+- **移除 2 秒开机启动图直出地图（`cluster.c`，瘦身 287 KB 源码）**：
+  - 删除 `src/cl_render/boot_canim_data.h` 及 `h264` 模式下 2 秒 `fifthBro` 开机启动图门控，连上 CarPlay 直接出地图免等待（CC BY-NC-SA 4.0 署名继续在 `README` 与 `LICENSES/THIRD_PARTY_NOTICES.md` 完整保留）。
+- **途锐 `1920×639` 实车像素级精确几何规范入仓 + 模拟器参考线全面校准**：
+  - 新增 [`docs/reference/CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)（并随发布包打入 `v23皮肤模板/`），同步更新 `THEME_API_SPEC.md`、`my_theme.js`、`USB/AGENTS.md` 及浏览器 1:1 模拟器 `drawOemGuides`：修正顶部双层遮挡（`y=0..82` 全黑栏 + `y=82..154` 导航栏 + `y>=164` 安全顶线）、精确左右斜梯形底边（`468 / 1458`）、新增**全天候常驻底部正中小路禁区（`y=580..639`）** 以及左右 `295×344` 黄金对称对齐参考框。
+- **修复车机 QNX 默认 `PATH` 缺 `/mnt/app/armle/bin/awk`**：
+  - 修复 `VW_HUD_2` / `VW_HUD_3` Persist 启动脚本、`touareg_netd` 重置基线命令与 `tools/deploy_eth.sh` 在 QNX 运行态下因默认 `PATH` 缺 `/mnt/app/armle/bin` 导致裸 `awk` 计数报错的隐患。
+- **车机 QNX 6.6 ARMv7 二进制 & Java 1.4 校验和（`src/build.sh` + `src/hud-java/build.sh`，已通过 `carlibs` 符号审计 0 新增缺失符号、`DT_HASH+GNU_HASH` 完整、29 个 Java class 全为 version `48`）**：
+  - `cl_render`（`1,341,980 B`）：`ca73ffcbfdf8984b975b9719cf3821b8f2626b8ff8fb036a9098720f22a55c0e`
+  - `touareg_netd`：`1f659124a666434d2a0846c725d2dd6d6a75b6cc8e8d099a29aad84d1a5ef516`
+  - `VWClusterNav_v6.jar`：`db5807bb5c4613a61898ad0a8906c5d19932f4fa3e969881f12a26974be47540`
+  - `clusterd`（与 `v23.0-beta.1` 一致）：`096a71c1b37bdcf9ebba3b1d3e66428af38488177c585ed0e3d7f4db695d4f64`
+  - `cl_probe.so`（与 `v22.1` 一致）：`e260013df86291611225856c6f1c3c05a1d12857bfeaaa0514d1494192cbfa24`
+- 包含 `v23.0-beta.4` ～ `v23.0-beta.1` 的全部内容。
+
 ## v23.0-beta.4
 > **Pre-release 实车性能优化与超时容错升级版**：在 `v23.0-beta.3` 实车跑通 60fps 全屏 AI 皮肤与 CarPlay 地图切换的基础上，针对实车反馈的**复杂多组件皮肤运行数十秒偶发触发 10ms 硬中断回退**与**红条提示重叠原车路名**问题，完成底层 GLES2 渲染管线全面提速与容错升级。已装 `v22.1+` 与 `8080` 无线控制台的车主直接传 `touareg-ota-v23.0-beta.4.tar`（1.6 MB）10 秒无线升级即可。
 

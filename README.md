@@ -14,7 +14,7 @@
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载稳定版（v22.1）</b></a> ·
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1"><b>🧪 尝鲜版（v23.0-beta.1）</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5"><b>🧪 尝鲜版（v23.0-beta.5）</b></a> ·
   <a href="#4-步免拆刷入安装"><b>⚡ 4 步安装</b></a> ·
   <a href="#11-大可选功能全景"><b>🧩 功能清单</b></a> ·
   <a href="README.en.md"><b>🇺🇸 English</b></a> ·
@@ -36,7 +36,7 @@
 ---
 
 > [!TIP]
-> **🧪 尝鲜测试版 [`v23.0-beta.1 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1) 已开放下载** —— 新增 **60fps AI 自定义仪表皮肤引擎（GLES2 + QuickJS）**、**1:1 浏览器试驾模拟器**与空白模板 [`my_theme.js`](tools/preview/my_theme.js)（「改装设置」一键试驾/导入 + U 盘一次写入，无需 8080 热点；默认关闭 `v23_mode`，全程受车机三层自动保险丝保护）。日常求稳请继续下载 [`v22.1` 稳定版](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)。
+> **🧪 尝鲜测试版 [`v23.0-beta.5 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5) 已开放下载** —— 实车验通 **55～59 fps 硬件零拷贝 AI 自定义皮肤引擎（GLES2 + QuickJS）**、**1920×639 实车标定几何规范**（[`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)）、**方向盘 OK 盲切多皮肤**（默认双击 OK 零延迟切皮肤；同时装切原车地图模块时双击切图、三连击切皮肤）与 `8080` 多皮肤切换按钮、**信息框运动条整条平滑四色热力渐变**、并已移除 2 秒开机启动图直出地图（默认关闭 `v23_mode`，全程受车机三层自动保险丝保护）。日常求稳请继续下载 [`v22.1` 稳定版](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)。
 
 <div align="center">
   <img src="docs/img/cluster.png" alt="v22 仪表地图、大字运动信息框与对称导航卡示意图" width="92%">

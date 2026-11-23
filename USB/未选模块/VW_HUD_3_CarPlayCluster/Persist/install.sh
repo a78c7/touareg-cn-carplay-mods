@@ -2,6 +2,7 @@
 # Runs at every boot (ModKit Persist). Switch files for cl_probe.so / VWClusterNav and the cluster daemon.
 # Disable without uninstalling: create an empty file /mnt/app/eso/bin/apps/cluster/disable
 D=/mnt/app/eso/bin/apps/cluster
+export PATH=/sbin:/usr/sbin:/bin:/usr/bin:/mnt/app/armle/sbin:/mnt/app/armle/usr/sbin:/mnt/app/armle/bin:/mnt/app/armle/usr/bin:$PATH
 export LD_LIBRARY_PATH=/mnt/app/armle/lib:/mnt/app/armle/usr/lib:/mnt/app/armle/graphics:/eso/lib:/lib:/usr/lib
 export CL_ZOOM=0
 

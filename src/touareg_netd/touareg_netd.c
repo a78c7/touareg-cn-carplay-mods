@@ -1029,12 +1029,12 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], ota_ver[48];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.3");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.5");
 
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v23.0-beta.3 ota_version=%s bcm2_ip=%s\n"
+        "netd_version=v23.0-beta.5 ota_version=%s bcm2_ip=%s\n"
         "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d v23_fallback=%d\n"
         "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d v23_mode=%d\n\n",
         ota_ver, ipstr,
@@ -1118,7 +1118,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], esc1[320], esc2[320], ota_ver[48], esc_ov[64];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.1");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.5");
     json_escape(ota_ver, esc_ov, sizeof(esc_ov));
     double spd = -1.0, odo = -1.0;
     read_dash_state(&spd, &odo);
@@ -1136,7 +1136,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     refresh_proc_flags(&p_cld, &p_ren, &p_dio);
 
     l += (size_t)snprintf(j + l, 32768 - l,
-        "{\"ok\":true,\"version\":\"v23.0-beta.1\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
+        "{\"ok\":true,\"version\":\"v23.0-beta.5\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
         "\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
@@ -1561,6 +1561,7 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
             }
             send_json(cfd, ok ? 200 : 500, ok, ok ? "开关已更新" : "开关写入失败");
         } else if (strcmp(target, "/api/theme/select") == 0) {
+            static unsigned int s_theme_sel_seq = 0;
             char act[24], idx_s[16];
             form_get(body, "act", act, sizeof(act));
             form_get(body, "idx", idx_s, sizeof(idx_s));
@@ -1575,10 +1576,19 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
             } else {
                 int fd_sel = open("/tmp/v23_theme_select", O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 if (fd_sel >= 0) {
-                    char sb[24];
-                    int sl = snprintf(sb, sizeof(sb), "%d\n", atoi(idx_s));
+                    char sb[32];
+                    int sl;
+                    s_theme_sel_seq++;
+                    if (strcmp(act, "next") == 0) {
+                        sl = snprintf(sb, sizeof(sb), "next #%u\n", s_theme_sel_seq);
+                    } else if (strcmp(act, "prev") == 0) {
+                        sl = snprintf(sb, sizeof(sb), "prev #%u\n", s_theme_sel_seq);
+                    } else {
+                        sl = snprintf(sb, sizeof(sb), "%d #%u\n", atoi(idx_s), s_theme_sel_seq);
+                    }
                     ssize_t wr = (sl > 0) ? write(fd_sel, sb, (size_t)sl) : -1;
                     close(fd_sel);
+                    chmod("/tmp/v23_theme_select", 0666);
                     if (wr == (ssize_t)sl) send_json(cfd, 200, 1, "已发送皮肤切换指令");
                     else send_json(cfd, 500, 0, "写入切换指令失败");
                 } else {
@@ -1623,10 +1633,10 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
                     unlink("/tmp/v23_theme_loading");
                     mount_app_rw();
                     unlink(CLUSTER_DIR "/safe_mode");
-                    run_const_cmd("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/j9_base_crashes");
-                    run_const_cmd("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/dio_base_cores");
-                    run_const_cmd("[ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/render_base_cores");
-                    run_const_cmd("[ -d " WIFI_DIR " ] && ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " WIFI_DIR "/iopkt_base_cores");
+                    run_const_cmd("PATH=/mnt/app/armle/bin:$PATH; [ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/java/* 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/j9_base_crashes");
+                    run_const_cmd("PATH=/mnt/app/armle/bin:$PATH; [ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/dio_manager*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/dio_base_cores");
+                    run_const_cmd("PATH=/mnt/app/armle/bin:$PATH; [ -d " CLUSTER_DIR " ] && ls /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " CLUSTER_DIR "/render_base_cores");
+                    run_const_cmd("PATH=/mnt/app/armle/bin:$PATH; [ -d " WIFI_DIR " ] && ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > " WIFI_DIR "/iopkt_base_cores");
                     mount_app_ro();
                 }
                 send_json(cfd, 200, 1, "已清除安全模式锁并刷新崩溃基线，建议重启车机生效");

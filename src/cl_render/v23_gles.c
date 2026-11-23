@@ -169,7 +169,9 @@ static int v23_map_setup(int w, int h) {
     g_v23_map.auto_night = 1;
     g_v23_stop = 0;
 
-    int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_zerocopy", F_OK) == 0);
+    /* 实车 Tegra K1 已验证 EGL_KHR_image_pixmap 硬件零拷贝满血 55~59fps 且无反色/花屏；
+     * 默认开启零拷贝（驱动不兼容时自动无缝降级 glTexSubImage2D，建 v23_no_zerocopy 可手动强制降级）。 */
+    int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0);
     int fmt = SCREEN_FORMAT_RGBX8888;
     int usage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ |
                 (want_zc ? SCREEN_USAGE_OPENGL_ES2 : 0);
@@ -589,7 +591,7 @@ typedef struct {
     int    user_shader_ok;
     char   shader_err[256];
 
-    /* CarPlay 地图纹理（默认 glTexSubImage2D 紧致上传；v23_zerocopy 开关启用时尝试 EGLImage 零拷贝） */
+    /* CarPlay 地图纹理（默认启用实车已验通的 EGLImage 零拷贝；建 v23_no_zerocopy 或驱动失败时自动降级 glTexSubImage2D） */
     int      map_has_stream;
     int      map_zero_copy;
     GLuint   map_tex[3];
@@ -1308,9 +1310,9 @@ static void v23_write_status_json(const v23_sandbox_t *cur_sb, const v23_gl_ctx_
                                   const char *source, int fallback, const char *err_msg,
                                   int fps, int map_fps) {
     char id_e[128], name_e[192], err_e[512], sh_e[384], src_e[64];
-    int idx = (cur_sb && cur_sb->entry_count > 0) ? cur_sb->active_idx : 0;
-    const char *tid = (cur_sb && cur_sb->entry_count > 0) ? cur_sb->metas[idx].id : "default_classic";
-    const char *tnm = (cur_sb && cur_sb->entry_count > 0) ? cur_sb->metas[idx].name : "官方默认 60fps 经典版";
+    int idx = fallback ? -1 : ((cur_sb && cur_sb->entry_count > 0) ? cur_sb->active_idx : 0);
+    const char *tid = (!fallback && cur_sb && cur_sb->entry_count > 0) ? cur_sb->metas[idx].id : "default_classic";
+    const char *tnm = (!fallback && cur_sb && cur_sb->entry_count > 0) ? cur_sb->metas[idx].name : "官方默认 60fps 经典版";
     v23_json_escape(tid, id_e, sizeof(id_e));
     v23_json_escape(tnm, name_e, sizeof(name_e));
     v23_json_escape(err_msg ? err_msg : "", err_e, sizeof(err_e));
@@ -1620,10 +1622,10 @@ static int v23_run_gl_loop(int with_carplay_map) {
     v23_atlas_init(&gc->atlas);
     v23_diag("[7] atlas ok tex=%u", gc->atlas.tex);
 
-    /* 初始化 CarPlay 地图纹理：默认稳走 glTexSubImage2D（含 stride 紧致拷贝）；仅手动建 v23_zerocopy 时尝鲜 EGLImage */
+    /* 初始化 CarPlay 地图纹理：默认启用实车验通的 EGLImage 零拷贝（55~59fps），不兼容自动降级 glTexSubImage2D */
     if (with_carplay_map && g_v23_map.initialized) {
         int zc_ok = 0;
-        int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_zerocopy", F_OK) == 0);
+        int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0);
         if (want_zc && v23gl.EglCreateImageKHR && v23gl.GlEGLImageTargetTex2D) {
             zc_ok = 1;
             gl_GenTextures(3, gc->map_tex);
@@ -1729,6 +1731,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
     char cur_source[32] = "builtin";
     char cur_err[512] = "";
     time_t last_live_mt = 0, last_saved_mt = 0, last_sel_mt = 0;
+    char last_sel_txt[64] = "";
     int had_live = 0, had_saved = 0;
 
     /* 冷启动死循环哨兵检测：若上次加载固化皮肤直接进程崩溃，本次跳过固化皮肤直接保底进默认经典版 */
@@ -1826,18 +1829,42 @@ static int v23_run_gl_loop(int with_carplay_map) {
                 v23_write_status_json(using_user ? user_sb : fb_sb, gc, cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
             }
 
-            /* 检查多皮肤切换索引 /tmp/v23_theme_select */
-            if (using_user && stat("/tmp/v23_theme_select", &st_sel) == 0 && st_sel.st_mtime != last_sel_mt) {
-                last_sel_mt = st_sel.st_mtime;
+            /* 检查多皮肤切换索引 /tmp/v23_theme_select（支持整数 0..7 / -1 及 "next #seq" / "prev #seq"，
+             * 同时比对 mtime 与内容，彻底消除 QNX 1 秒 mtime 粒度导致的连续切换漏检） */
+            if (using_user && stat("/tmp/v23_theme_select", &st_sel) == 0) {
                 FILE *sf = fopen("/tmp/v23_theme_select", "r");
                 if (sf) {
                     char sb_txt[64];
-                    if (fgets(sb_txt, sizeof(sb_txt), sf)) {
-                        int want = atoi(sb_txt);
+                    sb_txt[0] = '\0';
+                    if (fgets(sb_txt, sizeof(sb_txt), sf) &&
+                        (st_sel.st_mtime != last_sel_mt || strcmp(sb_txt, last_sel_txt) != 0)) {
+                        last_sel_mt = st_sel.st_mtime;
+                        snprintf(last_sel_txt, sizeof(last_sel_txt), "%s", sb_txt);
+                        int want = 0;
+                        if (strncmp(sb_txt, "next", 4) == 0) {
+                            if (fallback_active) {
+                                want = 0;
+                            } else if (user_sb->entry_count > 1) {
+                                want = (user_sb->active_idx + 1) % user_sb->entry_count;
+                            } else {
+                                want = -1; /* 单皮肤包时在自定义皮肤 ↔ 官方默认经典间往返 */
+                            }
+                        } else if (strncmp(sb_txt, "prev", 4) == 0) {
+                            if (fallback_active) {
+                                want = user_sb->entry_count - 1;
+                            } else if (user_sb->entry_count > 1) {
+                                want = (user_sb->active_idx + user_sb->entry_count - 1) % user_sb->entry_count;
+                            } else {
+                                want = -1;
+                            }
+                        } else {
+                            want = atoi(sb_txt);
+                        }
                         if (want < 0) {
                             /* -1 表示暂时切回默认经典 */
                             fallback_active = 1;
                             v23_compile_user_shader(gc, NULL);
+                            v23_set_banner(gc, "已切回官方默认 60fps 经典版", 0, 3);
                         } else if (want < user_sb->entry_count) {
                             fallback_active = 0; slow_frames = 0; timeout_streak = 0; cur_err[0] = '\0';
                             user_sb->active_idx = want;
@@ -1846,7 +1873,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                             snprintf(bm, sizeof(bm), "已切换风格：%s", user_sb->metas[want].name);
                             v23_set_banner(gc, bm, 0, 3);
                         }
-                        v23_write_status_json(fallback_active ? fb_sb : user_sb, gc, cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
+                        v23_write_status_json(user_sb, gc, cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
                     }
                     fclose(sf);
                 }
@@ -1992,7 +2019,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
         }
         if (now_ms - last_stat_ms >= 2000ULL) {
             last_stat_ms = now_ms;
-            v23_write_status_json((using_user && !fallback_active) ? user_sb : fb_sb, gc,
+            v23_write_status_json(using_user ? user_sb : fb_sb, gc,
                                   cur_source, fallback_active, cur_err, meas_fps, meas_map_fps);
         }
     }

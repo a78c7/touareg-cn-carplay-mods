@@ -185,6 +185,7 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
         ('tools/preview/index.html', 'v23皮肤模板/preview.html'),
         ('tools/preview/my_theme.js', 'v23皮肤模板/my_theme.js'),
         ('tools/preview/THEME_API_SPEC.md', 'v23皮肤模板/THEME_API_SPEC.md'),
+        ('docs/reference/CLUSTER_LAYOUT_SPEC.md', 'v23皮肤模板/CLUSTER_LAYOUT_SPEC.md'),
     ):
         if os.path.isfile(src_p):
             add_file(z, src_p, arc_p, 0o644)

@@ -14,7 +14,7 @@
 
 <p>
   <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Stabile Version (v22.1)</b></a> ·
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1"><b>🧪 Beta-Vorschau (v23.0-beta.1)</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5"><b>🧪 Beta-Vorschau (v23.0-beta.5)</b></a> ·
   <a href="#4-schritte-usb-installation"><b>⚡ 4-Schritte-Installation</b></a> ·
   <a href="#11-optionale-module"><b>🧩 Module</b></a> ·
   <a href="README.md"><b>🇨🇳 简体中文</b></a> ·
@@ -36,7 +36,7 @@
 ---
 
 > [!TIP]
-> **🧪 Öffentliche Beta [`v23.0-beta.1 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.1) verfügbar** — bringt die optionale **60fps-KI-Design-Engine für das Digital Cockpit (GLES2 + QuickJS)**, einen integrierten **1:1-Browser-Fahrsimulator** sowie die KI-Vorlage [`my_theme.js`](tools/preview/my_theme.js) (einmalig per Konfigurator & USB-Stick flashen, ganz ohne `8080`-WLAN; `v23_mode` ist standardmäßig deaktiviert und durch eine 3-stufige Sicherheitsabschaltung geschützt). Für den Alltag bleibt [`v22.1` (Stabil)](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) empfohlen.
+> **🧪 Öffentliche Beta [`v23.0-beta.5 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5) verfügbar** — im Fahrzeug verifizierte **55–59 fps Hardware-Zero-Copy KI-Design-Engine (GLES2 + QuickJS)**, pixelgenaue **1920×639 Cockpit-Geometriespezifikation** ([`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)), Lenkrad-`OK`-Designwechsel (standardmäßig Doppelklick `OK`; bei installiertem Kartenwechsel-Modul Doppelklick Karte / Dreifachklick Design) + `8080`-Designauswahl, 4-stufige Sport-Balkenfarbverläufe und Sofortstart ohne 2-s-Splashscreen (`v23_mode` standardmäßig deaktiviert, 3-stufige Sicherheitsabschaltung). Für den Alltag bleibt [`v22.1` (Stabil)](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) empfohlen.
 
 <div align="center">
   <img src="docs/img/cluster.png" alt="v22 Kombiinstrument-Karte, Sport-Infoboxen und symmetrische Navigationskarte" width="92%">

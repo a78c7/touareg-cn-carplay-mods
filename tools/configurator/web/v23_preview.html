@@ -203,7 +203,7 @@ pre#statusJson{
 window.BUILTIN_THEMES = {
   default_classic: "// ① 官方默认 60fps 经典版 — 100% 忠实原版视觉，完全沿用 dash.conf 43 项勾选\nconst THEME = {\n  id: \"default_classic\",\n  name: \"① 官方默认 60fps 经典版\",\n  author: \"a78c7\",\n  version: \"1.0\",\n  desc: \"最原始经典外观：满屏 CarPlay 地图 + 左右 295px 60fps 丝滑信息框/自动导航卡，完全沿用 dash.conf\",\n  shader: \"\"\n};\n\nfunction render(ctx, bus, state) {\n  var mapOn = bus.sys.mapLive;\n  ctx.clear(8, 13, 22, 1);\n\n  if (mapOn) {\n    // 满屏 CarPlay 实时地图（20fps 底图），左右信息框/导航卡 60fps 丝滑叠加\n    ctx.drawMap(0, 0, 1920, 639, { alpha: 1.0 });\n  } else {\n    // 断开 CarPlay 且开启「断流进全屏 60fps 仪表」时的纯净中置车速/转速表\n    ctx.rect(0, 0, 1920, 639, { fill: \"#070c15\", fill2: \"#0d1829\", gradDir: \"v\" });\n    var cx = 960, cy = 355, R = 182;\n    var rpmFrac = Math.min(1, Math.max(0, bus.rpm / 6500));\n    var rpmCol = rpmFrac > 0.85 ? \"#ff3b4e\" : (rpmFrac > 0.65 ? \"#f59e0b\" : \"#22d3ee\");\n\n    ctx.arc(cx, cy, R, 135, 405, { color: \"rgba(255,255,255,0.09)\", lineWidth: 20, cap: \"round\" });\n    ctx.ticks(cx, cy, R - 22, R - 8, 135, 405, 35, {\n      color: \"rgba(180,205,230,0.35)\", majorEvery: 5, majorLen: 10,\n      lineWidth: 2, majorWidth: 3, redFromFrac: 0.84, redColor: \"#ef4444\"\n    });\n    ctx.arc(cx, cy, R, 135, 135 + 270 * rpmFrac, {\n      color: rpmCol, lineWidth: 20, cap: \"round\", glow: 16, glowColor: rpmCol\n    });\n    ctx.needle(cx, cy, R - 22, 20, 135 + 270 * rpmFrac, {\n      color: \"#ffffff\", tipColor: rpmCol, width: 5, glow: 12\n    });\n    ctx.circle(cx, cy, 86, { fill: \"rgba(9,14,24,0.94)\", stroke: \"rgba(255,255,255,0.12)\", lineWidth: 1.5 });\n    ctx.text(String(Math.round(bus.speed)), cx, cy + 20, {\n      size: 82, bold: true, color: \"#ffffff\", align: \"center\", glow: 12, glowColor: \"rgba(56,189,248,0.35)\"\n    });\n    ctx.text(\"km/h  ·  \" + Math.round(bus.rpmRaw) + \" rpm  ·  \" + bus.gear, cx, cy + 56, {\n      size: 20, bold: true, color: \"#94a3b8\", align: \"center\"\n    });\n  }\n\n  // 左右两侧 100% 沿用用户 dash.conf 勾选，导航激活时自动接管指定侧\n  var navOn = bus.nav.live && bus.conf.nav_box > 0;\n  var navLeft = navOn && bus.conf.nav_side === \"left\";\n  var navRight = navOn && bus.conf.nav_side !== \"left\";\n\n  if (navLeft) {\n    ctx.drawNavCard(5, 164, 295, 344, { alpha: bus.conf.alpha });\n  } else if (bus.conf.show) {\n    ctx.drawDashBox(5, 164, 295, \"left\");\n  }\n\n  if (navRight) {\n    ctx.drawNavCard(1620, 164, 295, 344, { alpha: bus.conf.alpha });\n  } else if (bus.conf.r_show) {\n    ctx.drawDashBox(1620, 164, 295, \"right\");\n  }\n}\n"
 };
-window.MY_THEME_TEMPLATE = "/*\n * ============================================================================\n * 途锐 MH2p v23 · 60fps 仪表自定义皮肤模板（给 AI 直接编写用）\n * ============================================================================\n *\n * 【车主怎么用（3 步零编程）】\n *   1. 直接把这个 my_theme.js 文件发给任意 AI（DeepSeek / ChatGPT / Claude / 手机 DSH Go），\n *      用大白话告诉它你想要什么风格（例如：“帮我在这个文件里写 2 套皮肤：一套红黑运动双表盘中间嵌高德地图，\n *      一套越野姿态+四轮胎压风格”）。\n *   2. AI 改好保存后，双击打开同目录的单文件 preview.html（或 index.html），把本文件直接拖进网页里 1:1 试驾预览\n *      （键盘 W 油门 / S 刹车 / A D 转向 / 空格弹射 / 长按 O 两秒切换多套风格）。\n *   3. 浏览器里试驾顺滑且右上角绿灯「运行正常」后，连上车机 http://touareg.local:8080 上传即可生效。\n *\n * ----------------------------------------------------------------------------\n * 【给 AI 的编写规范（必须严格遵守）】\n * 1. 本文件支持写「1 套或多套皮肤」：直接往下面的 THEMES 数组里追加对象即可（建议 1~5 套）。\n *    每套皮肤包含：{ id, name, author, desc, shader(可选), render(ctx, bus, state) }。\n *    （也兼容单皮肤写法：顶层 const THEME = {...}; function render(ctx, bus, state) {...}）\n *\n * 2. 途锐实车画布分辨率固定为 1920 × 639，必须避开原车仪表自绘遮挡区：\n *    - 顶部原车信息栏 / 时钟：y = 0 .. 156（时钟中心 x = 965），重要内容请放在 y >= 160\n *    - 左下原车挡位斜梯形：x = 0 .. 355, y = 509 .. 639\n *    - 右下原车车速斜梯形：x = 1565 .. 1920, y = 509 .. 639\n *    - 【重要】底部正中 ACC 巡航图标遮挡区：当 bus.sys.acc === true 时，原车会在 x = 760 .. 1160, y = 495 .. 639\n *      绘制 ACC 跟车图示（实车地图车标会自动上移 80px）。底部居中的组件请避开此区域，或在 bus.sys.acc 为 true 时自动上移/隐藏！\n *    - 黄金无遮挡区：左右侧 y = 160 .. 506；正中央 x = 370 .. 1550, y = 160 .. 490（ACC 关闭时可用至 y = 628）\n *\n * 3. 可用的 60fps 显卡高速画笔 ctx（车机 OpenGL ES 2.0 与浏览器 1:1 同源）：\n *    - ctx.clear(r, g, b, a)\n *    - ctx.drawMap(x, y, w, h, { radius, alpha, vignette, shape:\"rect\"|\"circle\", borderColor, borderWidth })\n *      * 提示：用 bus.sys.mapLive 判断当前是否连着 CarPlay 地图；断开时请自行绘制全屏自绘仪表内容。\n *    - ctx.drawShader({ alpha, blend:\"normal\"|\"add\" })\n *      * 若皮肤填写了 shader（标准 GLSL ES 1.00 片段着色器，<= 8KB），调用此函数叠画显卡光效；\n *      * 统一 uniforms: u_res(vec2), u_time(float), u_rpm(0..1), u_speed(0..1), u_power(0..1),\n *        u_pedal(0..1), u_brake(0..1), u_g(vec2), u_map_live(0/1), u_night(0/1)\n *    - ctx.rect(x, y, w, h, { fill, fill2, gradDir:\"v\"|\"h\", stroke, lineWidth, radius, glow, glowColor })\n *    - ctx.circle(cx, cy, r, { fill, stroke, lineWidth, glow, glowColor })\n *    - ctx.line(x1, y1, x2, y2, { color, lineWidth, cap, glow, glowColor })\n *    - ctx.poly([[x,y], ...], { fill, stroke, lineWidth, glow, glowColor })   // 可矢量绘制车标/姿态剪影\n *    - ctx.arc(cx, cy, r, startDeg, endDeg, { color, lineWidth, cap:\"round\"|\"butt\", glow, glowColor })\n *    - ctx.ticks(cx, cy, rIn, rOut, startDeg, endDeg, count, { color, majorEvery, majorLen, lineWidth, majorWidth, redFromFrac, redColor })\n *    - ctx.needle(cx, cy, len, tail, angleDeg, { color, tipColor, width, glow, hubRadius, hubColor })\n *    - ctx.segBar(x, y, w, h, frac, { segs, redSegs, color, warnColor, redColor, pulse })\n *    - ctx.biBar(x, y, w, h, signedFrac, { posColor, negColor })\n *    - ctx.rangeBar(x, y, w, h, frac, { color, tickLo, tickHi })\n *    - ctx.text(str, x, y, { size, bold, italic, color, align:\"left\"|\"center\"|\"right\", glow, glowColor, maxWidth })\n *    - ctx.drawDashBox(x, y, w, \"left\"|\"right\")        // 复用用户 8080 勾选的 dash.conf 信息框\n *    - ctx.drawNavCard(x, y, w, h, { alpha })          // 复用大字高德/百度/苹果导航卡\n *    - ctx.drawTurnArrow(x, y, size, bus.nav.turnType, { color })\n *\n * 4. 可用的 60fps 车辆与导航数据总线 bus（连续量已平滑，加 Raw 后缀可取原始值，如 bus.rpmRaw）：\n *    - 动力速度：rpm, rpmRaw, rpmPeak, speed, power(kW), torque(Nm), pedal(%), brake(bar), gear(\"D4\"/\"S1\"), steer(°)\n *    - 车身动态：g(合G), glong(纵G), glat(横G), pitch(俯仰°), roll(侧倾°), alt(海拔m)\n *    - 温度油量：oil(机油°C), gearbox(波箱°C), coolant(水温°C), outside(车外°C), cons(L/100km), fuel(L), range(km)\n *    - 胎压极值：tpfl, tpfr, tprl, tprr(bar), tires, t100(0-100秒), t100Running, pmax, tqmax, gmax\n *    - 导航状态：nav.{ live, distM, remDistKm, remMin, eta, road, nextRoad, action, turnType, lanes }\n *    - 系统配置：sys.{ mapLive, night, acc, time, dt, fps, mapFps, width, height }, conf(dash.conf 配置)\n *    - 冷车就绪标志：ready.{ oil, gearbox, tires, t100, alt }（车机保证所有数值字段永远为有限数字、不会是 null/NaN，\n *      因此可直接安全调用 .toFixed()；若想在冷车未就绪时显示 \"--\"，可用 bus.ready.oil ? ... : \"--\"）\n *\n * 5. 安全红线（车机端强制校验，违者自动熔断回退默认皮肤并报错行号）：\n *    - 禁止使用 window / document / fetch / XMLHttpRequest / WebSocket / localStorage / eval / Function / setTimeout\n *    - 禁止死循环或超大数组分配（车机单帧预算 <= 10ms、JS 内存上限 4MB）\n *    - 禁止引用任何外部图片 URL，车标与图形全部用矢量 ctx 函数绘制\n *\n * 6. 【给 AI 的必执行收尾提示】\n *    写完或修改完本 my_theme.js 后，请务必明确提示用户：\n *    「皮肤已写入 my_theme.js！请直接双击打开 preview.html（单文件断网即用，或 index.html），\n *    把本 my_theme.js 拖进浏览器页面（或点击“导入本地 .js 皮肤”加载本文件），即可按键盘 W/S 踩油门刹车、\n *    勾选 ACC 巡航/冷车测试、长按 O 两秒切换风格，在浏览器中 1:1 实时验证 60fps 效果与安全体检！」\n * ============================================================================\n */\n\nconst THEMES = [\n  // ======================== 皮肤 1（请让 AI 直接修改或替换为你的设计） ========================\n  {\n    id: \"my_custom_1\",\n    name: \"我的自定义皮肤 1（空白模板）\",\n    author: \"车主 / AI\",\n    version: \"1.0\",\n    desc: \"请把本文件交给 AI，告诉它你想要的仪表风格；也可在 THEMES 数组里一次写多套皮肤\",\n    shader: \"\",\n    render: function (ctx, bus, state) {\n      ctx.clear(8, 12, 20, 1);\n\n      // 连着 CarPlay 时满屏显示实时地图，断开时铺深色座舱底板\n      if (bus.sys.mapLive) {\n        ctx.drawMap(0, 0, 1920, 639, { alpha: 1.0 });\n      } else {\n        ctx.rect(0, 0, 1920, 639, { fill: \"#070c16\", fill2: \"#101b2e\", gradDir: \"v\" });\n      }\n\n      // 模板占位提示卡（AI 修改时请删除这里，换成你的正式表盘/动效）\n      ctx.rect(580, 210, 760, 200, {\n        fill: \"rgba(10,16,28,0.82)\", stroke: \"rgba(34,211,238,0.45)\", lineWidth: 2, radius: 18\n      });\n      ctx.text(\"空白自定义模板已加载 (my_theme.js)\", 960, 272, {\n        size: 30, bold: true, color: \"#67e8f9\", align: \"center\"\n      });\n      ctx.text(\"当前车速 \" + Math.round(bus.speed) + \" km/h · \" + Math.round(bus.rpmRaw) + \" rpm · \" + bus.gear, 960, 326, {\n        size: 24, bold: true, color: \"#ffffff\", align: \"center\"\n      });\n      ctx.text(\"把 my_theme.js 发给 AI 写皮肤，写完拖回本网页即可 60fps 试驾验证\", 960, 374, {\n        size: 19, color: \"#94a3b8\", align: \"center\"\n      });\n    }\n  }\n\n  // AI 如需一次生成第 2 套、第 3 套皮肤，直接在上方大括号后加逗号并继续添加同结构对象即可：\n  // , { id: \"my_custom_2\", name: \"我的自定义皮肤 2\", ..., render: function(ctx, bus, state) { ... } }\n];\n";
+window.MY_THEME_TEMPLATE = "/*\n * ============================================================================\n * 途锐 MH2p v23 · 60fps 仪表自定义皮肤模板（给 AI 直接编写用）\n * ============================================================================\n *\n * 【车主怎么用（3 步零编程）】\n *   1. 直接把这个 my_theme.js 文件发给任意 AI（DeepSeek / ChatGPT / Claude / 手机 DSH Go），\n *      用大白话告诉它你想要什么风格（例如：“帮我在这个文件里写 2 套皮肤：一套红黑运动双表盘中间嵌高德地图，\n *      一套越野姿态+四轮胎压风格”）。\n *   2. AI 改好保存后，双击打开同目录的单文件 preview.html（或 index.html），把本文件直接拖进网页里 1:1 试驾预览\n *      （键盘 W 油门 / S 刹车 / A D 转向 / 空格弹射 / 长按 O 两秒切换多套风格）。\n *   3. 浏览器里试驾顺滑且右上角绿灯「运行正常」后，连上车机 http://touareg.local:8080 上传即可生效。\n *\n * ----------------------------------------------------------------------------\n * 【给 AI 的编写规范（必须严格遵守）】\n * 1. 本文件支持写「1 套或多套皮肤」：直接往下面的 THEMES 数组里追加对象即可（建议 1~5 套）。\n *    每套皮肤包含：{ id, name, author, desc, shader(可选), render(ctx, bus, state) }。\n *    （也兼容单皮肤写法：顶层 const THEME = {...}; function render(ctx, bus, state) {...}）\n *\n * 2. 途锐实车画布分辨率固定为 1920 × 639（物理屏 1920×722），必须避开实车正面标定的原车遮挡区：\n *    - 顶部全黑原车状态栏：y = 0 .. 82（时钟中心 x = 965），画在此处完全不可见\n *    - 顶部半透明原车导航栏：y = 82 .. 154（154..164 为 10px 呼吸缝），所有卡片/组件顶边请对齐 y >= 164\n *    - 左下原车挡位斜梯形：(0,518) → (314,518) → (468,639) → (0,639)\n *    - 右下原车车速斜梯形：(1612,518) → (1920,518) → (1920,639) → (1458,639)\n *    - 【重要】底部正中原车小路图标（即使挂 P 挡 / ACC 关闭也常驻！）：\n *      (890,580) → (1035,580) → (1130,639) → (795,639)，y = 580..639 居中区全天候禁放文字或进度条！\n *    - 【重要】底部正中 ACC 扩展遮挡区：当 bus.sys.acc === true 时向上扩大至 x = 760..1160, y = 495..639\n *      （实车地图车标会自动上移 80px），底部居中组件请在 bus.sys.acc 为 true 时自动上移/拆分避让！\n *    - 黄金标准对齐框（与原车边框严丝合缝，强烈推荐）：\n *      * 左翼黄金栏：x = 5 .. 300（宽 295px），y = 164 .. 508（高 344px，距底部梯形留 10px 呼吸缝）\n *      * 右翼黄金栏：x = 1620 .. 1915（宽 295px），y = 164 .. 508（高 344px，严格镜像）\n *      * 加宽侧翼/圆盘建议宽 <= 340px 且底边停在 y <= 508\n *      * 中央全天候无遮挡主舞台：x = 312 .. 1608, y = 164 .. 512（宽 1296px）\n *      * 底部斜边夹缝安全槽：x = 476 .. 1448, y = 518 .. 576（ACC 开时避开 x = 760..1160）\n *\n * 3. 可用的 60fps 显卡高速画笔 ctx（车机 OpenGL ES 2.0 与浏览器 1:1 同源）：\n *    - ctx.clear(r, g, b, a)\n *    - ctx.drawMap(x, y, w, h, { radius, alpha, vignette, shape:\"rect\"|\"circle\", borderColor, borderWidth })\n *      * 提示：用 bus.sys.mapLive 判断当前是否连着 CarPlay 地图；断开时请自行绘制全屏自绘仪表内容。\n *    - ctx.drawShader({ alpha, blend:\"normal\"|\"add\" })\n *      * 若皮肤填写了 shader（标准 GLSL ES 1.00 片段着色器，<= 8KB），调用此函数叠画显卡光效；\n *      * 统一 uniforms: u_res(vec2), u_time(float), u_rpm(0..1), u_speed(0..1), u_power(0..1),\n *        u_pedal(0..1), u_brake(0..1), u_g(vec2), u_map_live(0/1), u_night(0/1)\n *    - ctx.rect(x, y, w, h, { fill, fill2, gradDir:\"v\"|\"h\", stroke, lineWidth, radius, glow, glowColor })\n *    - ctx.circle(cx, cy, r, { fill, stroke, lineWidth, glow, glowColor })\n *    - ctx.line(x1, y1, x2, y2, { color, lineWidth, cap, glow, glowColor })\n *    - ctx.poly([[x,y], ...], { fill, stroke, lineWidth, glow, glowColor })   // 可矢量绘制车标/姿态剪影\n *    - ctx.arc(cx, cy, r, startDeg, endDeg, { color, lineWidth, cap:\"round\"|\"butt\", glow, glowColor })\n *    - ctx.ticks(cx, cy, rIn, rOut, startDeg, endDeg, count, { color, majorEvery, majorLen, lineWidth, majorWidth, redFromFrac, redColor })\n *    - ctx.needle(cx, cy, len, tail, angleDeg, { color, tipColor, width, glow, hubRadius, hubColor })\n *    - ctx.segBar(x, y, w, h, frac, { segs, redSegs, color, warnColor, redColor, pulse })\n *    - ctx.biBar(x, y, w, h, signedFrac, { posColor, negColor })\n *    - ctx.rangeBar(x, y, w, h, frac, { color, tickLo, tickHi })\n *    - ctx.text(str, x, y, { size, bold, italic, color, align:\"left\"|\"center\"|\"right\", glow, glowColor, maxWidth })\n *    - ctx.drawDashBox(x, y, w, \"left\"|\"right\")        // 复用用户 8080 勾选的 dash.conf 信息框\n *    - ctx.drawNavCard(x, y, w, h, { alpha })          // 复用大字高德/百度/苹果导航卡\n *    - ctx.drawTurnArrow(x, y, size, bus.nav.turnType, { color })\n *\n * 4. 可用的 60fps 车辆与导航数据总线 bus（连续量已平滑，加 Raw 后缀可取原始值，如 bus.rpmRaw）：\n *    - 动力速度：rpm, rpmRaw, rpmPeak, speed, power(kW), torque(Nm), pedal(%), brake(bar), gear(\"D4\"/\"S1\"), steer(°)\n *    - 车身动态：g(合G), glong(纵G), glat(横G), pitch(俯仰°), roll(侧倾°), alt(海拔m)\n *    - 温度油量：oil(机油°C), gearbox(波箱°C), coolant(水温°C), outside(车外°C), cons(L/100km), fuel(L), range(km)\n *    - 胎压极值：tpfl, tpfr, tprl, tprr(bar), tires, t100(0-100秒), t100Running, pmax, tqmax, gmax\n *    - 导航状态：nav.{ live, distM, remDistKm, remMin, eta, road, nextRoad, action, turnType, lanes }\n *    - 系统配置：sys.{ mapLive, night, acc, time, dt, fps, mapFps, width, height }, conf(dash.conf 配置)\n *    - 冷车就绪标志：ready.{ oil, gearbox, tires, t100, alt }（车机保证所有数值字段永远为有限数字、不会是 null/NaN，\n *      因此可直接安全调用 .toFixed()；若想在冷车未就绪时显示 \"--\"，可用 bus.ready.oil ? ... : \"--\"）\n *\n * 5. 安全红线（车机端强制校验，违者自动熔断回退默认皮肤并报错行号）：\n *    - 禁止使用 window / document / fetch / XMLHttpRequest / WebSocket / localStorage / eval / Function / setTimeout\n *    - 禁止死循环或超大数组分配（车机单帧硬中断 35ms×3 帧、JS 内存上限 4MB，正常渲染建议 <= 8ms）\n *    - 禁止引用任何外部图片 URL，车标与图形全部用矢量 ctx 函数绘制\n *\n * 6. 【给 AI 的必执行收尾提示】\n *    写完或修改完本 my_theme.js 后，请务必明确提示用户：\n *    「皮肤已写入 my_theme.js！请直接双击打开 preview.html（单文件断网即用，或 index.html），\n *    把本 my_theme.js 拖进浏览器页面（或点击“导入本地 .js 皮肤”加载本文件），即可按键盘 W/S 踩油门刹车、\n *    勾选 ACC 巡航/冷车测试、长按 O 两秒切换风格，在浏览器中 1:1 实时验证 60fps 效果与安全体检！」\n * ============================================================================\n */\n\nconst THEMES = [\n  // ======================== 皮肤 1（请让 AI 直接修改或替换为你的设计） ========================\n  {\n    id: \"my_custom_1\",\n    name: \"我的自定义皮肤 1（空白模板）\",\n    author: \"车主 / AI\",\n    version: \"1.0\",\n    desc: \"请把本文件交给 AI，告诉它你想要的仪表风格；也可在 THEMES 数组里一次写多套皮肤\",\n    shader: \"\",\n    render: function (ctx, bus, state) {\n      ctx.clear(8, 12, 20, 1);\n\n      // 连着 CarPlay 时满屏显示实时地图，断开时铺深色座舱底板\n      if (bus.sys.mapLive) {\n        ctx.drawMap(0, 0, 1920, 639, { alpha: 1.0 });\n      } else {\n        ctx.rect(0, 0, 1920, 639, { fill: \"#070c16\", fill2: \"#101b2e\", gradDir: \"v\" });\n      }\n\n      // 模板占位提示卡（AI 修改时请删除这里，换成你的正式表盘/动效）\n      ctx.rect(580, 210, 760, 200, {\n        fill: \"rgba(10,16,28,0.82)\", stroke: \"rgba(34,211,238,0.45)\", lineWidth: 2, radius: 18\n      });\n      ctx.text(\"空白自定义模板已加载 (my_theme.js)\", 960, 272, {\n        size: 30, bold: true, color: \"#67e8f9\", align: \"center\"\n      });\n      ctx.text(\"当前车速 \" + Math.round(bus.speed) + \" km/h · \" + Math.round(bus.rpmRaw) + \" rpm · \" + bus.gear, 960, 326, {\n        size: 24, bold: true, color: \"#ffffff\", align: \"center\"\n      });\n      ctx.text(\"把 my_theme.js 发给 AI 写皮肤，写完拖回本网页即可 60fps 试驾验证\", 960, 374, {\n        size: 19, color: \"#94a3b8\", align: \"center\"\n      });\n    }\n  }\n\n  // AI 如需一次生成第 2 套、第 3 套皮肤，直接在上方大括号后加逗号并继续添加同结构对象即可：\n  // , { id: \"my_custom_2\", name: \"我的自定义皮肤 2\", ..., render: function(ctx, bus, state) { ... } }\n];\n";
 
 </script>
 <script>
@@ -215,8 +215,8 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
 
   // ==================== 1. 43 项遥测目录（与 src/cl_render/dash.c 1:1 对齐） ====================
   const ITEMS = {
-    power: ["功率", "kW", "seg", 265], torque: ["扭矩", "Nm", "seg", 460], rpm: ["转速", "rpm", "seg", 6500],
-    pedal: ["油门", "%", "seg", 100], brake: ["制动压力", "bar", "seg", 80],
+    power: ["功率", "kW", "seg", 250], torque: ["扭矩", "Nm", "seg", 450], rpm: ["转速", "rpm", "seg", 6500],
+    pedal: ["油门", "%", "seg", 100], brake: ["制动压力", "bar", "seg", 60],
     g: ["G 值", "g", "bi", 0.85], glong: ["纵向 G", "g", "bi", 0.85], glat: ["横向 G", "g", "bi", 0.85],
     t100: ["0–100", "s", "", 0], pmax: ["最大功率", "kW", "", 0], tqmax: ["最大扭矩", "Nm", "", 0], gmax: ["最大 G 值", "g", "", 0],
     speed: ["车速", "km/h", "", 0], steer: ["转向角", "°", "bi", 450], gear: ["挡位", "", "", 0], tripkm: ["Trip", "km", "", 0],
@@ -1084,6 +1084,34 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
         const litPos = f * nseg;
         const pulse = opts.pulse ? (0.72 + 0.28 * Math.sin(bus.sys.time * 20)) : 1.0;
 
+        // 方案 1：整条平滑四色热力渐变（与车机 dash.c 1:1 一致：<=22% 青绿 -> 34% 明黄 -> 56% 亮橙 -> >=80% 烈红）
+        let heatFill = null;
+        if (opts.dynamicHeat) {
+          const base = opts.baseRgb || [42, 232, 196];
+          let r, g, b;
+          if (f <= 0.22) {
+            r = base[0]; g = base[1]; b = base[2];
+          } else if (f < 0.34) {
+            const t = (f - 0.22) / 0.12;
+            r = Math.round(base[0] + (250 - base[0]) * t);
+            g = Math.round(base[1] + (218 - base[1]) * t);
+            b = Math.round(base[2] + (42  - base[2]) * t);
+          } else if (f < 0.56) {
+            const t = (f - 0.34) / 0.22;
+            r = Math.round(250 + (255 - 250) * t);
+            g = Math.round(218 + (134 - 218) * t);
+            b = Math.round(42  + (28  - 42)  * t);
+          } else if (f < 0.80) {
+            const t = (f - 0.56) / 0.24;
+            r = 255;
+            g = Math.round(134 + (48 - 134) * t);
+            b = Math.round(28  + (66 - 28)  * t);
+          } else {
+            r = 255; g = 48; b = 66;
+          }
+          heatFill = "rgb(" + r + "," + g + "," + b + ")";
+        }
+
         c.save();
         for (let s = 0; s < nseg; s++) {
           const isRed = s >= nseg - redSegs;
@@ -1100,7 +1128,7 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
           c.fillStyle = isRed ? "rgba(138,32,48,0.75)" : "rgba(42,56,70,0.62)";
           c.fill();
           if (fillAmt > 0.02) {
-            c.fillStyle = isRed ? (opts.redColor || "#ff3848") : (isWarn ? (opts.warnColor || "#ffbc34") : (opts.color || "#2ae8c4"));
+            c.fillStyle = heatFill || (isRed ? (opts.redColor || "#ff3848") : (isWarn ? (opts.warnColor || "#ffbc34") : (opts.color || "#2ae8c4")));
             c.globalAlpha = fillAmt * pulse;
             c.fill();
             c.globalAlpha = 1;
@@ -1284,8 +1312,11 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
             const bx = x + 13, by = ry + tier.row - tier.bh - 4, bw = w - 26;
             const smVal = Number(bus[k]) || 0;
             if (it[2] === "seg") {
-              const col = k === "rpm" ? "#2ae8c4" : (k === "brake" ? "#ff9438" : "#38d4ff");
-              api.segBar(bx, by, bw, tier.bh, smVal / it[3], { segs: 18, redSegs: k === "rpm" ? 4 : 3, color: col });
+              const baseRgb = k === "rpm" ? [42, 232, 196] :
+                              k === "torque" ? [46, 228, 186] :
+                              k === "power" ? [56, 212, 255] : [64, 204, 255];
+              const redSegs = (k === "rpm" || k === "brake") ? 4 : (k === "pedal" ? 2 : 3);
+              api.segBar(bx, by, bw, tier.bh, smVal / it[3], { segs: 18, redSegs, dynamicHeat: true, baseRgb });
             } else if (it[2] === "bi") {
               api.biBar(bx, by, bw, tier.bh, smVal / it[3], {});
             } else if (it[2] === "rng") {
@@ -1553,51 +1584,91 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
     return smoothBus;
   }
 
-  // ==================== 8. 原车遮挡参考线 + 长按 OK 进度环 + 报错安全横幅 ====================
+  // ==================== 8. 原车遮挡参考线（实车 1920×639 正视标定） + 长按 OK 进度环 + 报错安全横幅 ====================
   function drawOemGuides(bus) {
     const c = g2d;
     c.save();
-    // 顶部原车信息栏（y=0..156 边缘线，实测 y=156，时钟中心 x=965）
-    c.fillStyle = "rgba(0,0,0,0.48)";
-    c.fillRect(0, 0, W, 56);
-    c.strokeStyle = "rgba(56,189,248,0.28)";
+
+    // 1. 顶部双层原车遮挡：y=0..82 全黑不透明状态栏 + y=82..154 半透明导航顶栏 + y=154..164 呼吸缝
+    c.fillStyle = "rgba(0,0,0,0.92)";
+    c.fillRect(0, 0, W, 82);
+    c.fillStyle = "rgba(18,32,26,0.52)";
+    c.fillRect(0, 82, W, 72);
+
+    c.strokeStyle = "rgba(56,189,248,0.40)";
     c.setLineDash([8, 6]);
     c.lineWidth = 1.5;
-    c.beginPath(); c.moveTo(0, 156); c.lineTo(W, 156); c.stroke();
+    c.beginPath(); c.moveTo(0, 154); c.lineTo(W, 154); c.stroke();
+    c.strokeStyle = "rgba(52,211,153,0.38)";
+    c.beginPath(); c.moveTo(0, 164); c.lineTo(W, 164); c.stroke();
     c.setLineDash([]);
 
     const now = new Date();
     const hm = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
     c.fillStyle = "#e2e8f0";
-    c.font = "700 22px -apple-system,sans-serif";
+    c.font = "700 24px -apple-system,sans-serif";
     c.textAlign = "center";
-    c.fillText(hm + "   " + bus.outside + "°C   途锐 3.0T · 运动", 965, 36);
-    c.fillStyle = "rgba(148,163,184,0.65)";
-    c.font = "600 13px -apple-system,sans-serif";
-    c.fillText("▲ 原车顶部导航条底边参考线 (y=156, 时钟中心 x=965)", 965, 148);
+    c.fillText("▲ 东       " + hm + "       " + bus.outside + "°C", 965, 50);
+    c.fillStyle = "rgba(226,232,240,0.88)";
+    c.font = "700 22px -apple-system,PingFang SC,sans-serif";
+    c.fillText(bus.nav.live ? (bus.nav.remDistKm.toFixed(1) + " km   |   " + bus.nav.road + "   |   " + bus.nav.eta) : "原车半透明导航顶栏 (y=82..154)", 965, 126);
+    c.fillStyle = "rgba(148,163,184,0.72)";
+    c.font = "600 12px -apple-system,sans-serif";
+    c.fillText("▲ 顶栏底 y=154 · 组件顶边对齐 y>=164 (时钟中心 x=965)", 965, 150);
 
-    // 左下原车挡位梯形 & 右下车速梯形（实测 y=509, x=300）
-    c.fillStyle = "rgba(2,6,14,0.62)";
-    c.strokeStyle = "rgba(56,189,248,0.45)";
+    // 2. 左/右翼黄金标准对齐虚线框（295×344，与原车边框和下方梯形留 10px 呼吸缝）
+    c.strokeStyle = "rgba(34,211,238,0.45)";
+    c.setLineDash([6, 5]);
+    c.lineWidth = 1.5;
+    c.strokeRect(5, 164, 295, 344);
+    c.strokeRect(1620, 164, 295, 344);
+    c.setLineDash([]);
+    c.fillStyle = "rgba(103,232,249,0.72)";
+    c.font = "600 12px -apple-system,PingFang SC,sans-serif";
+    c.textAlign = "left";
+    c.fillText("左翼黄金框 5..300 × 164..508", 10, 178);
+    c.textAlign = "right";
+    c.fillText("右翼黄金框 1620..1915 × 164..508", 1910, 178);
+
+    // 3. 左下原车挡位斜梯形 & 右下车速斜梯形（实车标定：顶 y=518，底宽 468 / 1458）
+    c.fillStyle = "rgba(2,6,14,0.78)";
+    c.strokeStyle = "rgba(56,189,248,0.52)";
     c.lineWidth = 2;
-    c.beginPath(); c.moveTo(0, 509); c.lineTo(295, 509); c.lineTo(355, H); c.lineTo(0, H); c.closePath(); c.fill(); c.stroke();
-    c.beginPath(); c.moveTo(W, 509); c.lineTo(1625, 509); c.lineTo(1565, H); c.lineTo(W, H); c.closePath(); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(0, 518); c.lineTo(314, 518); c.lineTo(468, H); c.lineTo(0, H); c.closePath(); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(1612, 518); c.lineTo(W, 518); c.lineTo(W, H); c.lineTo(1458, H); c.closePath(); c.fill(); c.stroke();
 
     c.fillStyle = "#e2e8f0";
     c.font = "800 44px -apple-system,sans-serif";
-    c.textAlign = "left"; c.fillText(bus.gear, 36, 594);
-    c.textAlign = "right"; c.fillText(Math.round(bus.speed) + " km/h", W - 36, 594);
+    c.textAlign = "left"; c.fillText(bus.gear, 36, 598);
+    c.textAlign = "right"; c.fillText(Math.round(bus.speed) + " km/h", W - 36, 598);
 
-    // 底部正中 ACC 自适应巡航原车遮挡区（实测开启 ACC 时原车在底部居中绘制跟车图标，约 x=760..1160, y=495..639）
+    // 4. 底部正中原车小路图标（全天候常驻！即使挂 P 挡 / ACC 关闭也在 y=580..639）
+    c.fillStyle = "rgba(8,14,24,0.82)";
+    c.strokeStyle = "rgba(248,113,113,0.72)";
+    c.lineWidth = 1.8;
+    c.setLineDash([5, 4]);
+    c.beginPath();
+    c.moveTo(890, 580); c.lineTo(1035, 580); c.lineTo(1130, H); c.lineTo(795, H);
+    c.closePath(); c.fill(); c.stroke();
+    c.setLineDash([]);
+    // 透视小路白线示意
+    c.strokeStyle = "rgba(226,232,240,0.78)";
+    c.lineWidth = 2.5;
+    c.beginPath(); c.moveTo(918, 584); c.lineTo(855, 636); c.moveTo(1007, 584); c.lineTo(1070, 636); c.stroke();
+    c.fillStyle = "rgba(252,165,165,0.92)";
+    c.font = "700 12px -apple-system,PingFang SC,sans-serif";
+    c.textAlign = "center";
+    c.fillText("常驻原车小路 (y=580..639 禁放文字)", 962, 622);
+
+    // 5. ACC 自适应巡航开启时向上扩大至 x=760..1160, y=495..639
     if (env.acc) {
       c.fillStyle = "rgba(10, 18, 30, 0.78)";
-      c.strokeStyle = "rgba(251, 191, 36, 0.85)";
+      c.strokeStyle = "rgba(251, 191, 36, 0.88)";
       c.lineWidth = 2;
       c.setLineDash([7, 5]);
       c.beginPath(); c.roundRect(760, 495, 400, 140, 14); c.fill(); c.stroke();
       c.setLineDash([]);
 
-      // 模拟大众原车 ACC 跟车车道与跟车距横条
       c.strokeStyle = "rgba(56,189,248,0.8)";
       c.lineWidth = 3;
       c.beginPath(); c.moveTo(855, 622); c.lineTo(902, 526); c.moveTo(1065, 622); c.lineTo(1018, 526); c.stroke();
@@ -1608,7 +1679,7 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
       c.fillStyle = "#fbbf24";
       c.font = "700 15px -apple-system,PingFang SC,sans-serif";
       c.textAlign = "center";
-      c.fillText("▲ 原车 ACC 巡航遮挡区 (x=760..1160, y=495..639)", 960, 518);
+      c.fillText("▲ 原车 ACC 巡航扩展遮挡区 (x=760..1160, y=495..639)", 960, 518);
       c.fillStyle = "#e2e8f0";
       c.font = "800 18px -apple-system,sans-serif";
       c.fillText("ACC 巡航 110 km/h", 960, 624);
