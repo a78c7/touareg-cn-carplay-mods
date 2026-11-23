@@ -29,6 +29,7 @@ CLD_SRC="$(find_mod "VW_HUD_3_CarPlayCluster/Update/clusterd")"
 CLR_SRC="$(find_mod "VW_HUD_3_CarPlayCluster/Update/cl_render")"
 CONF_SRC="$(find_mod "VW_HUD_3_CarPlayCluster/Update/dash.conf")"
 NETD_SRC="$(find_mod "VW_WiFi_Dev/Update/touareg_netd")"
+WPER_SRC="$(find_mod "VW_WiFi_Dev/Persist/install.sh")"
 
 NO_REBOOT=0
 PROBE_ONLY=0
@@ -236,16 +237,26 @@ if [ "$HAS_POP" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
     POP_SZ="$(wc -c < "$POP_SRC" | tr -d ' ')"
     push_hu "$POP_SRC" "/mnt/app/eso/hmi/lsd/jars/VWPopupFilter.jar.new"
 fi
-PER3_DST="/mnt/ota/modkit/Mods/VW_HUD_3_CarPlayCluster/Persist/install.sh"
-HAS_PER3="$(run_hu "[ -f '$PER3_DST' ] && echo 1 || echo 0")"
+PER3_DST="$(run_hu 'if [ -f /mnt/ota/modkit/Mods/VW_HUD_3_CarPlayCluster/Persist/install.sh ]; then echo /mnt/ota/modkit/Mods/VW_HUD_3_CarPlayCluster/Persist/install.sh; elif [ -f /mnt/ota/modkit/Mods/VW_CarPlayCluster/Persist/install.sh ]; then echo /mnt/ota/modkit/Mods/VW_CarPlayCluster/Persist/install.sh; fi')"
+HAS_PER3=0
 PER3_SZ=0
-if [ "$HAS_PER3" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
+if [ -n "$PER3_DST" ] && [ "$NO_REBOOT" = "0" ]; then
+    HAS_PER3=1
     PER3_SZ="$(wc -c < "$PER3_SRC" | tr -d ' ')"
+    echo "    同步升级 CarPlayCluster Persist: $PER3_DST"
     push_hu "$PER3_SRC" "${PER3_DST}.new"
+fi
+WPER_DST="/mnt/ota/modkit/Mods/VW_WiFi_Dev/Persist/install.sh"
+HAS_WPER="$(run_hu "[ -f '$WPER_DST' ] && echo 1 || echo 0")"
+WPER_SZ=0
+if [ "$HAS_WPER" = "1" ] && [ "$NO_REBOOT" = "0" ] && [ -f "$WPER_SRC" ]; then
+    WPER_SZ="$(wc -c < "$WPER_SRC" | tr -d ' ')"
+    echo "    同步升级 VW_WiFi_Dev Persist: $WPER_DST"
+    push_hu "$WPER_SRC" "${WPER_DST}.new"
 fi
 
 echo ">>> [3/4] 严格校验字节长度并执行原子替换..."
-run_hu "NO_REBOOT=$NO_REBOOT RESET_CONF=$RESET_CONF HAS_NETD=$HAS_NETD HAS_POP=$HAS_POP POP_SZ=$POP_SZ HAS_PER3=$HAS_PER3 PER3_SZ=$PER3_SZ PER3_DST='$PER3_DST' JAR_SZ=$JAR_SZ PRB_SZ=$PRB_SZ CLD_SZ=$CLD_SZ CLR_SZ=$CLR_SZ PER_SZ=$PER_SZ CONF_SZ=$CONF_SZ NETD_SZ=$NETD_SZ PER_DST='$PER_DST' /bin/ksh -s" <<'EOF'
+run_hu "NO_REBOOT=$NO_REBOOT RESET_CONF=$RESET_CONF HAS_NETD=$HAS_NETD HAS_POP=$HAS_POP POP_SZ=$POP_SZ HAS_PER3=$HAS_PER3 PER3_SZ=$PER3_SZ PER3_DST='$PER3_DST' HAS_WPER=$HAS_WPER WPER_SZ=$WPER_SZ WPER_DST='$WPER_DST' JAR_SZ=$JAR_SZ PRB_SZ=$PRB_SZ CLD_SZ=$CLD_SZ CLR_SZ=$CLR_SZ PER_SZ=$PER_SZ CONF_SZ=$CONF_SZ NETD_SZ=$NETD_SZ PER_DST='$PER_DST' /bin/ksh -s" <<'EOF'
 set -e
 chk_sz() {
     f="$1"
@@ -304,15 +315,26 @@ if [ "$HAS_PER3" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
     chk_sz "$PER3_DST.new" "$PER3_SZ"
     chmod 755 "$PER3_DST.new" && mv -f "$PER3_DST.new" "$PER3_DST"
 fi
-# 同步刷新 v22.0 崩溃计数基线（车机 QNX 默认 PATH 不含 /mnt/app/armle/bin，显式补齐避免裸 awk 报错）
+if [ "$HAS_WPER" = "1" ] && [ "$NO_REBOOT" = "0" ] && [ "$WPER_SZ" -gt 0 ]; then
+    chk_sz "$WPER_DST.new" "$WPER_SZ"
+    chmod 755 "$WPER_DST.new" && mv -f "$WPER_DST.new" "$WPER_DST"
+fi
+# 同步刷新 v22.0 崩溃计数基线（QNX ksh set -e 下禁止在空 glob 上写 [ -e "$x" ] && ...，须用 if）
 export PATH="/mnt/app/armle/bin:/mnt/app/armle/usr/bin:$PATH"
-count_glob() { n=0; for x in "$@"; do [ -e "$x" ] && n=$((n + 1)); done; echo "$n"; }
+count_glob() {
+    n=0
+    for x in "$@"; do
+        if [ -e "$x" ]; then n=$((n + 1)); fi
+    done
+    echo "$n"
+}
 count_glob /mnt/crashlogs/java/* > "$D/j9_base_crashes"
 count_glob /mnt/crashlogs/core/dio_manager*.core.gz > "$D/dio_base_cores"
 count_glob /mnt/crashlogs/core/cl_render*.core.gz /mnt/crashlogs/core/clusterd*.core.gz > "$D/render_base_cores"
 
 sync
 mount -ur /mnt/app 2>/dev/null || true
+mount -ur /mnt/ota 2>/dev/null || true
 ls -l "$J" "$D/cl_probe.so" "$D/clusterd" "$D/cl_render" "$D/dash.conf"
 EOF
 
@@ -324,9 +346,24 @@ if [ "$NO_REBOOT" = "1" ]; then
     exit 0
 fi
 
-echo ">>> [4/4] 触发车机软重启 (gem-reset) 以加载新版 Java 插件（约需 35~45 秒）..."
-run_hu 'sync; echo gem-reset > /dev/ooc/system' || true
-sleep 12
-wait_car_ssh 75
+echo ">>> [4/4] 触发车机软重启 (gem-reset) 以加载新版 Java 插件（约需 45~75 秒）..."
+run_hu ': > /tmp/.deploy_reboot_sentinel; sync; echo gem-reset > /dev/ooc/system' || true
+# ooc 优雅关停可能持续 20~35 秒才断网，先确认进入重启或 /tmp 哨兵已清空，再等待新系统上线
+printf "⏳ 等待车机正式下电重启"
+r_wait=0
+while [ "$r_wait" -lt 45 ]; do
+    if ! nc -z -G 2 "$HOST" 2012 >/dev/null 2>&1; then
+        echo " 已下电，等待冷启动..."
+        break
+    fi
+    if run_hu '[ ! -e /tmp/.deploy_reboot_sentinel ]' >/dev/null 2>&1; then
+        echo " 已完成重启！"
+        break
+    fi
+    printf "."
+    sleep 3
+    r_wait=$((r_wait + 3))
+done
+wait_car_ssh 90
 echo "✅ 车机重启完成并已重新连上！"
 show_live_probe
