@@ -36,7 +36,7 @@ jobs:
       - name: Catalogue alignment, HTML DOM & USB script safety checks
         run: |
           python3 - <<'PY'
-          import os, re, subprocess, sys
+          import json, os, re, subprocess, sys
 
           def read(p):
               with open(p, encoding='utf-8') as f:
@@ -98,12 +98,21 @@ jobs:
               if os.path.exists(forbidden):
                   errors.append(f'{forbidden}: configurator release binary must NOT be committed to git')
 
-          # 5) web_ui.html 与 web_ui_data.h 同步检查 + 许可附加条款检查
+          # 5) web_ui.html 与 web_ui_data.h 同步检查 + 预览器/模板双份同步检查 + 许可附加条款检查
           h_txt = read('src/touareg_netd/web_ui_data.h')
           m = re.search(r'WEB_UI_HTML_LEN\s*=\s*(\d+)', h_txt)
           actual_len = os.path.getsize('src/touareg_netd/web_ui.html')
           if not m or int(m.group(1)) != actual_len:
               errors.append(f'web_ui_data.h out of sync (header={m.group(1) if m else None}, html={actual_len})')
+          for a, b in [
+              ('tools/preview/my_theme.js', 'tools/configurator/web/my_theme.js'),
+              ('tools/preview/index.html', 'tools/configurator/web/v23_preview.html'),
+          ]:
+              if open(a, 'rb').read() != open(b, 'rb').read():
+                  errors.append(f'{a} != {b} (preview/configurator embedded copy out of sync)')
+          tpl_m = re.search(r'^window\.MY_THEME_TEMPLATE\s*=\s*(".*");$', read('tools/preview/index.html'), re.M)
+          if not tpl_m or json.loads(tpl_m.group(1)) != read('tools/preview/my_theme.js'):
+              errors.append('tools/preview/index.html window.MY_THEME_TEMPLATE out of sync with tools/preview/my_theme.js')
           if not os.path.isfile('LICENSE.ADDITIONAL-TERMS.md'):
               errors.append('missing LICENSE.ADDITIONAL-TERMS.md')
 
@@ -112,7 +121,7 @@ jobs:
               for e in errors:
                   print('  -', e)
               sys.exit(1)
-          print(f'ALL CHECKS PASSED ({len(c_items)} telemetry items, DOM IDs, USB Update scripts, web_ui sync)')
+          print(f'ALL CHECKS PASSED ({len(c_items)} telemetry items, DOM IDs, USB Update scripts, web_ui & preview sync)')
           PY
 
       - name: POSIX shell syntax check on tools, tests and build scripts
