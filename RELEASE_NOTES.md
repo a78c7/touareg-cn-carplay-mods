@@ -1,7 +1,7 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
-## v23.0-beta.5
-> **Pre-release 实车满血 59fps 零拷贝 + 方向盘 OK 盲切皮肤 + 四色动态运动条 + `1920×639` 实车标定几何规范版**：基于 2023 款国行途锐真机全流程实测（`EGL_KHR_image_pixmap` 零拷贝、4 套复杂皮肤与 GLSL 光效切换、方向盘 NavBAP 按键探针、35 ms 保险丝与 `y=162` 横幅避让、正面像素标定照），一次性落地 7 项核心体验与底层升级。已装 `v22.1+` 与 `8080` 无线控制台的车主直接上传 `touareg-ota-v23.0-beta.5.tar`（约 1.6 MB）并点「软重启车机」即可生效（因为本次同时更新了 `VWClusterNav_v6.jar`）。
+## v23.0
+> **正式稳定版（实车全流程验通 · 55～59 fps 硬件零拷贝 AI 自定义皮肤 + 方向盘 OK 盲切皮肤 + 四色动态运动条 + `1920×639` 实车像素标定规范）**：在 2023 款国行途锐实车上完成全链路真机验收（`EGL_KHR_image_pixmap` 硬件零拷贝 55～59 fps、4 套复杂矢量与真 GLSL 光效皮肤热切、方向盘 NavBAP 按键实测、35 ms×3 帧保险丝与 `y=162` 避让横幅、正视像素标定）。默认安装仍不开启 `v23_mode`（100% 稳跑经典通道），勾选即享 60fps AI 皮肤且全程受车机三层自动保险丝保护。已装 `v22.1+` 与 `8080` 无线控制台的车主直接上传 `touareg-ota-v23.0.tar`（约 1.6 MB）并点「软重启车机」即可完成升级（因同时更新了 `VWClusterNav_v6.jar`）。
 
 - **默认开启实车验通的 `EGL_KHR_image_pixmap` 硬件零拷贝（`v23_gles.c`，帧率直接翻倍至 `55～59 fps`）**：
   - 途锐 Tegra K1 真机实测带 `17 fps` 实时高德地图全屏监控 HUD 跑满 **`59 fps`**、GT 双炮筒 **`56 fps`**、赛博真 GLSL 显卡光效 **`55 fps`**，全程 0 反色 / 0 花屏 / 0 超时毛刺；
@@ -21,7 +21,7 @@
   - 修复 `VW_HUD_2` / `VW_HUD_3` Persist 启动脚本、`touareg_netd` 重置基线命令与 `tools/deploy_eth.sh` 在 QNX 运行态下因默认 `PATH` 缺 `/mnt/app/armle/bin` 导致裸 `awk` 计数报错的隐患。
 - **车机 QNX 6.6 ARMv7 二进制 & Java 1.4 校验和（`src/build.sh` + `src/hud-java/build.sh`，已通过 `carlibs` 符号审计 0 新增缺失符号、`DT_HASH+GNU_HASH` 完整、29 个 Java class 全为 version `48`）**：
   - `cl_render`（`1,341,980 B`）：`ca73ffcbfdf8984b975b9719cf3821b8f2626b8ff8fb036a9098720f22a55c0e`
-  - `touareg_netd`：`1f659124a666434d2a0846c725d2dd6d6a75b6cc8e8d099a29aad84d1a5ef516`
+  - `touareg_netd`：`b50f4b6fb7f0cc22b849f1110b394cbd66b91b9909597e5ed87114d13a639ce3`
   - `VWClusterNav_v6.jar`：`db5807bb5c4613a61898ad0a8906c5d19932f4fa3e969881f12a26974be47540`
   - `clusterd`（与 `v23.0-beta.1` 一致）：`096a71c1b37bdcf9ebba3b1d3e66428af38488177c585ed0e3d7f4db695d4f64`
   - `cl_probe.so`（与 `v22.1` 一致）：`e260013df86291611225856c6f1c3c05a1d12857bfeaaa0514d1494192cbfa24`

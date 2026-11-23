@@ -13,8 +13,7 @@
 **Single-USB unlock for full-screen / wireless CarPlay, HUD navigation, digital cluster map & sport telemetry boxes — with mobile `8080` signed OTA and wireless SSH development.**
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Stable Release (v22.1)</b></a> ·
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5"><b>🧪 Beta Preview (v23.0-beta.5)</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Latest Release (v23.0)</b></a> ·
   <a href="#4-step-usb-installation"><b>⚡ 4-Step Install</b></a> ·
   <a href="#11-opt-in-modules"><b>🧩 Modules</b></a> ·
   <a href="README.md"><b>🇨🇳 简体中文</b></a> ·
@@ -36,7 +35,7 @@
 ---
 
 > [!TIP]
-> **🧪 Public Beta [`v23.0-beta.5 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5) is out** — real-car verified **55–59 fps hardware zero-copy AI Custom Cluster Theme Engine (GLES2 + QuickJS)**, pixel-calibrated **1920×639 cluster geometry spec** ([`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)), steering-wheel `OK` theme switching (double-tap `OK` by default; double-tap map / triple-tap theme when map-switch is also installed) + `8080` skin switcher, smooth 4-color sport telemetry bars, and instant map startup with the 2s boot splash removed (`v23_mode` is OFF by default and guarded by a 3-layer safety fuse). For daily stability, stick with [`v22.1` Stable](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest).
+> **🚀 Official Release [`v23.0`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) is live** — real-car verified **55–59 fps hardware zero-copy AI Custom Cluster Theme Engine (GLES2 + QuickJS)**, pixel-calibrated **`1920×639` cluster geometry spec** ([`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)), steering-wheel `OK` theme switching (double-tap `OK` by default; double-tap map / triple-tap theme when map-switch is also installed) + `8080` skin switcher, smooth 4-color sport telemetry bars, and instant map startup with the 2s boot splash removed. `v23_mode` remains opt-in (classic path stays default) and guarded by a 3-layer automatic safety fuse.
 
 <div align="center">
   <img src="docs/img/cluster.png" alt="v22 digital cluster map, bold sport telemetry boxes, and symmetrical navigation card" width="92%">

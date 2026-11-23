@@ -13,8 +13,7 @@
 **单 U 盘解锁途锐全屏 / 无线 / HUD / 仪表地图与运动信息框，支持手机 `8080` 签名 OTA 与无线开发。**
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载稳定版（v22.1）</b></a> ·
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5"><b>🧪 尝鲜版（v23.0-beta.5）</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 下载正式版（v23.0）</b></a> ·
   <a href="#4-步免拆刷入安装"><b>⚡ 4 步安装</b></a> ·
   <a href="#11-大可选功能全景"><b>🧩 功能清单</b></a> ·
   <a href="README.en.md"><b>🇺🇸 English</b></a> ·
@@ -36,7 +35,7 @@
 ---
 
 > [!TIP]
-> **🧪 尝鲜测试版 [`v23.0-beta.5 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5) 已开放下载** —— 实车验通 **55～59 fps 硬件零拷贝 AI 自定义皮肤引擎（GLES2 + QuickJS）**、**1920×639 实车标定几何规范**（[`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)）、**方向盘 OK 盲切多皮肤**（默认双击 OK 零延迟切皮肤；同时装切原车地图模块时双击切图、三连击切皮肤）与 `8080` 多皮肤切换按钮、**信息框运动条整条平滑四色热力渐变**、并已移除 2 秒开机启动图直出地图（默认关闭 `v23_mode`，全程受车机三层自动保险丝保护）。日常求稳请继续下载 [`v22.1` 稳定版](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)。
+> **🚀 正式版 [`v23.0`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) 已发布** —— 实车验通 **55～59 fps 硬件零拷贝 AI 自定义仪表皮肤引擎（GLES2 + QuickJS）**、**`1920×639` 实车标定几何规范**（[`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)）、**方向盘 `OK` 键盲切多皮肤**（默认双击 `OK` 零延迟切皮肤；同时选装切原车地图模块时双击切图、三连击切皮肤）与 `8080` 多皮肤切换按钮、**信息框运动条整条平滑四色热力渐变**，并移除 2 秒开机启动图直出地图。默认安装仍不开启 `v23_mode`（稳跑经典通道），勾选即享 60fps AI 皮肤且全程受车机三层自动保险丝保护。
 
 <div align="center">
   <img src="docs/img/cluster.png" alt="v22 仪表地图、大字运动信息框与对称导航卡示意图" width="92%">

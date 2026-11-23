@@ -293,7 +293,7 @@ if [ "$HAS_NETD" = "1" ]; then
     W=/mnt/app/eso/bin/apps/wifi_dev/touareg_netd
     chk_sz "$W.new" "$NETD_SZ"
     chmod 755 "$W.new" && mv -f "$W.new" "$W"
-    echo "v22.1" > /mnt/app/eso/bin/apps/wifi_dev/ota_version
+    echo "v23.0" > /mnt/app/eso/bin/apps/wifi_dev/ota_version
 fi
 if [ "$HAS_POP" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
     PJ=/mnt/app/eso/hmi/lsd/jars/VWPopupFilter.jar

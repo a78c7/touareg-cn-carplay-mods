@@ -1029,12 +1029,12 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], ota_ver[48];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.5");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0");
 
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v23.0-beta.5 ota_version=%s bcm2_ip=%s\n"
+        "netd_version=v23.0 ota_version=%s bcm2_ip=%s\n"
         "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d v23_fallback=%d\n"
         "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d v23_mode=%d\n\n",
         ota_ver, ipstr,
@@ -1118,7 +1118,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], esc1[320], esc2[320], ota_ver[48], esc_ov[64];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0-beta.5");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.0");
     json_escape(ota_ver, esc_ov, sizeof(esc_ov));
     double spd = -1.0, odo = -1.0;
     read_dash_state(&spd, &odo);
@@ -1136,7 +1136,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     refresh_proc_flags(&p_cld, &p_ren, &p_dio);
 
     l += (size_t)snprintf(j + l, 32768 - l,
-        "{\"ok\":true,\"version\":\"v23.0-beta.5\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
+        "{\"ok\":true,\"version\":\"v23.0\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
         "\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"

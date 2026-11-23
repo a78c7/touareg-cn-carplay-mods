@@ -13,8 +13,7 @@
 **Ein-USB-Stick-Modifikationspaket für Vollbild- & Wireless-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte & Sport-Infoboxen — inkl. Handy-Web-Konsole (`8080`), Ed25519-signiertem Offline-OTA und WLAN-SSH.**
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Stabile Version (v22.1)</b></a> ·
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5"><b>🧪 Beta-Vorschau (v23.0-beta.5)</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Aktuelle Version (v23.0)</b></a> ·
   <a href="#4-schritte-usb-installation"><b>⚡ 4-Schritte-Installation</b></a> ·
   <a href="#11-optionale-module"><b>🧩 Module</b></a> ·
   <a href="README.md"><b>🇨🇳 简体中文</b></a> ·
@@ -36,7 +35,7 @@
 ---
 
 > [!TIP]
-> **🧪 Öffentliche Beta [`v23.0-beta.5 (Pre-release)`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/tag/v23.0-beta.5) verfügbar** — im Fahrzeug verifizierte **55–59 fps Hardware-Zero-Copy KI-Design-Engine (GLES2 + QuickJS)**, pixelgenaue **1920×639 Cockpit-Geometriespezifikation** ([`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)), Lenkrad-`OK`-Designwechsel (standardmäßig Doppelklick `OK`; bei installiertem Kartenwechsel-Modul Doppelklick Karte / Dreifachklick Design) + `8080`-Designauswahl, 4-stufige Sport-Balkenfarbverläufe und Sofortstart ohne 2-s-Splashscreen (`v23_mode` standardmäßig deaktiviert, 3-stufige Sicherheitsabschaltung). Für den Alltag bleibt [`v22.1` (Stabil)](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) empfohlen.
+> **🚀 Offizielle Version [`v23.0`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) ist da** — im Fahrzeug verifizierte **55–59 fps Hardware-Zero-Copy KI-Design-Engine (GLES2 + QuickJS)**, pixelgenaue **`1920×639` Cockpit-Geometriespezifikation** ([`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)), Lenkrad-`OK`-Designwechsel (standardmäßig Doppelklick `OK`; bei installiertem Kartenwechsel-Modul Doppelklick Karte / Dreifachklick Design) + `8080`-Designauswahl, 4-stufige Sport-Balkenfarbverläufe und Sofortstart ohne 2-s-Splashscreen. `v23_mode` bleibt optional (klassischer Pfad bleibt Standard) mit 3-stufiger Sicherheitsabschaltung.
 
 <div align="center">
   <img src="docs/img/cluster.png" alt="v22 Kombiinstrument-Karte, Sport-Infoboxen und symmetrische Navigationskarte" width="92%">
