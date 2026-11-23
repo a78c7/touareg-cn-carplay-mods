@@ -77,9 +77,9 @@
 
 ## 8. 显示管理接口
 
-- 切屏服务入口：OSGi 服务 **`de.vw.mib.display.DisplayManagementService`**（通过 `bctx.getServiceReference("de.vw.mib.display.DisplayManagementService")` 获取；而 `de.vw.mib.widgets.internal.ServiceManager.displayManager` 仅用于只读查询 `getActiveDisplayables()`）。【途锐实测】
+- 切屏服务入口：OSGi 服务 **`de.vw.mib.display.DisplayManagementService`**（通过 `bctx.getServiceReference("de.vw.mib.display.DisplayManagementService")` 获取）。**重要坑点**：切勿在仪表屏 4 上调用 `de.vw.mib.widgets.internal.ServiceManager.displayManager.getActiveDisplayables(4)`，在途锐实车上必抛 `NullPointerException`；**自 `v21.1` 起改为通过 `DSIProxy` 注册 `DSIDisplayManagementListener`** 事件驱动监听仪表屏 4 的 `showDisplayablesResult` / `activeContext`（平时 `[58, 33]` 在位时 0 次多余 3 秒盲刷，原车切屏时 ≤100 ms 顶回；不可用固件降级 5 秒兜底）。【途锐实测】
 - `showDisplayables(屏编号, int[] 编号列表)`：设置某块屏显示哪些窗口，**列表第一个在最上层**。
 - `setUpdateRate(屏编号, 刷新率, 回调)`：原车地图可见时设 10，不可见时设 1。
 - `disableDisplayable` / `enableDisplayable` / `updateDisplay`：单独开关某个窗口。
-- 原车按方向盘 VIEW 键切到地图的流程：先 `showDisplayables(4, [33])`，再把地图设为可见，再 `setUpdateRate(4, 10)`。在 HMI 里搜 `SwitchToPermanentMapSequence` 能找到这段流程。【途锐实测】
+- 原车在仪表切到导航地图视图的流程（方向盘右侧左右翻页键进入「导航」菜单，按 `VIEW` 键切换全宽地图视图）：先 `showDisplayables(4, [33])`，再把地图设为可见，再 `setUpdateRate(4, 10)`。在 HMI 里搜 `SwitchToPermanentMapSequence` 能找到这段流程。【途锐实测】
 - 屏编号和窗口编号见 [R4](R4-显示系统.md)。

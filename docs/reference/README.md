@@ -10,9 +10,10 @@
 | --- | --- |
 | [R1 系统结构与文件位置](R1-系统结构与文件位置.md) | QNX 分区和挂载、主要进程、配置文件、ModKit 的安装/开机脚本机制、网络和防火墙、U 盘挂载点 |
 | [R2 HMI（J9 Java）](R2-HMI-J9-Java.md) | `lsd.jxe` 的组成、插件怎么加载、datapool / ASL list 编号、BAP NavSD、显示管理接口 |
-| [R3 车辆数据接口](R3-车辆数据接口.md) | `DSICarVehicleStates`、`DSICarKombi` 的属性编号、字段、单位、刷新率、无效值（实测表） |
+| [R3 车辆数据接口](R3-车辆数据接口.md) | `DSICarVehicleStates`、`DSICarKombi`、`DSICarComfort`、`DSICarDrivingCharacteristics`、`DSINavigation` 的属性编号、字段、单位、刷新率、无效值（实测表） |
 | [R4 显示系统](R4-显示系统.md) | 显示屏编号、displayable 编号、仪表和 HUD 的画面来源、`dmdt` |
 | [R5 CarPlay 与 iAP2](R5-CarPlay与iAP2.md) | CarPlay 进程结构、可拦截的 libairplay 函数、第二屏、路线指引消息字段、命令 |
+| [仪表几何规范](CLUSTER_LAYOUT_SPEC.md) | 途锐 12 英寸数字驾驶舱 `1920×639` 实车像素标定遮挡区与安全布局坐标真相源 |
 
 ## 标注
 

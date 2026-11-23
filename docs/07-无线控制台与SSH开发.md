@@ -54,7 +54,7 @@
 
 ## 7. `touareg_netd`：免查 IP（`touareg.local`）与 `8080` 手机网页控制台
 
-为了让不想碰命令行的车主也能用手机改设置，写了一个约 54 KB 的纯 C 守护进程 `touareg_netd`（源码在 `src/touareg_netd`，只依赖 `libc` 和 `libsocket`）：
+为了让不想碰命令行的车主也能用手机改设置，写了一个纯 C 守护进程 `touareg_netd`（初始版约 54 KB，`v23.0` 集成 Ed25519 验签 OTA、脱敏诊断与 `v23` 皮肤接口后约 118 KB；源码在 `src/touareg_netd`，只依赖 `libc` 和 `libsocket`）：
 
 - **内置轻量 mDNS 响应器（UDP 5353）**：监听 `224.0.0.251:5353`，收到查询 `touareg.local`（A 记录）时直接把当前 `bcm2` 的 IPv4 地址回给局域网设备。iPhone Safari 和电脑无需去热点列表翻 IP，直接访问 `http://touareg.local:8080` 或连 `root@touareg.local`。（注：部分安卓端原生编译程序内置 DNS 解析器不走系统 mDNS，连不上 `.local` 时填热点列表里 `touareg` 的实际 IP 即可。）
 - **仅绑定 `bcm2` 地址**：车机本地 `127.0.0.1:8080` 原本就有内部服务占用。`touareg_netd` 轮询拿到 `bcm2` 的局域网 IPv4 后，只绑定 `<bcm2_ip>:8080`（IP 变化时自动重绑），既避开本地端口冲突，又保证绝不在 `ecm0` 车联网接口上监听。
@@ -102,7 +102,7 @@
 3. **锁车休眠与电瓶寄生耗电**：熄火锁车后 MH2p 主机随整车 CAN 总线休眠彻底断电，本仓库所有后台服务均随主机一同停止，**不会产生锁车静态寄生耗电**；开发新功能时严禁尝试阻止车机电源管理（`ooc`）休眠。
 4. **渲染架构与帧率边界（CPU 软渲 vs OpenGL ES 2.0 硬件加速）**：
    - `cl_render` 默认的 **`capture=h264`** 模式采用 **Tegra K1 NVDEC 硬解 + QNX `screen_blit` 硬件合成**，`dash.c` 仅在 CPU 上绘制两侧 `295×344` 小框。这套架构显示数字与轻量运动条极稳，配合 `v22.0` 的 `10Hz` 采样 + `smooth=1` 指数阻尼插值已足够跟手；**但千万不要让 AI 在 `dash.c` 里用 CPU 循环做全屏 `1920×639` 逐像素动画或高频大面积重绘**，否则必然掉帧发卡！
-   - 若要实现 **全屏 60fps 仪表指针、弧形转速表、发光渐变或自定义动效主题**，请使用 `v22.0` 新增的独立 OpenGL ES 2.0 硬件加速引擎 **`src/cl_render/gles60.c`**（运行参数 `capture=gles60`，同一窗口 `58`，以 `eglSwapInterval(dpy, 1)` 锁死硬件 VSync 60fps，并用 `eglGetProcAddress` 动态解析 `gl*` 符号、绝不直接链接 `-lGLESv2`）。
+   - 若要实现 **全屏 60fps 仪表指针、弧形转速表、发光渐变、同屏 CarPlay 地图或自定义动效主题**，优先使用 `v23.0` 正式的单画布 OpenGL ES 2.0 + QuickJS 零拷贝引擎 **`src/cl_render/v23_gles.c`**（启用 `v23_mode`，实车 55–59 fps，详见 `docs/reference/CLUSTER_LAYOUT_SPEC.md`）；若需纯 C 独立渲染通道，也可参考 `v22.0` 新增的 **`src/cl_render/gles60.c`**（运行参数 `capture=gles60`，同一窗口 `58`，以 `eglSwapInterval(dpy, 1)` 锁死硬件 VSync 60fps，并用 `eglGetProcAddress` 动态解析 `gl*` 符号、绝不直接链接 `-lGLESv2`）。
 5. **先本地回放预览，再上车验证**：修改信息框布局或动画参数前，先在电脑双击打开 [`tools/preview/index.html`](../tools/preview/index.html)，拖入真实 `drive_logs/*.csv` 或切换内置场景实时预览，确认观感与帧率后再上车部署，并欢迎把满意的 `dash.conf` 与截图发到仓库 **GitHub Discussions** 共享给车友。
 
 ## 12. 自动化测试、静态分析与 CI 门禁（v22.1）

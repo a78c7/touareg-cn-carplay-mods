@@ -75,7 +75,7 @@
 - Cinemo 本身支持路线指引（`libNmeVfs.so` 有 `StartRouteGuidanceUpdates`、`RouteGuidanceDisplayComponent`），只是识别信息里没声明。
 - 做法（不改 `smartphone_integrator.json`，代码编进本来就预加载在 `dio_manager` 里的库）：
   - 拦 `NmeIAP2Message::Encode(NmeArray<uint8_t>&)`（`libNmeBaseClasses.so`，`libNmeVfs.so` 经 PLT 调用）：编码好的 0x1D01 识别信息按字节补上 0x5200 系列消息号和 0x001E 路线指引组件，做法和 `dio_cluster.so` 相同；`NmeArray` 是 `{data, count, capacity, grow}`，用 libc `realloc` 扩容。
-  - 拦 `NmeIAP2Message::Decode(const uint8_t*, int)`：拿到 0x5201/0x5202/0x5204 原始消息，用和无线同一套解析写 `/tmp/cluster_cp.state`，HUD/仪表那边不用改。
+  - 拦 `NmeIAP2Message::Decode(const uint8_t*, int)`：拿到 0x5201/0x5202/0x5204 原始消息并写入同一个 `/tmp/cluster_cp.state` 格式（早期复用了与无线相同的解析逻辑，自 `v22.0` 起已重构为完全独立自研的有线解析协议栈 `src/cluster-probe/wired/cl_wired_rg.{h,c}`），HUD/仪表消费端不用改。
   - 拦 `CinemoCreateIAP(ICinemoIAP **out)`（`dio_manager` 经 PLT 调用）记下对象；识别被接受、车机发出第一条位置信息（0xFFFB）后，另起线程调 `ICinemoIAP_StartRouteGuidanceUpdates(iap, count, uint16_t *componentIds)`（`libNmeSDK.so` 导出）。0x5200 的参数 1～3（要 App 名等）由 Encode 钩子补上。
 - 结果：iPhone 接受修改后的识别信息，有线时也发 0x5201/0x5202，App 名也有。**【途锐实测，iOS 27】**
 - 保险：收到 0x1D03（识别被拒）就停止修改，直到下次重启，CarPlay 不受影响。

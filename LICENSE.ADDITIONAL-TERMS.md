@@ -10,7 +10,7 @@ Required Notice: Original components in this repository are licensed under the P
 
 ### 适用范围
 
-本条款自 **v22.0** 起适用于本仓库中标为「PolyForm Noncommercial 1.0.0 + 附加条款」的全部原创代码、编译产物、配置器、离线预览器、安装脚本与发布包（以下统称「本软件」），包括但不限于 `src/hud-java`、`src/popup-filter-java`、`src/cluster-probe`（含独立重写的 `wired/cl_wired*.c`）、`src/clusterd`、`src/touareg_netd`、`src/vhpatch`、`src/cl_render/dash.c`、`src/cl_render/navbox.c`、`src/cl_render/carpos.c`、`src/cl_render/gles60.c`、`src/common`、`tools/` 及全部 `VW_*` 模块脚本。
+本条款自 **v22.0** 起适用于本仓库中标为「PolyForm Noncommercial 1.0.0 + 附加条款」的全部独立原创代码、编译产物、配置器、离线预览器、安装脚本与发布包（以下统称「本软件」），包括但不限于 `src/hud-java`、`src/popup-filter-java`、`src/cluster-probe`（含独立重写的 `wired/cl_wired*.c`）、`src/clusterd`、`src/touareg_netd`、`src/vhpatch`、`src/common`、`tools/`（含桌面配置器与离线预览器）及全部 `VW_*` 模块脚本。
 
 本软件按 PolyForm Noncommercial License 1.0.0（全文见根目录 `LICENSE`）授权，并附加以下条款。附加条款与 PolyForm 通用条款不一致时，以本附加条款为准。
 
@@ -33,7 +33,7 @@ Required Notice: Original components in this repository are licensed under the P
 
 ### 三、其他
 
-1. 本仓库中引用的第三方组件（如 `LawPaul/MH2p_SD_ModKit`、`fifthBro/mh2p-cluster`、`Noto Sans CJK`、`stb_truetype`、`zlib` 等）仍按各自原许可证执行，详见 `LICENSES/THIRD_PARTY_NOTICES.md`。
+1. 基于 `fifthBro/mh2p-cluster` 改编的 `src/cl_render/` 整体代码及其编译产物 `cl_render` 统一适用 **CC BY-NC-SA 4.0**，**不叠加本附加条款**（其内嵌的 `dash_font.h` 遵循 SIL OFL 1.1、`stb_truetype.h` 遵循 Public Domain / MIT、`quickjs/` 遵循 MIT）；其余第三方组件（如 `LawPaul/MH2p_SD_ModKit`、`fifthBro/mh2p-cluster`、`Noto Sans CJK`、`stb_truetype`、`zlib`、`TweetNaCl`、`QuickJS` 等）均各自保留原许可证，详见 `LICENSES/THIRD_PARTY_NOTICES.md`。
 2. `docs/` 技术文档文字继续允许按 **CC BY-SA 4.0** 署名并相同方式共享。
 3. 本条款不影响此前历史版本在发布时已授予的许可。
 4. 中英文文本如有歧义，以中文版本为准。
@@ -44,7 +44,7 @@ Required Notice: Original components in this repository are licensed under the P
 
 ### Scope
 
-Effective from **v22.0**, these Additional Terms apply to all original source code, compiled binaries, desktop configurator, offline previewer, installation scripts, and release packages in `a78c7/touareg-cn-carplay-mods` ("the Software"), licensed under the PolyForm Noncommercial License 1.0.0 (`LICENSE`). Where these Additional Terms conflict with the PolyForm Noncommercial License 1.0.0, these Additional Terms prevail.
+Effective from **v22.0**, these Additional Terms apply to all independent original source code, compiled binaries, desktop configurator, offline previewer, installation scripts, and release packages in `a78c7/touareg-cn-carplay-mods` ("the Software") — including without limitation `src/hud-java`, `src/popup-filter-java`, `src/cluster-probe` (including the independently rewritten `wired/cl_wired*.c`), `src/clusterd`, `src/touareg_netd`, `src/vhpatch`, `src/common`, `tools/` (desktop configurator and offline previewer), and all `VW_*` module scripts — licensed under the PolyForm Noncommercial License 1.0.0 (`LICENSE`). Where these Additional Terms conflict with the PolyForm Noncommercial License 1.0.0, these Additional Terms prevail.
 
 ### 1. Strict Prohibition on Commercial Use, Selling, and Paid Installation
 
@@ -65,6 +65,6 @@ When sharing the Software free of charge among individual vehicle owners, you mu
 
 ### 3. Miscellaneous
 
-1. Third-party components retain their respective upstream licenses as documented in `LICENSES/THIRD_PARTY_NOTICES.md`.
+1. The adapted `src/cl_render/` codebase derived from `fifthBro/mh2p-cluster` and its compiled binary `cl_render` are licensed as a whole under **CC BY-NC-SA 4.0** without imposing these Additional Terms (embedded third-party files retain their original licenses: `dash_font.h` under SIL OFL 1.1, `stb_truetype.h` under Public Domain / MIT, and `quickjs/` under MIT). All other third-party components (including `LawPaul/MH2p_SD_ModKit`, `fifthBro/mh2p-cluster`, `Noto Sans CJK`, `stb_truetype`, `zlib`, `TweetNaCl`, and `QuickJS`) retain their respective upstream licenses as documented in `LICENSES/THIRD_PARTY_NOTICES.md`.
 2. Documentation text under `docs/` remains additionally available under **CC BY-SA 4.0**.
 3. In case of discrepancy between Chinese and English versions, the Chinese text governs.

@@ -15,8 +15,8 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
 
 ## 1. 原车仪表地图是怎么来的
 
-- `displaymanager.json`：display 0 = 中控（LVDS1/HDMI1，1920x1020），display 4 = 仪表（LVDS2/INTERNAL2，1920x722），display 5 = HUD（MOST）。
-- 原车导航进程有一个 QNX screen 窗口，id string = **"33"**（1920x639，GLES2），displaymanager 把它合成到仪表。和保时捷 PCM5 一样。**【MH2p 通用，编号在途锐上验证】**
+- `displaymanager.json`：display 0 = 中控（LVDS1/HDMI1，1920x1020），display 4 = 仪表（LVDS2/INTERNAL2，`displaymanager` 逻辑上报 1920×722；大众官方标称物理屏为 12 英寸 `1920×720`），display 5 = HUD（MOST）。
+- 原车导航进程有一个 QNX screen 窗口，id string = **"33"**（1920x639，GLES2），displaymanager 把它合成到仪表。和保时捷 PCM 5 一样。**【MH2p 通用，编号在途锐上验证】**
 - 实测：断开 CarPlay、仪表在原车地图页时，往 33 号窗口画东西会出现在仪表中间。
 - 车机有 `libnvmedia.so`（H.264 硬解）、libscreen、EGL/GLESv2，够用。
 
@@ -35,7 +35,7 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
 
 本车 libairplay（HomeKit 配对）屏幕流的加密：**【MH2p 通用（同版本 libairplay）】**
 
-- 配对会话 = `*(session + 0x3E4)`（由 `AirPlayReceiverSessionSetHomeKitSecurityContext` 写入）。`session + 0x1F8` 是旧的 AES 密钥，没用。
+- 配对会话：早期通过固定偏移 `*(session + 0x3E4)` 读取（由 `AirPlayReceiverSessionSetHomeKitSecurityContext` 写入）；**自 `v21.1` 起已消除硬编码偏移**，改为直接通过 PLT Hook 截获 `AirPlayReceiverSessionSetHomeKitSecurityContext(session, pairing)` 动态获取配对会话指针（并带 Thumb-2 指令自动探针兜底与安全熔断）。`session + 0x1F8` 是旧的 AES 密钥，没用。
 - 密钥 = `PairingSessionDeriveKey(pairing, "DataStream-Salt<connectionID 十进制>", "DataStream-Output-Encryption-Key", 32)`，用的是车机自己的配对会话，不是破解。
 - 每个 op=0 包：nonce = 8 字节小端计数器（从 0 开始每帧加 1），AAD = 整个 128 字节包头，正文 = 密文 + 16 字节 tag。
 - op=1 是明文 avcC（SPS/PPS，NAL 长度 4 字节）。解出来是 H.264 High@3.2，1920x640，约 20 fps，关键帧很少（38 秒只有 2 个）。
@@ -62,8 +62,8 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
 - 一开始我们的窗口也叫 "33"。displaymanager 把 33 绑定到**最后创建**的窗口，原车导航的 33 被挤掉；我们退出后原车窗口不会重新绑定 → 仪表停在最后一帧，只有按 VIEW 才恢复。fifthBro 代码注释也提到这个问题，他的做法是断开后放 logo 动画一直占着 33。
 - 只换成别的编号单独显示：仪表报"加载 CarPlay 失败"。用 `dmdt ts 4` 截图证明车机输出给仪表的画面是正常的，是原车/仪表判断"33 不在显示列表里"。
 - **最终方案**：我们用编号 **58**（`DISPLAYABLE_GOOGLE_EARTH_KOMBI_MAP_VIEW`，国内用不到），仪表显示列表设为 `[58, 33]`——**列表第一个在最上层**，原车 33 一直垫在下面"在场"，仪表就不报错；断开时设回 `[33]`，原车地图直接露出来。**【编号途锐验证】**
-- 原车按 VIEW 时的流程（反编译 lvdskombi `SwitchToPermanentMapSequenceLVDS` + `ChangeDataRateSequence`）：`showDisplayables(4, [33])` → 地图设可见 → `setUpdateRate(4, 10)`（不可见时为 1）。断开时我们照做一遍。
-- 实现：`clusterd`（[`src/clusterd`](../src/clusterd)）看共享内存里有没有流：有流就启动 cl_render，并通过 Java 插件把仪表设为 `[58,33]`，每 3 秒重申一次（防止原车切换把它盖掉）；断流 3 秒后停掉并恢复 `[33]`。Java 插件通过 OSGi 服务 **`de.vw.mib.display.DisplayManagementService`** 执行 `showDisplayables`/`setUpdateRate` 切屏（`ServiceManager.displayManager` 仅用于只读查询当前活动列表）。
+- 原车在仪表切至导航地图视图时的流程（方向盘右侧左右翻页键进入「导航」菜单，按 `VIEW` 键切换全宽地图视图；反编译 lvdskombi `SwitchToPermanentMapSequenceLVDS` + `ChangeDataRateSequence`）：`showDisplayables(4, [33])` → 地图设可见 → `setUpdateRate(4, 10)`（不可见时为 1）。断开时我们照做一遍。
+- 实现：`clusterd`（[`src/clusterd`](../src/clusterd)）看共享内存里有没有流：有流就启动 cl_render，并通过 Java 插件把仪表设为 `[58,33]`，断流 3 秒后停掉并恢复 `[33]`。早期版本每 3 秒重申一次列表；**自 `v21.1` 起 `Rebind.java` 已改为通过 `DSIProxy` 注册 `DSIDisplayManagementListener` 监听仪表屏 4 事件驱动守护**（平时 `[58,33]` 在位时 0 次多余 3 秒盲刷，原车切屏时 ≤100 ms 顶回；不可用固件自动降级 5 秒兜底）。Java 插件通过 OSGi 服务 **`de.vw.mib.display.DisplayManagementService`** 执行 `showDisplayables`/`setUpdateRate` 切屏（**注意**：勿在仪表屏 4 调用 `widgets.DisplayManager.getActiveDisplayables(4)`，在途锐上必抛 `NullPointerException`）。
 
 ## 7. 冷启动后要断开重连几次才投上仪表
 
@@ -116,7 +116,7 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
 - 高德车标识别偶尔会失败，此时保持当前画面位置。百度巡航时车标位置不受控制。
 - 车机重启后要等导航 App 重新开始一次导航、发出名字后才会按 App 切换位置。
 - 中控 CarPlay 上苹果/百度导航时"我的位置"偏右，和改装无关（App 自身布局）。
-- 仪表两侧表盘可以在仪表设置里隐藏，地图就铺满了。
+- 仪表两侧圆表盘可短按方向盘 `VIEW` 键（或在车机「车辆设置 → 数字驾驶舱」中）隐藏，地图即可全宽铺满。
 
 ## 15. 为什么没做 CarPlay Ultra
 
@@ -128,13 +128,15 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
 - 【途锐实测】2023 款途锐（P2878）使用高德导航，有线和无线 CarPlay 均已验证。
 - 刷机保留车机上已有的 `cl.conf`。已安装的车辆要启用这项设置，需在现有配置中手动加入这两行。
 
-## 17. `cl_render` 启动命令、字库重生成与 GLES2 60fps 通道（v22）
+## 17. `cl_render` 启动命令、字库重生成与 GLES2 60fps 通道（v22 / v23.0）
 
-- **默认模式（CarPlay H.264 地图 + 信息框/导航卡叠加）**：
+- **默认经典模式（CarPlay H.264 地图 + 信息框/导航卡叠加）**：
   ```sh
   CL_DISPID=58 cl_render capture=h264 xres=1920 yres=639 mode=stretch
   ```
-- **独立 60fps OpenGL ES 2.0 动画通道（试验，`gles60.c`，由 `8080` 控制台 `gles60_mode` 切换）**：
+- **`v23.0` 正式单画布 60fps OpenGL ES 2.0 + QuickJS 皮肤引擎（`src/cl_render/v23_gles.c`，启用 `v23_mode` 标记后自动接管）**：
+  - 仍复用窗口 `58`（`[58, 33]`），NVDEC 硬解 CarPlay 实时地图流经 `screen_blit` 写入离屏 RGBX8888 表面并默认通过 `EGL_KHR_image_pixmap` 硬件零拷贝绑定为 GLES2 纹理（不兼容时自动退回 `glTexSubImage2D`），上层矢量仪表、指针、导航卡与文字在 Tegra K1 GPU 上以实车 **55–59 fps** 合成；复用车机原厂 TTF 字体（`ZYHei_GB18030_c.ttf` + `VWTextCarUI-Bold.ttf`）动态光栅化图集，受 QuickJS 沙盒 + 三层自动保险丝保护；坐标规范见 [`docs/reference/CLUSTER_LAYOUT_SPEC.md`](reference/CLUSTER_LAYOUT_SPEC.md)。
+- **独立 60fps OpenGL ES 2.0 纯 C 通道（`v22.0` 新增，`gles60.c`，由 `8080` 控制台 `gles60_mode` 切换）**：
   ```sh
   CL_DISPID=58 cl_render capture=gles60 xres=1920 yres=639
   ```

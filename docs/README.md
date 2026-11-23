@@ -1,10 +1,10 @@
 # 大众 MH2p 车机改装开发笔记（非官方）
 
-在一台 2023 款国产途锐（车机 MH2p_CN_VWG36_P2878）上，从零做出下面几项改装的完整开发过程：每一步遇到什么问题、怎么查到原因、怎么解决。写给想在别的 MH2p 车上自己动手的人作参考。
+在一台 2023 款国行途锐（中国进口版，车机 MH2p_CN_VWG36_P2878）上，从零做出下面几项改装的完整开发过程：每一步遇到什么问题、怎么查到原因、怎么解决。写给想在别的 MH2p 车上自己动手的人作参考。
 
-MH2p（MIB2+ High）是大众集团多个品牌共用的车机平台。据 [MH2p SD ModKit 网站](https://lawpaul.github.io/MH2p_SD_ModKit_Site/) 的列表，用这个平台的有：
+MH2p（MIB2+ High）是大众集团多个品牌共用的车机平台。据 [MH2p SD ModKit 网站](https://lawpaul.github.io/MH2p_SD_ModKit_Site/) 的列表并结合中欧改款边界，用这个平台的有：
 
-- 大众：途锐（2018–2024）
+- 大众：第三代途锐改款前（CR7，欧版 2018–2023.05 / 中规 2019–2023 款，配备 15 英寸 Discover Premium MH2p；不含改款前低配 9.2 英寸模拟仪表领航版、欧版 MY2024+ 中期改款 MIB3 Discover Pro Max 及中规 2025–2026 改款 15.05 英寸 Asterix 新途锐）
 - 奥迪（MIB2+ High）：A1、A6、A7、A8、Q3、Q7、Q8、e-tron（各自有年份范围）
 - 保时捷（PCM 5）：911（992）、Cayenne（E3）、Macan（95B）、Panamera（976）
 - 宾利（MIB2+ High）：添越 Bentayga、飞驰 Flying Spur、欧陆 Continental GT（对应年份车型）
@@ -37,9 +37,10 @@ MH2p（MIB2+ High）是大众集团多个品牌共用的车机平台。据 [MH2p
 | [平台参考说明](reference/README.md) | 标注方法、这里不写什么（不放大众文件、不涉及任何保护机制的绕过） |
 | [R1 系统结构与文件位置](reference/R1-系统结构与文件位置.md) | 分区和挂载、主要进程、配置文件、ModKit 脚本机制、重启方法、网络和防火墙 |
 | [R2 HMI（J9 Java）](reference/R2-HMI-J9-Java.md) | 插件加载、编译要求、读车辆数据、datapool / ASL 列表编号、BAP NavSD、显示管理接口 |
-| [R3 车辆数据接口](reference/R3-车辆数据接口.md) | DSICarVehicleStates、DSICarKombi 属性编号、字段、单位、刷新率、无效值（实测表） |
+| [R3 车辆数据接口](reference/R3-车辆数据接口.md) | DSICarVehicleStates、DSICarKombi、DSICarComfort、DSICarDrivingCharacteristics、DSINavigation 属性编号、字段、单位、刷新率、无效值（实测表） |
 | [R4 显示系统](reference/R4-显示系统.md) | 屏幕和 displayable 编号、仪表上谁画什么、画到屏上的方法、dmdt |
 | [R5 CarPlay 与 iAP2](reference/R5-CarPlay与iAP2.md) | 可拦截的 libairplay 函数、路线指引字段、第二屏、车机命令、安全区 |
+| [仪表几何规范](reference/CLUSTER_LAYOUT_SPEC.md) | 途锐 12 英寸数字驾驶舱 `1920×639` 实车像素标定遮挡区与安全布局坐标真相源 |
 
 ## 标注说明
 
@@ -67,7 +68,7 @@ MH2p（MIB2+ High）是大众集团多个品牌共用的车机平台。据 [MH2p
 
 # VW MH2p head-unit modding notes (unofficial)
 
-Development notes (Chinese) from building these mods on a 2023 China-market VW Touareg (`MH2p_CN_VWG36_P2878`, QNX 6.6, Tegra K1, J9 Java HMI), written as a reference for other cars on the MH2p (MIB2+ High) platform — VW Touareg, Audi (A1/A6/A7/A8/Q3/Q7/Q8/e-tron), Porsche PCM 5 (992, Cayenne E3, Macan 95B, Panamera 976), Bentley (Bentayga, Flying Spur, Continental GT), Lamborghini Urus (LIS III). Only verified on the Touareg:
+Development notes (Chinese) from building these mods on a 2023 China-market imported VW Touareg (`MH2p_CN_VWG36_P2878`, QNX 6.6, Tegra K1, J9 Java HMI), written as a reference for other cars on the MH2p (MIB2+ High) platform — pre-facelift 3rd-gen VW Touareg CR7 (EU 2018–05/2023, CN 2019–2023 with 15" Discover Premium; excluding base 9.2" analog-gauge trims, EU MY2024+ MIB3 Discover Pro Max, and CN 2025–2026 Asterix facelifts), Audi (A1/A6/A7/A8/Q3/Q7/Q8/e-tron), Porsche PCM 5 (992, Cayenne E3, Macan 95B, Panamera 976), Bentley (Bentayga, Flying Spur, Continental GT), Lamborghini Urus (LIS III). Only verified on the Touareg:
 
 - **CarPlay turn-by-turn on the HUD**: `LD_PRELOAD` hook adds iAP2 route-guidance (0x5200–0x5204) to Identify; a J9 OSGi bundle feeds BAP NavSD through ASL datapool 732 / lists 741, 744, 751, 838. J9 only loads class files ≤ version 48. Wired CarPlay uses a different iAP2 stack (Cinemo NME over `/dev/otg-cinemo`, not VW `libesoiap2`): hook `NmeIAP2Message::Encode`/`Decode` and call `ICinemoIAP_StartRouteGuidanceUpdates`.
 - **CarPlay map on the instrument cluster**: advertise a second display (`altScreen`, `viewAreas`) in `/info`; stream 111 is ChaCha20-Poly1305 (key from `PairingSessionDeriveKey` with `DataStream-Salt<connID>`); receive on a port the pf firewall allows (6200); NvMedia H.264 decode; show on displayable 58 with the cluster list `[58, 33]` so the stock map (33) stays bound underneath and returns on disconnect.

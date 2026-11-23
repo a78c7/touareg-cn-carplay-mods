@@ -1,46 +1,35 @@
 <div align="center">
 
-<img src="docs/img/hero_banner.svg" alt="VW Touareg MH2p CarPlay Mod-Paket & Offenes WLAN-Cockpit" width="100%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/hero_banner_dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/img/hero_banner_light.svg">
+  <img src="docs/img/hero_banner.svg" alt="VW Touareg (CR7 / MH2p) CarPlay- & Cockpit-Mods" width="340">
+</picture>
 
-# VW Touareg MH2p CarPlay Mod-Paket & Offenes WLAN-Cockpit
+# VW Touareg (CR7 / MH2p) CarPlay- & Cockpit-Mods
 
-<p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><img src="docs/img/badges/release.svg" alt="Release v22.1"></a>
-  <a href="docs/README.md"><img src="docs/img/badges/platform.svg" alt="MH2p QNX 6.6"></a>
-  <a href="#lizenz"><img src="docs/img/badges/license.svg" alt="License PolyForm Noncommercial 1.0"></a>
-</p>
-
-**Ein-USB-Stick-Modifikationspaket für Vollbild- & Wireless-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte & Sport-Infoboxen — inkl. Handy-Web-Konsole (`8080`), Ed25519-signiertem Offline-OTA und WLAN-SSH.**
+Ein-USB-Stick-Paket ohne Demontage für Vollbild- & Wireless-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte, Echtzeit-Fahrdaten sowie drahtlose Einrichtung und Updates per Smartphone.
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>📦 Aktuelle Version (v23.0)</b></a> ·
-  <a href="#4-schritte-usb-installation"><b>⚡ 4-Schritte-Installation</b></a> ·
-  <a href="#11-optionale-module"><b>🧩 Module</b></a> ·
-  <a href="README.md"><b>🇨🇳 简体中文</b></a> ·
-  <a href="README.en.md"><b>🇺🇸 English</b></a>
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.1</b></a> ·
+  <a href="#funktionen">Funktionen</a> ·
+  <a href="#4-schritte-installation">4-Schritte-Installation</a> ·
+  <a href="#kompatibilität">Kompatibilität</a> ·
+  <a href="RELEASE_NOTES.md">Versionshinweise</a> ·
+  <a href="README.md">简体中文</a> ·
+  <a href="README.en.md">English</a>
 </p>
 
-<p><sub>Wenn dir das Projekt hilft, freue ich mich über einen <b>⭐ Star</b> oben rechts oder ein <b>Gefällt mir</b> ohne Login unten; für Release-Benachrichtigungen einfach <b>👀 Watch → Custom → Releases</b> aktivieren.</sub></p>
-
-<p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/downloads.svg" alt="Downloads gesamt"></a>
-  &nbsp;
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/stars.svg" alt="GitHub Stars"></a>
-  &nbsp;
-  <a href="https://touareg-likes.pages.dev/like?lang=de"><img src="https://touareg-likes.pages.dev/badge.svg?lang=de" alt="Gefällt mir (ohne Login)"></a>
-</p>
+<p><a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/downloads.svg" alt="Downloads gesamt"></a>&nbsp;&nbsp;<a href="https://github.com/a78c7/touareg-cn-carplay-mods/stargazers"><img src="https://raw.githubusercontent.com/a78c7/touareg-cn-carplay-mods/refs/heads/badges/stars.svg" alt="GitHub Stars"></a>&nbsp;&nbsp;<a href="https://touareg-likes.pages.dev/like?lang=de"><img src="https://touareg-likes.pages.dev/badge.svg?lang=de" alt="Gefällt mir (ohne Login)"></a></p>
 
 </div>
 
 ---
 
-> [!TIP]
-> **🚀 Offizielle Version [`v23.0`](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest) ist da** — im Fahrzeug verifizierte **55–59 fps Hardware-Zero-Copy KI-Design-Engine (GLES2 + QuickJS)**, pixelgenaue **`1920×639` Cockpit-Geometriespezifikation** ([`CLUSTER_LAYOUT_SPEC.md`](docs/reference/CLUSTER_LAYOUT_SPEC.md)), Lenkrad-`OK`-Designwechsel (standardmäßig Doppelklick `OK`; bei installiertem Kartenwechsel-Modul Doppelklick Karte / Dreifachklick Design) + `8080`-Designauswahl, 4-stufige Sport-Balkenfarbverläufe und Sofortstart ohne 2-s-Splashscreen. `v23_mode` bleibt optional (klassischer Pfad bleibt Standard) mit 3-stufiger Sicherheitsabschaltung.
-
 <div align="center">
-  <img src="docs/img/cluster.png" alt="v22 Kombiinstrument-Karte, Sport-Infoboxen und symmetrische Navigationskarte" width="92%">
+  <img src="docs/img/cluster.png" alt="Touareg Digital Cockpit CarPlay-Karte, Sport-Infoboxen und Navigationskarte" width="92%">
   <br>
-  <sub><i>Ansicht im Digital Cockpit: zentrierte CarPlay-Karte mit symmetrischen <code>295×344px</code> Großschrift-Sport-Infoboxen und Navigationskarte.</i></sub>
+  <sub><i>Ansicht im Digital Cockpit: zentrierte CarPlay-Karte mit symmetrischen Großschrift-Fahrdaten und Abbiege-Navigationskarte.</i></sub>
 </div>
 
 <br>
@@ -48,84 +37,169 @@
 https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 <div align="center">
-  <sub><i>Live-Demo im Fahrzeug (Klick für Ton, chinesisch/englische Untertitel; das einleitende Custom-Theme demonstriert eine Erweiterung auf Basis des <code>1920×639</code>-Kanals dieses Repos).</i></sub>
+  <sub><i>Live-Demo im Fahrzeug (Klick für Ton, chinesisch/englische Untertitel; der Anfang zeigt ein 60-fps-Custom-Design).</i></sub>
 </div>
 
 ---
 
-## 11 Optionale Module
+## Funktionen
 
-> Alle Module liegen standardmäßig deaktiviert unter `USB/未选模块/`. Über den Offline-Konfigurator am PC/Mac lässt sich jedes Modul einzeln auf **Installieren / Deinstallieren / Ignorieren** setzen; Abhängigkeiten werden automatisch aufgelöst.
+Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick doppelklicken, gewünschte Funktionen anhaken, Infoboxen per Drag & Drop anordnen und speichern (alle Module sind standardmäßig deaktiviert und jederzeit per Klick deinstallierbar):
 
-| Kategorie | Modul | Hauptfunktion | Kompatibilität |
+<div align="center">
+  <img src="docs/img/configurator.png" alt="Touareg Offline-Konfigurator Oberfläche" width="92%">
+  <br>
+  <sub><i>Offline-Konfigurator für PC/Mac: Module auswählen, Infoboxen und Navigationskarte visuell anordnen und mit einem Klick auf den USB-Stick speichern.</i></sub>
+</div>
+
+<br>
+
+| Kategorie | Funktion | Wirkung im Fahrzeug | Kompatibilität |
 | :--- | :--- | :--- | :---: |
-| **Infotainment & Projektion** | **🖥️ Vollbild-CarPlay** | 38-Byte-In-Place-Patch entfernt seitliche Balken (prüft Skin-CRC32, überspringt sicher bei Abweichung) | CN Touareg `P*` |
-| | **📡 Wireless CarPlay** | Aktiviert werksseitig inaktives Wireless CarPlay (integriert LawPaul-Modul) | MH2p allgemein |
-| | **🤖 Android Auto** | Aktiviert werksseitig inaktives Android Auto (integriert LawPaul-Modul) | MH2p allgemein |
-| **HUD & Kombiinstrument** | **🧭 Navigation im HUD** | Projiziert Abbiegepfeile, Entfernung, Straßennamen & Spurhinweise (Apple/AMap/Baidu) ins HUD (eigenes Wired-iAP2 + Wireless-Dual-Stack) | CN Touareg `P*` |
-| | **🗺️ Kombiinstrument-Karte + Sport-Infoboxen** | CarPlay-Karte im `1920×639` Innovision Cockpit (AMap-Zentrierung, Lenkrad-Zoom); symmetrische `295px` **46px-Großschrift-Sportbalken mit 10-Hz-Dämpfung** (43 echte DSI-Kanäle), **Großschrift-Navigationskarte** & experimentelle **60-fps-GLES2-Engine** | CN Touareg `P*` |
-| | **🔄 Lenkrad-`OK`-Doppelklick Kartenwechsel** | Doppelklick auf rechte `OK`-Taste innerhalb von 2 s schaltet zwischen CarPlay- und Werkskarte um (`VW_HUD_4_OkMapSwitch`) | CN Touareg `P*` |
-| | **🎙️ Sprachtaste Kurzdruck für Siri (Experimentell)** | Kurzdruck auf die Lenkrad-Sprachtaste startet Siri bei aktivem CarPlay (Werks-Langdruck unverändert) | CN Touareg `P*` |
-| **WLAN & Entwicklung** | **📱 Mobile WLAN-Konsole (OTA + Diagnose + optional SSH)** | Hintergrundverbindung zum Handy-Hotspot (`http://touareg.local:8080`): Infoboxen live anpassen, **Ed25519-signiertes Offline-OTA mit Rollback**, anonymisiertes Diagnosepaket & Safe-Mode-Verwaltung; optional Key-only SSH (`:2012`) | MH2p allgemein |
-| **Fixes & Popup-Filter** | **📶 P2878 5-GHz-WLAN-Region-Fix** | Nur erforderlich, falls nach Update von älterer Firmware (z. B. `P9832`) auf `P2878` Kabel-CarPlay läuft, aber Wireless nicht verbindet | CN Touareg `P*` |
-| | **🔕 Bluetooth-Popup „Benutzername eingeben“ ausblenden** | Gemeinsamer Bundle-`98`-Filter blockiert nur Bluetooth-OBEX-Auth (`Busrlo`) ohne Einfluss auf Telefonie, Musik oder CarPlay | VW MH2p |
-| | **🔕 Popup „SIM nur für Daten“ ausblenden** | Gemeinsamer Bundle-`98`-Filter blockiert `PHONE_SIM_DATAONLY` ohne Einfluss auf Internetverbindung oder SOS | VW MH2p |
+| **Display & Projektion** | **Vollbild-CarPlay** | Entfernt seitliche schwarze Ränder für echte Vollbild-Darstellung auf dem 15"-Display (prüft Skin-Stand, überspringt sicher bei Abweichung) | CN Touareg `P*` |
+| | **Wireless CarPlay** | Aktiviert werksseitig inaktives Wireless CarPlay für kabelloses Verbinden | MH2p allgemein |
+| | **Android Auto** | Aktiviert werksseitig inaktives Android Auto (CN-Vorfacelift 2019–2023 ab Werk ohne Android Auto) | MH2p allgemein |
+| **HUD & Kombiinstrument** | **Navigation im HUD** | Projiziert Abbiegepfeile, Distanz, Straßennamen & Spurhinweise (Apple/AMap/Baidu) ins Windschutzscheiben-HUD (erfordert Werks-HUD; Kabel & Wireless) | CN Touareg `P*` |
+| | **Kombiinstrument-Karte + Fahrdaten** | Zeigt die CarPlay-Karte direkt im 12"-Digital Cockpit (AMap-Zentrierung, Lenkrad-Zoom) mit symmetrischen 43-Kanal-Fahrdaten, Navigationskarte & 60-fps-Custom-Designs | CN Touareg `P*` |
+| | **Lenkrad-`OK` Kartenwechsel** | Doppelklick auf rechte `OK`-Taste (`480-ms`-Fenster) schaltet zwischen CarPlay- und Werkskarte um; bei aktivem `v23`-Design wechselt Dreifachklick das Design (ohne dieses Modul wechselt Doppelklick direkt das Design) | CN Touareg `P*` |
+| | **Sprachtaste Kurzdruck für Siri (Experimentell)** | Kurzdruck auf die Lenkrad-Sprachtaste startet Siri bei aktivem CarPlay (Werks-Langdruck unverändert; je nach Firmwarestand kann zusätzlich die Werkssprachbedienung auslösen) | CN Touareg `P*` |
+| **WLAN & Verwaltung** | **Mobile WLAN-Konsole** | Verbindet sich mit dem Handy-Hotspot für Live-Anpassung der Infoboxen, Designwechsel, signierte Offline-Updates und Diagnose unter `http://touareg.local:8080` (optional Key-only SSH) | MH2p allgemein |
+| **Fixes & Filter** | **P2878 5-GHz-WLAN-Region-Fix** | Nur nötig, falls nach Update von älterer Firmware (z. B. `P9832`) auf `P2878` Kabel-CarPlay läuft, Wireless aber nicht verbindet | CN Touareg `P*` |
+| | **Bluetooth-Popup „Benutzername eingeben“ ausblenden** | Unterdrückt das wiederkehrende Bluetooth-Anmeldefenster ohne Einfluss auf Telefonie, Musik oder CarPlay | VW MH2p |
+| | **Popup „SIM nur für Daten“ ausblenden** | Unterdrückt den SIM-Datenhinweis bei CarPlay ohne Einfluss auf mobile Daten oder SOS | VW MH2p |
+
+<details>
+<summary><b>Empfohlene Kombinationen für Einsteiger</b></summary>
+
+| Profil | Empfohlene Auswahl | Hinweis |
+| :--- | :--- | :--- |
+| **Die meisten Touareg-Fahrer** | Ein-Klick-Preset **Empfohlenes Fahrpaket** (Vollbild + Wireless CarPlay + HUD + Cockpit-Karte + `OK`-Kartenwechsel); bei Bedarf Kurzdruck-Siri ergänzen | Beste Navigation inkl. sofortigem Wechsel zur Werkskarte |
+| **Anpassung & Updates per Handy** | Zusätzlich **Mobile WLAN-Konsole** aktivieren (SSH im Alltag deaktiviert lassen) | Infoboxen, Designs und signierte Updates direkt im Handy-Browser |
+| **Störende Popups** | Je nach Meldung „Benutzername eingeben“ oder „SIM nur für Daten“ anhaken | Unabhängig voneinander nutzbar |
+| **Kein Wireless nach P2878-Update** | **P2878 5-GHz-WLAN-Region-Fix** aktivieren | Bei ab Werk mit `P2878` ausgelieferten Fahrzeugen mit funktionierendem Wireless CarPlay nicht erforderlich |
+
+</details>
 
 ---
 
 <a id="notice"></a>
 
-> [!IMPORTANT]
-> **Vor der Installation lesen: EU-Hinweis, Fahrzeugkompatibilität, Schutzschaltung & Haftungsausschluss**
-> - **Hinweis für EU-Fahrzeuge (z. B. Touareg CR `P2869`)**: Die fertigen Touareg-UI-Skripte prüfen gezielt auf chinesische P-Firmwarestände (`MH2p_CN_VWG36_P*`, vollständig verifiziert auf `P2878`) und **brechen auf EU- oder anderen Ständen sicher ohne Änderungen ab**, um Schäden auszuschließen. Architektur, Quellcode (`src/`), Dokumentation (`docs/01–07`, `R1–R5`), lokaler Browser-Previewer (`tools/preview/index.html`) und `VW_WiFi_Dev` dienen direkt als offene Basis für **MH2p (VW Touareg, Audi, Porsche PCM 5, Bentley, Lamborghini LIS III)** — siehe auch den [Touareg-Freunde-Thread zur EU-P2869-Portierung](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/).
-> - **3-Absturz-Schutzschaltung (Zero-Wear Safe Mode) & Fahrsicherheit**: Integrierte Schutzschaltung für J9 HMI, `cl_probe.so`, `clusterd`/`cl_render` und `io-pkt` (keine eMMC-Schreibzugriffe bei normalem Start). Konsole und Einstellungen niemals während der Fahrt bedienen; für Geschwindigkeit und Warnleuchten gilt stets die Werksanzeige.
-> - **Kostenlos, Open Source & strikt nicht-kommerziell**: Lizenziert unter **[PolyForm Noncommercial 1.0.0](LICENSE) + [Zusatzbedingungen](LICENSE.ADDITIONAL-TERMS.md)**. Ausschließlich für den privaten, nicht-kommerziellen Gebrauch; Weiterverkauf, kostenpflichtige Codierung/Aufspielung oder kommerzielle Bündelung sind streng untersagt.
-> - **Inoffiziell & Nutzung auf eigene Gefahr**: Privates Forschungsprojekt ohne Verbindung zu VW, Audi, Porsche, Bentley, Lamborghini, Apple, Google oder AMap. Bereitstellung ohne Gewährleistung; jedes Flash-Risiko trägt der Nutzer selbst. Rechteinhaber können über [GitHub Issues](https://github.com/a78c7/touareg-cn-carplay-mods/issues) Kontakt aufnehmen.
+## Kompatibilität
 
-## 4-Schritte-USB-Installation
+| Bereich | Details |
+| :--- | :--- |
+| **Unterstützt** | **Touareg III Vorfacelift (CR7: CN 2019–2023)** mit **15"-Discover Premium (MH2p / MIB2+ High) & 12"-Digital Cockpit** (vollständig verifiziert auf `P2878`; andere CN-`P*`-Stände wie `P2876`/`P2838`/`P9832` werden automatisch geprüft und bei Abweichung sicher übersprungen; WLAN-Konsole & Doku gelten MH2p-übergreifend). |
+| **Nicht unterstützt** | Vorfacelift-Basismodelle mit **9,2"-Discover Pro** / Analoginstrument / ohne HUD (z. B. CN Linghang 2019 / 2021–2022); **EU-Facelift ab MJ 2024 mit MIB3 (Discover Pro Max)** und **CN-Facelift 2025–2026 mit 15,05"-Asterix**; **Touareg II (7P)**. |
+| **EU- / MH2p-Fahrzeuge** | Die fertigen Touareg-UI-Skripte brechen auf EU-Ständen (z. B. `P2869`) und anderen MH2p-Marken sicher ohne Änderungen ab; Architektur, Quellcode, Previewer, Doku und WLAN-Konsole dienen direkt als Basis (siehe [Touareg-Freunde EU-P2869-Thread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)). |
 
-1. **USB-Stick vorbereiten**: **≤ 32 GB**, formatiert als **FAT32** (Windows: Rechtsklick → Formatieren → FAT32; macOS: Festplattendienstprogramm → Löschen → `MS-DOS (FAT)`).
-2. **Direkt ins Hauptverzeichnis entpacken**: Neuestes Release-`zip` unter **[Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)** laden (Prüfsumme in `SHA256SUMS.txt`) und den gesamten Inhalt direkt auf die oberste Ebene des USB-Sticks legen (keinen zusätzlichen Unterordner anlegen):
+- **Ausstattungs- & Antriebshinweise**: HUD-Navigation erfordert Werks-HUD; `pitch`/`roll`-Neigungswinkel erfordern Luftfederung (nicht verfügbar bei Modellen ohne Luftfederung wie CN eHybrid 2021–2022); Tankvolumen standardmäßig `90 L` (CN Verbrenner; für CN eHybrid `76 L`, für EU-Serie `75 L` eintragen); 8-Gang-Ersatzübersetzung & Balkenskalen sind auf 3.0 TSI kalibriert.
+- **Schutzschaltung & Kostenlos-Hinweis**: Integrierte 3-Absturz-Schutzschaltung (Zero-Wear Safe Mode, keine eMMC-Schreibzugriffe bei normalem Start). Einstellungen niemals während der Fahrt bedienen; für Geschwindigkeit und Warnleuchten gilt stets die Werksanzeige. Kostenlos, Open Source & **strikt nicht-kommerziell**.
+
+---
+
+## 4-Schritte-Installation
+
+1. **USB-Stick vorbereiten**: Einen USB-Stick mit **≤ 32 GB im FAT32-Format** verwenden (neue Sticks sind ab Werk meist bereits FAT32, und der Konfigurator prüft dies oben automatisch — **nur formatieren, falls er noch kein FAT32 ist**, nicht jedes Mal neu formatieren).
+2. **Direkt ins Hauptverzeichnis entpacken**: Neuestes Release-`zip` unter **[Releases](https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest)** laden und den gesamten Inhalt direkt auf die oberste Ebene des USB-Sticks legen (keinen zusätzlichen Unterordner anlegen):
    ```text
    USB-Stammverzeichnis/
    ├── Data/                          ← Muss direkt im Hauptverzeichnis liegen
    ├── Meta/                          ← Muss direkt im Hauptverzeichnis liegen
    ├── Mods/                          ← Standardmäßig leer; wird vom Konfigurator befüllt
-   ├── 未选模块/                       ← Enthält alle optionalen Modulordner
+   ├── 未选模块/                       ← Enthält alle 12 Modulordner (HUD = VW_HUD_1 + VW_HUD_2)
    └── 改装设置（Windows）.exe / （Mac）.command
    ```
-3. **[Pflicht] Offline-Konfigurator ausführen & speichern**: **`改装设置（Windows）.exe`** oder **`改装设置（Mac）.command`** direkt vom USB-Stick starten (ohne diesen Schritt wird nichts installiert):
-   - Preset wählen oder Module einzeln auf **Installieren / Deinstallieren / Ignorieren** setzen sowie Infoboxen/Navigationskarte per Drag & Drop anordnen;
-   - Bei aktivierter **WLAN-Konsole** 1–3 Handy-Hotspots und eine 6–16-stellige PIN eintragen und auf **Auf USB speichern** klicken (die Mac-Version entfernt automatisch `._*`-Dateien).
-4. **Im Fahrzeug installieren**: USB-Stick sicher auswerfen → **Motor starten** → Stick in den USB-Anschluss der Mittelarmlehne stecken. Nach ca. 10 Sekunden startet das System automatisch neu und flasht (mehrere Neustarts über einige Minuten, **Infotainment dabei nicht bedienen**) → Stick nach Aufforderung abziehen.
+3. **Konfigurator ausführen & speichern (Pflicht)**: **`改装设置（Windows）.exe`** oder **`改装设置（Mac）.command`** direkt vom USB-Stick starten (ohne diesen Schritt wird nichts installiert):
+   - Preset wählen oder Module einzeln auf **Installieren / Deinstallieren / Ignorieren** setzen, Infoboxen anordnen oder `v23`-Designs importieren;
+   - Bei aktivierter **WLAN-Konsole** 1–5 Handy-Hotspots und eine 6–16-stellige PIN eintragen und auf **Auf USB speichern** klicken (die Mac-Version entfernt `._*`-Dateien automatisch).
+4. **Im Fahrzeug installieren**: USB-Stick sicher auswerfen → **Motor starten** → Stick in einen der beiden **vorderen Daten-USB-Anschlüsse** stecken (Mittelarmlehne oder Ablagefach unter der Mittelkonsole; hintere USB-Buchsen sind reine Ladebuchsen; keine USB-Hubs oder Verlängerungskabel verwenden). Nach ca. 10 Sekunden startet das System automatisch neu und flasht über einige Minuten (**Infotainment dabei nicht bedienen**) → Stick nach Aufforderung abziehen.
 
-> [!TIP]
-> - **Hinweis zu unsignierten Binärdateien**: Der Desktop-Konfigurator besitzt kein kostenpflichtiges Code-Signing-Zertifikat (Windows: *Weitere Informationen → Trotzdem ausführen*; macOS: *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*). Er wird per GitHub Actions direkt aus [`tools/configurator`](tools/configurator) gebaut, lauscht nur auf `127.0.0.1` und **stellt keinerlei Internetverbindung her**.
-> - **Upgrade von `v22.01` oder älter**: Einmaliges USB-Upgrade auf `v22.1` erforderlich (ältere Stände enthalten noch keinen Ed25519-Public-Key und lehnen signierte OTA-Pakete sicher ab). Bestehende `cl.conf` und `web.pin` bleiben erhalten.
-> - **Schwarze Ränder nach dem ersten Flash**: In den iPhone Bluetooth-/CarPlay-Einstellungen *Dieses Fahrzeug ignorieren* wählen und einmal neu verbinden.
-
----
-
-## Alltag, WLAN-Konsole & Technische Dokumentation
-
-- **Kombiinstrument & HUD**: Mit der Lenkradtaste `VIEW` in die Kartenansicht wechseln; bei aktiver CarPlay-Verbindung wird die Karte automatisch eingeblendet und passt sich Nachtmodus sowie ACC-Darstellung an.
-- **Lokale Browser-Vorschau**: [`tools/preview/index.html`](tools/preview/index.html) lokal im Browser öffnen, um `dash.conf` in nativen `1920×639` zu prüfen, `smooth=1`-Dämpfungsbalken zu vergleichen oder 10-Hz-CSV-Fahrdaten abzuspielen.
-- **Mobile WLAN-Konsole (`http://touareg.local:8080`)**: Nutzt das freie `bcm2`-Interface (`dhcp.client -n -R`) parallel zu 5-GHz-RSDB-Wireless-CarPlay und `ecm0`-Werks-Telematik. Geschützt durch Fail-Closed-`X-Pin`-Auth (inkl. automatisch im Kombiinstrument angezeigter Ersteinrichtungs-PIN), IP-Backoff und Park-Sperre (`≤ 3 km/h`). Ermöglicht Live-Konfiguration, **Ed25519-signiertes & SHA-256-geprüftes** Offline-OTA mit Rollback, anonymisierten Diagnose-Export, Safe-Mode-Reset sowie optionales Key-only **WLAN-SSH (`:2012`)**.
-- **Entwicklungsdoku & Quellcode**: Ausführliche Entwicklungsnotizen (`docs/01–07`, auf Chinesisch) und MH2p-Plattformreferenz (`docs/reference/R1–R5`, jeweils markiert als **Touareg-spezifisch** bzw. **MH2p-allgemein**) befinden sich in **[`docs/README.md`](docs/README.md)**, der vollständige Quellcode unter [`src/`](src) und [`tools/`](tools).
+> [!NOTE]
+> - **Unsignierte Binärdatei**: Der Desktop-Konfigurator besitzt kein kommerzielles Zertifikat (Windows: *Weitere Informationen → Trotzdem ausführen*; macOS: *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*). Per GitHub Actions aus [`tools/configurator`](tools/configurator) mit `SHA256SUMS.txt` gebaut; lauscht nur auf `127.0.0.1`, völlig offline.
+> - **Upgrade von `v22.01` oder älter**: Einmaliges USB-Upgrade auf `v22.1` / `v23.1` erforderlich (bestehende `cl.conf` und `web.pin` bleiben erhalten; ist keine PIN gesetzt, zeigt das Cockpit beim ersten Start eine 6-stellige Einmal-PIN an). Danach funktioniert drahtloses OTA weiter.
+> - **Schwarze Ränder nach dem ersten Flash**: In den iPhone Bluetooth-/CarPlay-Einstellungen *Dieses Fahrzeug ignorieren* wählen und neu verbinden.
 
 ---
 
-## Danksagung & Community
+<details>
+<summary><b>Alltag, AMap-Hinweise, Fehlerbehebung & Deinstallation</b></summary>
 
+### Bedienung im Alltag
+- **Kombiinstrument & HUD**: Mit den rechten Lenkrad-**Blättertasten (links/rechts)** das Navigationsmenü im Digital Cockpit wählen und per Taste **`VIEW`** (oder in den Infotainment-Fahrzeugeinstellungen → *Digital Cockpit*) die Rundinstrumente ausblenden; CarPlay erscheint automatisch und passt sich Nachtmodus sowie ACC-Versatz an.
+- **Lenkrad-Kurzbefehle**: Bei aktiviertem `v23`-Design ohne Kartenwechsel-Modul wechselt **Doppelklick `OK`** direkt das Design; mit `VW_HUD_4_OkMapSwitch` schaltet **Doppelklick `OK` (`480-ms`-Fenster)** zwischen CarPlay- und Werkskarte um und **Dreifachklick `OK`** wechselt das Design; Kurzdruck-Sprachtaste startet Siri bei aktivem Modul (identisch bei physischen 2019–2020 und kapazitiven 2021–2023 Lenkrädern).
+- **Lokaler 1:1-Simulator & Fahrdaten-Log**: [`tools/preview/index.html`](tools/preview/index.html) lokal im Browser öffnen, um Layouts, `v23`-Designs oder 10-Hz-CSV-Fahrdaten zu testen (optionaler Log-USB-Modus im Konfigurator aktivierbar; Marken-USB-Stick am vorderen Daten-Port empfohlen).
+
+### Bekannte AMap-Eigenheiten & Deinstallation
+- **AMap-Zentrierung & Zoom**: Die automatische Bilderkennung zentriert den versetzten AMap-Positionspfeil innerhalb von ca. 3 s; Zoomstufen setzt AMap geschwindigkeitsabhängig selbst zurück und übermittelt keine Spurdaten über CarPlay (Baidu Maps unterstützt Spurpfeile).
+- **Deinstallation**: Gewünschte Module im Konfigurator auf **Deinstallieren** setzen, speichern und einmal im Fahrzeug flashen (beim Entfernen von HUD müssen Cockpit-Karte, `OK`-Kartenwechsel und Kurzdruck-Siri mit deinstalliert werden).
+- **Diagnose für Issues**: Anonymisiertes Diagnosepaket über `http://touareg.local:8080` exportieren (Passwörter/PINs/FIN/Telefonnummern automatisch entfernt) oder Ordner `cluster_logs` auf einem USB-Stick anlegen; **niemals den eigenen `backup`-Ordner veröffentlichen**.
+
+</details>
+
+<details>
+<summary><b>Mobile WLAN-Konsole, Systemarchitektur, WLAN-SSH & Entwicklerdoku</b></summary>
+
+<br>
+
+### Mobile WLAN-Konsole (`http://touareg.local:8080`)
+
+`VW_WiFi_Dev` nutzt das freie `bcm2`-Client-Interface (`dhcp.client -n -R`) parallel zu 5-GHz-RSDB-Wireless-CarPlay ohne Eingriff in `ecm0`-Werks-Telematik (Details: **[`docs/07-无线控制台与SSH开发.md`](docs/07-无线控制台与SSH开发.md)**).
+
+<div align="center">
+  <img src="docs/img/wireless_console.png" alt="MH2p 8080 Mobile WLAN-Konsole" width="92%">
+  <br>
+  <sub><i>Mobile WLAN-Konsole: Park-Sperre (≤ 3 km/h), 43-Kanal-Anzeigen & Designwechsel, Ed25519-signiertes Offline-OTA und anonymisierte Diagnose.</i></sub>
+</div>
+
+1. Im Konfigurator **Mobile WLAN-Konsole** aktivieren (SSH für normale Nutzung aus lassen), 1–5 Handy-Hotspots und 6–16-stellige PIN eintragen und im Fahrzeug Hotspot starten (iPhone: *Kompatibilität maximieren* aktivieren und Hotspot-Menü 3–5 s offen lassen; Android: WPA2).
+2. **`http://touareg.local:8080`** öffnen (`X-Pin`-Header-Auth + Park-Sperre `≤ 3 km/h`): Infoboxen/Designs live anpassen, **Ed25519-signierte & SHA-256-geprüfte** `.tar`-OTA-Pakete mit Rollback einspielen, Diagnose exportieren oder Safe Mode zurücksetzen.
+
+### Systemarchitektur (MH2p-Datenpfad)
+
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/arch_dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/img/arch_light.svg">
+  <img src="docs/img/arch_light.svg" alt="VW Touareg MH2p Systemarchitektur" width="96%">
+</picture>
+</div>
+
+### WLAN-SSH (`:2012`) & Hardware-Leitplanken für KI-Entwicklung
+
+Optionales Key-only-SSH (`:2012`) im Konfigurator aktivieren (fahrzeugspezifischer Ed25519-Schlüssel unter Desktop `途锐无线SSH密钥/touareg_ed25519`, nicht auf dem Stick) und per `root@touareg.local:2012` verbinden. QNX 6.6 / Tegra-K1-Grenzen beachten:
+- **RAM (~2 GB) & `/tmp` (tmpfs)**: Keine großen Dateien oder unbegrenzten Logs in `/tmp`; Hintergrunddienste schlank halten.
+- **eMMC-Schutz**: `/mnt/app` regulär read-only belassen; keine hochfrequenten Telemetrie-Schreibvorgänge auf `/mnt/app` oder `/mnt/ota` (`/tmp/dash.state` & `/tmp/cluster_cp.state` nutzen); atomar über `.new` + `sync && mount -ur /mnt/app` schreiben. `/ifs`, `/mnt/system` und CAN-Ruhestrom-Management unangetastet lassen.
+- **60-fps-Rendering**: Für Vollbild-60-fps-Designs mit Live-CarPlay-Karte `src/cl_render/v23_gles.c` (`v23_mode`, QuickJS + GLES2 + `EGL_KHR_image_pixmap` Zero-Copy, 55–59 fps) oder `src/cl_render/gles60.c` (`capture=gles60`, dynamisches `eglGetProcAddress`, niemals direkt gegen `-lGLESv2` linken) verwenden; keine Vollbild-CPU-Schleifen in `dash.c`.
+
+### Entwicklungsdoku & Quellcode-Index
+
+Ausführliche Entwicklungsnotizen (`docs/01–07`, Chinesisch) und MH2p-Plattformreferenz (`docs/reference/R1–R5`, `CLUSTER_LAYOUT_SPEC.md`, jeweils markiert als **Touareg-spezifisch** vs. **MH2p-allgemein** für VW Touareg, Audi, Porsche PCM 5, Bentley, Lamborghini LIS III) liegen in **[`docs/README.md`](docs/README.md)**, der vollständige Quellcode unter [`src/`](src) und [`tools/`](tools).
+
+</details>
+
+<details>
+<summary><b>Sicherheit, Lizenzdetails, Markenhinweise & Danksagung</b></summary>
+
+### Sicherheit, Haftungsausschluss & Markenhinweise
+- **3-Absturz-Schutzschaltung (Zero-Wear Safe Mode)**: Schützt J9 HMI, `cl_probe.so`, `clusterd`/`cl_render` und `io-pkt` (keine eMMC-Schreibzugriffe bei normalem Start). Für Geschwindigkeit und Warnleuchten gilt stets die Werksanzeige.
+- **Inoffiziell & Nutzung auf eigene Gefahr**: Privates Forschungsprojekt ohne Verbindung zu Volkswagen, Audi, Porsche, Bentley, Lamborghini, Apple, Google, AMap oder Baidu. Bereitstellung ohne Gewährleistung; jedes Flash- und Garantierisiko trägt der Nutzer selbst. Rechteinhaber können über [GitHub Issues](https://github.com/a78c7/touareg-cn-carplay-mods/issues) Kontakt aufnehmen.
+- **Markenhinweise**: Volkswagen und Touareg sind eingetragene Marken der Volkswagen AG. CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.
+
+### Lizenzgrenzen
+- **Eigenständige Originalkomponenten**: `src/hud-java`, `src/popup-filter-java`, `src/cluster-probe` (inkl. eigenständig neu implementiertem `wired/cl_wired*.c`), `src/clusterd`, `src/touareg_netd`, `src/vhpatch`, `src/common`, `tools/` sowie alle `VW_*`-Skripte stehen unter **[PolyForm Noncommercial 1.0.0](LICENSE) + [Nicht-kommerzielle Zusatzbedingungen](LICENSE.ADDITIONAL-TERMS.md)** (keine proprietären VW-/Apple-Binärdateien; Weiterverkauf, bezahltes Flashen und kommerzielle Bündelung streng untersagt); `docs/`-Texte stehen unter **CC BY-SA 4.0**.
+- **Abgeleitete & Drittkomponenten**: Der angepasste `src/cl_render/`-Code samt kompiliertem Binary `cl_render` (ohne Zusatzbedingungen; eingebettetes `quickjs/` bleibt MIT, `dash_font.h` SIL OFL 1.1, `stb_truetype.h` Public Domain / MIT) sowie `dio_cluster.so`, ModKit und optionale LawPaul-Module unterliegen **[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)**. Vollständige Nachweise in **[THIRD_PARTY_NOTICES.md](LICENSES/THIRD_PARTY_NOTICES.md)**.
+
+### Danksagung & Community
 - **[luanqibazao0123-bot](https://github.com/luanqibazao0123-bot)** ([#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)): Impulsgeber für das `v21`-Großschrift-Sport-Design sowie die `60fps`-Kombiinstrument-Engine und Praxishinweise zum `P2878`-Upgrade.
 - **Touareg-Freunde Community**: Verlinkt und diskutiert im [deutschen EU-MH2p-P2869-Projektthread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/).
 - **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)** ([Website](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)): USB-ModKit-Basis sowie optionale `AppleCarPlay`- / `AndroidAuto`-Module ([CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md), inkl. [fifthBro/pcm5-androidauto-connect-fix](https://github.com/fifthBro/pcm5-androidauto-connect-fix)).
 - **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)** & **[mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**: Upstream-Basis für `dio_cluster.so` (v0034) und `cl_render` ([CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)).
 - **[davecozens / touareg-carplay](https://github.com/davecozens/touareg-carplay)**: Vollbild-Geometriereferenz; **[luka-dev](https://github.com/luka-dev)**: `jxe2jar` und `qnx65-armv7-toolchain`.
 
+</details>
+
 ---
 
 ## Lizenz
 
-- **Eigener Code**: **[PolyForm Noncommercial 1.0.0](LICENSE) + [Nicht-kommerzielle Zusatzbedingungen](LICENSE.ADDITIONAL-TERMS.md)** (enthält keine proprietären VW-/Apple-Binärdateien; Details siehe **[Vor der Installation lesen](#notice)**); Dokumentationstexte unter `docs/` stehen unter **CC BY-SA 4.0**.
-- **Drittkomponenten**: `src/cl_render`, `dio_cluster.so`, ModKit sowie optionale LawPaul-Module unterliegen **[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)**. Vollständige Nachweise und Lizenztexte in **[THIRD_PARTY_NOTICES.md](LICENSES/THIRD_PARTY_NOTICES.md)**.
+Eigenständige Originalkomponenten stehen unter **[PolyForm Noncommercial 1.0.0](LICENSE) + [Nicht-kommerzielle Zusatzbedingungen](LICENSE.ADDITIONAL-TERMS.md)** (kostenlos, Open Source, strikt nicht-kommerziell); `src/cl_render/` & `cl_render` sowie Upstream-Module stehen unter **[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)** (ohne Zusatzbedingungen); `docs/`-Texte unter **CC BY-SA 4.0**; vollständige Drittlizenzen in **[THIRD_PARTY_NOTICES.md](LICENSES/THIRD_PARTY_NOTICES.md)**.

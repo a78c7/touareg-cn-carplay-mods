@@ -5,7 +5,7 @@
 ## 1. 全屏 CarPlay 改了什么
 
 - 原厂 CarPlay 画面是带黑边的小窗。要改两处：
-  - `skin3/info.txt` 里的 CarPlay 画面尺寸：1152×592 → 1673×748（注意这个文件是 CRLF 换行，用 sed 时不能用 `$` 锚定）。
+  - `skin3/info.txt` 里的 CarPlay 画面尺寸：1152×592 → 1673×748（注意这个文件是 CRLF 换行，用 sed 时不能用 `$` 锚定；此处修改的是大众 HMI 皮肤视图容器视口尺寸，区别于 [R4](reference/R4-显示系统.md) 第 1 节记录的 AirPlay 协议协商主屏视频流尺寸 `1540×720`）。
   - 国行皮肤 `skin3/viewhandler.zip`（1246 个编译后的界面 jxe）里只有 `Am.jxe`、`Cm_0409.jxe` 两个文件要改，大小不变，各差 19 个字节，共 38 个字节。几何数值参考了 [davecozens/touareg-carplay](https://github.com/davecozens/touareg-carplay)（英国右舵途锐）。
 - 偏移和数值都是 P2878 国行皮肤专属，别的版本要自己对比原厂和改装文件重新生成补丁表。**【途锐特有】**
 
@@ -23,7 +23,7 @@
 ## 3. 其它改动都能原地还原
 
 - `smartphone_integrator.json`：去掉我们加的 LD_PRELOAD。
-- `bundles.properties`：去掉 97 号插件。
+- `bundles.properties`：按模块分别去掉 97 号插件（`VWClusterNav`）或 98 号共享弹窗过滤插件（`VWPopupFilter`，仅在两个弹窗屏蔽开关全部卸载时移除）。
 - 无线 CarPlay / Android Auto 的功能授权由 LawPaul 的模块写入，车上有它自己的 `granted.fecs.bak`。
 
 ## 4. ModKit 的机制（写模块前要知道）

@@ -1,13 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="185" height="22" role="img" aria-label="Platform: MH2p · QNX 6.6">
-  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
-  <clipPath id="r"><rect width="185" height="22" rx="4" fill="#fff"/></clipPath>
-  <g clip-path="url(#r)">
-    <rect width="70" height="22" fill="#24292f"/>
-    <rect x="70" width="115" height="22" fill="#0969da"/>
-    <rect width="185" height="22" fill="url(#s)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 176 22" width="176" height="22" role="img" aria-label="Platform: MH2p · QNX 6.6">
+  <clipPath id="clip-plat"><rect width="176" height="22" rx="4" fill="#fff"/></clipPath>
+  <g clip-path="url(#clip-plat)">
+    <rect width="66" height="22" fill="#2c333a"/>
+    <rect x="66" width="110" height="22" fill="#2b6cb0"/>
   </g>
-  <g fill="#fff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11.5" font-weight="600">
-    <text x="35.0" y="15">Platform</text>
-    <text x="127.5" y="15">MH2p · QNX 6.6</text>
+  <g fill="#fff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="600">
+    <text x="33" y="14.8">Platform</text>
+    <text x="121" y="14.8">MH2p · QNX 6.6</text>
   </g>
 </svg>
