@@ -228,7 +228,7 @@ int main(void) {
     /* 6. 6 Safety fuses */
     fails += assert_fault("syntax", "const THEME={}; function render(){ const a = ((1+; }", 1);
     fails += assert_fault("ref_err", "const THEME={}; function render(){ return nope.x; }", 0);
-    fails += assert_fault("loop_10ms", "const THEME={}; function render(){ while(true){} }", 0);
+    fails += assert_fault("loop_35ms", "const THEME={}; function render(){ while(true){} }", 0);
     fails += assert_fault("oom_4mb", "const THEME={}; function render(){ var a=[]; while(true) a.push('X'.repeat(8192)); }", 0);
     fails += assert_fault("stack_256k", "const THEME={}; function f(n){return f(n+1)+1;} function render(){f(0);}", 0);
     fails += assert_fault("no_eval", "const THEME={}; function render(){ eval('1+1'); }", 0);

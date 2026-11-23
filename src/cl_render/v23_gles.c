@@ -11,7 +11,7 @@
  *   - 所有 GLES2 / EGLImage 函数一律动态解析，绝不直链 libGLESv2 桩符号；
  *   - 绝不调用 glTexImage2D(NULL)（Tegra K1 驱动会崩溃），一律传入零填充 CPU 缓冲；
  *   - /tmp 下绝不调用 rename()（MH2p QNX RAMFS 不支持），一律原地覆写；
- *   - 自定义 JS 与 GLSL 均受独立保险丝保护：JS 异常/超 10ms/爆 4MB 当帧无缝切回内置 default_classic
+ *   - 自定义 JS 与 GLSL 均受独立保险丝保护：JS 异常/连续超 35ms/爆 4MB 当帧无缝切回内置 default_classic
  *     并弹出顶部红条提示，坏 Shader 仅关光效层，绝不黑屏。
  *
  * Copyright (c) 2026 a78c7 (https://github.com/a78c7/touareg-cn-carplay-mods)
@@ -450,9 +450,11 @@ static GLuint v23_compile_prog(const char *vs_s, const char *fs_s, char *err_out
     return prog;
 }
 
-/* ---- 共享 GLES2 TTF 动态字形图集 (1024x1024 GL_ALPHA，复用 navbox.c 已加载原厂 TTF) ---- */
-#define V23_ATLAS_SZ   1024
-#define V23_ATLAS_MAX  256
+/* ---- 共享 GLES2 TTF 动态字形图集 (1024x1024 GL_ALPHA，512 槽 + O(1) 哈希表，复用 navbox.c 原厂 TTF) ---- */
+#define V23_ATLAS_SZ     1024
+#define V23_ATLAS_MAX    512
+#define V23_ATLAS_HSZ    1024
+#define V23_ATLAS_HMASK  (V23_ATLAS_HSZ - 1)
 
 typedef struct {
     uint32_t cp;
@@ -467,14 +469,20 @@ typedef struct {
     GLuint       tex;
     int          cur_x, cur_y, row_h;
     v23_aglyph_t slots[V23_ATLAS_MAX];
+    uint16_t     htab[V23_ATLAS_HSZ]; /* 存 slot_index + 1，0 表示空槽 */
     int          count;
     int          inited;
 } v23_atlas_t;
+
+static inline uint32_t v23_atlas_hash(uint32_t cp, uint16_t px, uint8_t bold) {
+    return ((cp * 2654435761u) ^ ((uint32_t)px * 40503u) ^ ((uint32_t)bold * 97u)) & V23_ATLAS_HMASK;
+}
 
 static void v23_atlas_reset(v23_atlas_t *at) {
     at->cur_x = 2; at->cur_y = 2; at->row_h = 0;
     at->count = 0;
     memset(at->slots, 0, sizeof(at->slots));
+    memset(at->htab, 0, sizeof(at->htab));
 }
 
 static void v23_atlas_init(v23_atlas_t *at) {
@@ -497,17 +505,23 @@ static void v23_atlas_init(v23_atlas_t *at) {
     at->inited = 1;
 }
 
-static const v23_aglyph_t *v23_atlas_get(v23_atlas_t *at, uint32_t cp, int px, int bold) {
+static const v23_aglyph_t *v23_atlas_get(v23_atlas_t *at, uint32_t cp, int px, int bold, int *did_upload) {
     if (!at->inited) return NULL;
     if (px < 10) px = 10;
     if (px > 180) px = 180;
-    for (int i = 0; i < at->count; i++) {
-        v23_aglyph_t *g = &at->slots[i];
-        if (g->used && g->cp == cp && g->px == (uint16_t)px && g->bold == (uint8_t)bold)
-            return g;
+    uint16_t upx = (uint16_t)px;
+    uint8_t  ubd = (uint8_t)(bold ? 1 : 0);
+
+    uint32_t h = v23_atlas_hash(cp, upx, ubd);
+    for (int step = 0; step < V23_ATLAS_HSZ; step++) {
+        uint16_t e = at->htab[(h + (uint32_t)step) & V23_ATLAS_HMASK];
+        if (e == 0) break;
+        v23_aglyph_t *g = &at->slots[e - 1u];
+        if (g->used && g->cp == cp && g->px == upx && g->bold == ubd) return g;
     }
+
     int prefer_lat = (cp < 0x2000u) ? 1 : 0;
-    const nav_glyph_ent_t *ng = nav_get_glyph(cp, px, bold, prefer_lat);
+    const nav_glyph_ent_t *ng = nav_get_glyph(cp, px, ubd, prefer_lat);
     if (!ng) return NULL;
 
     if (at->count >= V23_ATLAS_MAX) v23_atlas_reset(at);
@@ -522,13 +536,15 @@ static const v23_aglyph_t *v23_atlas_get(v23_atlas_t *at, uint32_t cp, int px, i
             v23_atlas_reset(at);
         }
     }
-    v23_aglyph_t *g = &at->slots[at->count++];
-    g->cp = cp; g->px = (uint16_t)px; g->bold = (uint8_t)bold; g->used = 1;
+    int idx = at->count++;
+    v23_aglyph_t *g = &at->slots[idx];
+    g->cp = cp; g->px = upx; g->bold = ubd; g->used = 1;
     g->w = gw; g->h = gh; g->xoff = ng->xoff; g->yoff = ng->yoff; g->adv = ng->adv;
     if (gw > 0 && gh > 0 && ng->bm) {
         gl_BindTexture(GL_TEXTURE_2D, at->tex);
         if (v23gl.PixelStorei) v23gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
         gl_TexSubImage2D(GL_TEXTURE_2D, 0, at->cur_x, at->cur_y, gw, gh, GL_ALPHA, GL_UNSIGNED_BYTE, ng->bm);
+        if (did_upload) *did_upload = 1;
         g->u0 = (float)at->cur_x / (float)V23_ATLAS_SZ;
         g->v0 = (float)at->cur_y / (float)V23_ATLAS_SZ;
         g->u1 = (float)(at->cur_x + gw) / (float)V23_ATLAS_SZ;
@@ -538,8 +554,27 @@ static const v23_aglyph_t *v23_atlas_get(v23_atlas_t *at, uint32_t cp, int px, i
     } else {
         g->u0 = g->v0 = g->u1 = g->v1 = 0.0f;
     }
+    uint32_t ih = v23_atlas_hash(cp, upx, ubd);
+    for (int step = 0; step < V23_ATLAS_HSZ; step++) {
+        uint32_t slot = (ih + (uint32_t)step) & V23_ATLAS_HMASK;
+        if (at->htab[slot] == 0) {
+            at->htab[slot] = (uint16_t)(idx + 1);
+            break;
+        }
+    }
     return g;
 }
+
+/* ---- 预缓存全部内置与用户 Shader 的 Attrib / Uniform 句柄（渲染循环零字符串查询） ---- */
+typedef struct {
+    GLint solid_pos, solid_col;
+    GLint rrect_pos, rrect_uv, rrect_size, rrect_rad, rrect_sw, rrect_glow, rrect_gradh, rrect_f1, rrect_f2, rrect_st, rrect_gc;
+    GLint circ_pos, circ_uv, circ_r, circ_sw, circ_glow, circ_fill, circ_st, circ_gc;
+    GLint map_pos, map_uv, map_tex, map_size, map_crop, map_rad, map_circ, map_alpha, map_vig, map_bw, map_bc, map_swap;
+    GLint bgra_pos, bgra_uv, bgra_tex, bgra_alpha;
+    GLint text_pos, text_uv, text_tex, text_col;
+    GLint usr_pos, usr_uv, usr_res, usr_time, usr_rpm, usr_spd, usr_pwr, usr_ped, usr_brk, usr_g, usr_map, usr_night;
+} v23_locs_t;
 
 /* ---- 渲染器总上下文（持有全部 GL 程序、纹理、当前帧总线与沙盒状态） ---- */
 typedef struct {
@@ -548,6 +583,9 @@ typedef struct {
 
     GLuint prog_solid, prog_rrect, prog_circle, prog_map, prog_bgra, prog_text;
     GLuint prog_user;
+    v23_locs_t loc;
+    GLuint cur_prog;
+    GLuint cur_tex0;
     int    user_shader_ok;
     char   shader_err[256];
 
@@ -592,12 +630,94 @@ static void v23_ndc_quad(float v[24], float x, float y, float w, float h, float 
 static inline float v23_px_nx(float x, float ww) { return (x / ww) * 2.0f - 1.0f; }
 static inline float v23_px_ny(float y, float wh) { return 1.0f - (y / wh) * 2.0f; }
 
+static void v23_cache_core_locs(v23_gl_ctx_t *gc) {
+    v23_locs_t *L = &gc->loc;
+    L->solid_pos   = gl_GetAttribLocation(gc->prog_solid,  "a_pos");
+    L->solid_col   = gl_GetAttribLocation(gc->prog_solid,  "a_col");
+
+    L->rrect_pos   = gl_GetAttribLocation(gc->prog_rrect,  "a_pos");
+    L->rrect_uv    = gl_GetAttribLocation(gc->prog_rrect,  "a_uv");
+    L->rrect_size  = gl_GetUniformLocation(gc->prog_rrect, "u_size");
+    L->rrect_rad   = gl_GetUniformLocation(gc->prog_rrect, "u_rad");
+    L->rrect_sw    = gl_GetUniformLocation(gc->prog_rrect, "u_stroke_w");
+    L->rrect_glow  = gl_GetUniformLocation(gc->prog_rrect, "u_glow");
+    L->rrect_gradh = gl_GetUniformLocation(gc->prog_rrect, "u_grad_h");
+    L->rrect_f1    = gl_GetUniformLocation(gc->prog_rrect, "u_fill1");
+    L->rrect_f2    = gl_GetUniformLocation(gc->prog_rrect, "u_fill2");
+    L->rrect_st    = gl_GetUniformLocation(gc->prog_rrect, "u_stroke");
+    L->rrect_gc    = gl_GetUniformLocation(gc->prog_rrect, "u_glow_col");
+
+    L->circ_pos    = gl_GetAttribLocation(gc->prog_circle,  "a_pos");
+    L->circ_uv     = gl_GetAttribLocation(gc->prog_circle,  "a_uv");
+    L->circ_r      = gl_GetUniformLocation(gc->prog_circle, "u_r");
+    L->circ_sw     = gl_GetUniformLocation(gc->prog_circle, "u_stroke_w");
+    L->circ_glow   = gl_GetUniformLocation(gc->prog_circle, "u_glow");
+    L->circ_fill   = gl_GetUniformLocation(gc->prog_circle, "u_fill");
+    L->circ_st     = gl_GetUniformLocation(gc->prog_circle, "u_stroke");
+    L->circ_gc     = gl_GetUniformLocation(gc->prog_circle, "u_glow_col");
+
+    L->map_pos     = gl_GetAttribLocation(gc->prog_map,  "a_pos");
+    L->map_uv      = gl_GetAttribLocation(gc->prog_map,  "a_uv");
+    L->map_tex     = gl_GetUniformLocation(gc->prog_map, "u_tex");
+    L->map_size    = gl_GetUniformLocation(gc->prog_map, "u_size");
+    L->map_crop    = gl_GetUniformLocation(gc->prog_map, "u_crop");
+    L->map_rad     = gl_GetUniformLocation(gc->prog_map, "u_rad");
+    L->map_circ    = gl_GetUniformLocation(gc->prog_map, "u_is_circle");
+    L->map_alpha   = gl_GetUniformLocation(gc->prog_map, "u_alpha");
+    L->map_vig     = gl_GetUniformLocation(gc->prog_map, "u_vignette");
+    L->map_bw      = gl_GetUniformLocation(gc->prog_map, "u_border_w");
+    L->map_bc      = gl_GetUniformLocation(gc->prog_map, "u_border_col");
+    L->map_swap    = gl_GetUniformLocation(gc->prog_map, "u_swap_rb");
+
+    L->bgra_pos    = gl_GetAttribLocation(gc->prog_bgra,  "a_pos");
+    L->bgra_uv     = gl_GetAttribLocation(gc->prog_bgra,  "a_uv");
+    L->bgra_tex    = gl_GetUniformLocation(gc->prog_bgra, "u_tex");
+    L->bgra_alpha  = gl_GetUniformLocation(gc->prog_bgra, "u_alpha");
+
+    L->text_pos    = gl_GetAttribLocation(gc->prog_text,  "a_pos");
+    L->text_uv     = gl_GetAttribLocation(gc->prog_text,  "a_uv");
+    L->text_tex    = gl_GetUniformLocation(gc->prog_text, "u_tex");
+    L->text_col    = gl_GetUniformLocation(gc->prog_text, "u_col");
+}
+
+static void v23_cache_user_locs(v23_gl_ctx_t *gc) {
+    v23_locs_t *L = &gc->loc;
+    GLuint p = gc->prog_user;
+    L->usr_pos   = p ? gl_GetAttribLocation(p,  "a_pos")      : -1;
+    L->usr_uv    = p ? gl_GetAttribLocation(p,  "a_uv")       : -1;
+    L->usr_res   = p ? gl_GetUniformLocation(p, "u_res")      : -1;
+    L->usr_time  = p ? gl_GetUniformLocation(p, "u_time")     : -1;
+    L->usr_rpm   = p ? gl_GetUniformLocation(p, "u_rpm")      : -1;
+    L->usr_spd   = p ? gl_GetUniformLocation(p, "u_speed")    : -1;
+    L->usr_pwr   = p ? gl_GetUniformLocation(p, "u_power")    : -1;
+    L->usr_ped   = p ? gl_GetUniformLocation(p, "u_pedal")    : -1;
+    L->usr_brk   = p ? gl_GetUniformLocation(p, "u_brake")    : -1;
+    L->usr_g     = p ? gl_GetUniformLocation(p, "u_g")        : -1;
+    L->usr_map   = p ? gl_GetUniformLocation(p, "u_map_live") : -1;
+    L->usr_night = p ? gl_GetUniformLocation(p, "u_night")    : -1;
+}
+
+static inline void v23_use_prog(v23_gl_ctx_t *gc, GLuint prog) {
+    if (gc->cur_prog != prog) {
+        gl_UseProgram(prog);
+        gc->cur_prog = prog;
+    }
+}
+
+static inline void v23_bind_tex0(v23_gl_ctx_t *gc, GLuint tex) {
+    if (gc->cur_tex0 != tex) {
+        gl_ActiveTexture(GL_TEXTURE0);
+        gl_BindTexture(GL_TEXTURE_2D, tex);
+        gc->cur_tex0 = tex;
+    }
+}
+
 static void v23_draw_solid_tris(v23_gl_ctx_t *gc, const float *verts, int nverts) {
     /* verts: [x_ndc, y_ndc, r, g, b, a] * nverts */
     if (!gc->prog_solid || nverts < 3) return;
-    gl_UseProgram(gc->prog_solid);
-    GLint loc_p = gl_GetAttribLocation(gc->prog_solid, "a_pos");
-    GLint loc_c = gl_GetAttribLocation(gc->prog_solid, "a_col");
+    v23_use_prog(gc, gc->prog_solid);
+    GLint loc_p = gc->loc.solid_pos;
+    GLint loc_c = gc->loc.solid_col;
     gl_EnableVertexAttribArray(loc_p);
     gl_EnableVertexAttribArray(loc_c);
     gl_VertexAttribPointer(loc_p, 2, GL_FLOAT, GL_FALSE, 6 * (GLsizei)sizeof(float), verts);
@@ -613,16 +733,20 @@ static void v23_push_v(float *out, int *cnt, float x, float y, float ww, float w
     (*cnt)++;
 }
 
+static inline void v23_push_quad(float *out, int *cnt, float x0, float y0, float x1, float y1,
+                                 float x2, float y2, float x3, float y3, float ww, float wh, v23_rgba_t c) {
+    v23_push_v(out, cnt, x0, y0, ww, wh, c);
+    v23_push_v(out, cnt, x1, y1, ww, wh, c);
+    v23_push_v(out, cnt, x2, y2, ww, wh, c);
+    v23_push_v(out, cnt, x0, y0, ww, wh, c);
+    v23_push_v(out, cnt, x2, y2, ww, wh, c);
+    v23_push_v(out, cnt, x3, y3, ww, wh, c);
+}
+
 static void v23_draw_quad_solid(v23_gl_ctx_t *gc, float x0, float y0, float x1, float y1,
                                 float x2, float y2, float x3, float y3, v23_rgba_t c) {
     float v[36]; int n = 0;
-    float ww = (float)gc->win_w, wh = (float)gc->win_h;
-    v23_push_v(v, &n, x0, y0, ww, wh, c);
-    v23_push_v(v, &n, x1, y1, ww, wh, c);
-    v23_push_v(v, &n, x2, y2, ww, wh, c);
-    v23_push_v(v, &n, x0, y0, ww, wh, c);
-    v23_push_v(v, &n, x2, y2, ww, wh, c);
-    v23_push_v(v, &n, x3, y3, ww, wh, c);
+    v23_push_quad(v, &n, x0, y0, x1, y1, x2, y2, x3, y3, (float)gc->win_w, (float)gc->win_h, c);
     v23_draw_solid_tris(gc, v, n);
 }
 
@@ -654,24 +778,23 @@ static void v23_op_draw_map(void *u, float x, float y, float w, float h, const v
 
     float q[24];
     v23_ndc_quad(q, x, y, w, h, (float)gc->win_w, (float)gc->win_h);
-    gl_UseProgram(gc->prog_map);
-    gl_ActiveTexture(GL_TEXTURE0);
-    gl_BindTexture(GL_TEXTURE_2D, tex);
-    gl_Uniform1i(gl_GetUniformLocation(gc->prog_map, "u_tex"), 0);
-    v23gl.Uniform2f(gl_GetUniformLocation(gc->prog_map, "u_size"), w, h);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_map, "u_crop"), u0, v0, du, dv);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_map, "u_rad"), o->radius);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_map, "u_is_circle"), o->is_circle ? 1.0f : 0.0f);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_map, "u_alpha"), o->alpha);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_map, "u_vignette"), o->vignette);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_map, "u_border_w"), o->border_width);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_map, "u_border_col"),
+    v23_use_prog(gc, gc->prog_map);
+    v23_bind_tex0(gc, tex);
+    gl_Uniform1i(gc->loc.map_tex, 0);
+    v23gl.Uniform2f(gc->loc.map_size, w, h);
+    v23gl.Uniform4f(gc->loc.map_crop, u0, v0, du, dv);
+    v23gl.Uniform1f(gc->loc.map_rad, o->radius);
+    v23gl.Uniform1f(gc->loc.map_circ, o->is_circle ? 1.0f : 0.0f);
+    v23gl.Uniform1f(gc->loc.map_alpha, o->alpha);
+    v23gl.Uniform1f(gc->loc.map_vig, o->vignette);
+    v23gl.Uniform1f(gc->loc.map_bw, o->border_width);
+    v23gl.Uniform4f(gc->loc.map_bc,
                     o->border_col.r, o->border_col.g, o->border_col.b, o->border_col.valid ? o->border_col.a : 0.0f);
     /* 零拷贝 EGLImage 通常原生按驱动格式采样；CPU 读入 RGBX8888 (BGRA) 走 glTexSubImage2D 时需互换 R/B */
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_map, "u_swap_rb"), gc->map_zero_copy ? 0.0f : 1.0f);
+    v23gl.Uniform1f(gc->loc.map_swap, gc->map_zero_copy ? 0.0f : 1.0f);
 
-    GLint lp = gl_GetAttribLocation(gc->prog_map, "a_pos");
-    GLint lu = gl_GetAttribLocation(gc->prog_map, "a_uv");
+    GLint lp = gc->loc.map_pos;
+    GLint lu = gc->loc.map_uv;
     gl_EnableVertexAttribArray(lp);
     gl_EnableVertexAttribArray(lu);
     gl_VertexAttribPointer(lp, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q);
@@ -686,23 +809,20 @@ static void v23_op_draw_shader(void *u, const v23_shader_opts_t *o) {
 
     float q[24];
     v23_ndc_quad(q, 0.0f, 0.0f, (float)gc->win_w, (float)gc->win_h, (float)gc->win_w, (float)gc->win_h);
-    gl_UseProgram(gc->prog_user);
-    GLint loc;
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_res")) >= 0) v23gl.Uniform2f(loc, (float)gc->win_w, (float)gc->win_h);
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_time")) >= 0) v23gl.Uniform1f(loc, (float)gc->cur_bus.sys_time);
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_rpm")) >= 0) v23gl.Uniform1f(loc, (float)(gc->cur_bus.rpm / 7000.0));
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_speed")) >= 0) v23gl.Uniform1f(loc, (float)(gc->cur_bus.speed / 240.0));
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_power")) >= 0) v23gl.Uniform1f(loc, (float)(gc->cur_bus.power / 265.0));
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_pedal")) >= 0) v23gl.Uniform1f(loc, (float)(gc->cur_bus.pedal / 100.0));
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_brake")) >= 0) v23gl.Uniform1f(loc, (float)(gc->cur_bus.brake / 80.0));
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_g")) >= 0) v23gl.Uniform2f(loc, (float)gc->cur_bus.glat, (float)gc->cur_bus.glong);
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_map_live")) >= 0) v23gl.Uniform1f(loc, gc->cur_bus.sys_map_live ? 1.0f : 0.0f);
-    if ((loc = gl_GetUniformLocation(gc->prog_user, "u_night")) >= 0) v23gl.Uniform1f(loc, gc->cur_bus.sys_night ? 1.0f : 0.0f);
+    v23_use_prog(gc, gc->prog_user);
+    if (gc->loc.usr_res   >= 0) v23gl.Uniform2f(gc->loc.usr_res,   (float)gc->win_w, (float)gc->win_h);
+    if (gc->loc.usr_time  >= 0) v23gl.Uniform1f(gc->loc.usr_time,  (float)gc->cur_bus.sys_time);
+    if (gc->loc.usr_rpm   >= 0) v23gl.Uniform1f(gc->loc.usr_rpm,   (float)(gc->cur_bus.rpm / 7000.0));
+    if (gc->loc.usr_spd   >= 0) v23gl.Uniform1f(gc->loc.usr_spd,   (float)(gc->cur_bus.speed / 240.0));
+    if (gc->loc.usr_pwr   >= 0) v23gl.Uniform1f(gc->loc.usr_pwr,   (float)(gc->cur_bus.power / 265.0));
+    if (gc->loc.usr_ped   >= 0) v23gl.Uniform1f(gc->loc.usr_ped,   (float)(gc->cur_bus.pedal / 100.0));
+    if (gc->loc.usr_brk   >= 0) v23gl.Uniform1f(gc->loc.usr_brk,   (float)(gc->cur_bus.brake / 80.0));
+    if (gc->loc.usr_g     >= 0) v23gl.Uniform2f(gc->loc.usr_g,     (float)gc->cur_bus.glat, (float)gc->cur_bus.glong);
+    if (gc->loc.usr_map   >= 0) v23gl.Uniform1f(gc->loc.usr_map,   gc->cur_bus.sys_map_live ? 1.0f : 0.0f);
+    if (gc->loc.usr_night >= 0) v23gl.Uniform1f(gc->loc.usr_night, gc->cur_bus.sys_night ? 1.0f : 0.0f);
 
-    GLint lp = gl_GetAttribLocation(gc->prog_user, "a_pos");
-    GLint lu = gl_GetAttribLocation(gc->prog_user, "a_uv");
-    if (lp >= 0) { gl_EnableVertexAttribArray(lp); gl_VertexAttribPointer(lp, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q); }
-    if (lu >= 0) { gl_EnableVertexAttribArray(lu); gl_VertexAttribPointer(lu, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q + 2); }
+    if (gc->loc.usr_pos >= 0) { gl_EnableVertexAttribArray(gc->loc.usr_pos); gl_VertexAttribPointer(gc->loc.usr_pos, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q); }
+    if (gc->loc.usr_uv  >= 0) { gl_EnableVertexAttribArray(gc->loc.usr_uv);  gl_VertexAttribPointer(gc->loc.usr_uv,  2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q + 2); }
     gl_DrawArrays(GL_TRIANGLES, 0, 6);
 
     if (o->blend_add && v23gl.BlendFunc) v23gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -714,19 +834,19 @@ static void v23_op_rect(void *u, float x, float y, float w, float h, const v23_r
     float g = o->glow > 0.0f ? o->glow : 0.0f;
     float q[24];
     v23_ndc_quad(q, x - g, y - g, w + g * 2.0f, h + g * 2.0f, (float)gc->win_w, (float)gc->win_h);
-    gl_UseProgram(gc->prog_rrect);
-    v23gl.Uniform2f(gl_GetUniformLocation(gc->prog_rrect, "u_size"), w, h);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_rrect, "u_rad"), o->radius);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_rrect, "u_stroke_w"), o->stroke.valid ? o->line_width : 0.0f);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_rrect, "u_glow"), g);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_rrect, "u_grad_h"), o->grad_h ? 1.0f : 0.0f);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_rrect, "u_fill1"), o->fill.r, o->fill.g, o->fill.b, o->fill.valid ? o->fill.a : 0.0f);
+    v23_use_prog(gc, gc->prog_rrect);
+    v23gl.Uniform2f(gc->loc.rrect_size, w, h);
+    v23gl.Uniform1f(gc->loc.rrect_rad, o->radius);
+    v23gl.Uniform1f(gc->loc.rrect_sw, o->stroke.valid ? o->line_width : 0.0f);
+    v23gl.Uniform1f(gc->loc.rrect_glow, g);
+    v23gl.Uniform1f(gc->loc.rrect_gradh, o->grad_h ? 1.0f : 0.0f);
+    v23gl.Uniform4f(gc->loc.rrect_f1, o->fill.r, o->fill.g, o->fill.b, o->fill.valid ? o->fill.a : 0.0f);
     v23_rgba_t f2 = o->fill2.valid ? o->fill2 : o->fill;
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_rrect, "u_fill2"), f2.r, f2.g, f2.b, o->fill.valid ? f2.a : 0.0f);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_rrect, "u_stroke"), o->stroke.r, o->stroke.g, o->stroke.b, o->stroke.valid ? o->stroke.a : 0.0f);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_rrect, "u_glow_col"), o->glow_col.r, o->glow_col.g, o->glow_col.b, o->glow_col.valid ? o->glow_col.a : 0.0f);
-    GLint lp = gl_GetAttribLocation(gc->prog_rrect, "a_pos");
-    GLint lu = gl_GetAttribLocation(gc->prog_rrect, "a_uv");
+    v23gl.Uniform4f(gc->loc.rrect_f2, f2.r, f2.g, f2.b, o->fill.valid ? f2.a : 0.0f);
+    v23gl.Uniform4f(gc->loc.rrect_st, o->stroke.r, o->stroke.g, o->stroke.b, o->stroke.valid ? o->stroke.a : 0.0f);
+    v23gl.Uniform4f(gc->loc.rrect_gc, o->glow_col.r, o->glow_col.g, o->glow_col.b, o->glow_col.valid ? o->glow_col.a : 0.0f);
+    GLint lp = gc->loc.rrect_pos;
+    GLint lu = gc->loc.rrect_uv;
     gl_EnableVertexAttribArray(lp);
     gl_EnableVertexAttribArray(lu);
     gl_VertexAttribPointer(lp, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q);
@@ -742,15 +862,15 @@ static void v23_op_circle(void *u, float cx, float cy, float r, const v23_circle
     float pad = r + sw + g + 2.0f;
     float q[24];
     v23_ndc_quad(q, cx - pad, cy - pad, pad * 2.0f, pad * 2.0f, (float)gc->win_w, (float)gc->win_h);
-    gl_UseProgram(gc->prog_circle);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_circle, "u_r"), r);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_circle, "u_stroke_w"), sw);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_circle, "u_glow"), g);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_circle, "u_fill"), o->fill.r, o->fill.g, o->fill.b, o->fill.valid ? o->fill.a : 0.0f);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_circle, "u_stroke"), o->stroke.r, o->stroke.g, o->stroke.b, o->stroke.valid ? o->stroke.a : 0.0f);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_circle, "u_glow_col"), o->glow_col.r, o->glow_col.g, o->glow_col.b, o->glow_col.valid ? o->glow_col.a : 0.0f);
-    GLint lp = gl_GetAttribLocation(gc->prog_circle, "a_pos");
-    GLint lu = gl_GetAttribLocation(gc->prog_circle, "a_uv");
+    v23_use_prog(gc, gc->prog_circle);
+    v23gl.Uniform1f(gc->loc.circ_r, r);
+    v23gl.Uniform1f(gc->loc.circ_sw, sw);
+    v23gl.Uniform1f(gc->loc.circ_glow, g);
+    v23gl.Uniform4f(gc->loc.circ_fill, o->fill.r, o->fill.g, o->fill.b, o->fill.valid ? o->fill.a : 0.0f);
+    v23gl.Uniform4f(gc->loc.circ_st, o->stroke.r, o->stroke.g, o->stroke.b, o->stroke.valid ? o->stroke.a : 0.0f);
+    v23gl.Uniform4f(gc->loc.circ_gc, o->glow_col.r, o->glow_col.g, o->glow_col.b, o->glow_col.valid ? o->glow_col.a : 0.0f);
+    GLint lp = gc->loc.circ_pos;
+    GLint lu = gc->loc.circ_uv;
     gl_EnableVertexAttribArray(lp);
     gl_EnableVertexAttribArray(lu);
     gl_VertexAttribPointer(lp, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q);
@@ -789,11 +909,28 @@ static void v23_op_poly(void *u, const float *xy, int npts, const v23_circle_opt
         v23_draw_solid_tris(gc, verts, nv);
     }
     if (o->stroke.valid) {
-        v23_line_opts_t lo = { o->stroke, o->glow_col, o->line_width, o->glow, 1 };
+        float hw = (o->line_width > 0.5f ? o->line_width : 1.0f) * 0.5f;
+        float ww = (float)gc->win_w, wh = (float)gc->win_h;
+        float verts[32 * 6 * 6];
+        int nv = 0;
         for (int i = 0; i < npts; i++) {
             int j = (i + 1) % npts;
-            v23_op_line(u, xy[i * 2], xy[i * 2 + 1], xy[j * 2], xy[j * 2 + 1], &lo);
+            float x1 = xy[i * 2], y1 = xy[i * 2 + 1], x2 = xy[j * 2], y2 = xy[j * 2 + 1];
+            float dx = x2 - x1, dy = y2 - y1;
+            float len = nav_sqrtf(dx * dx + dy * dy);
+            if (len < 0.2f) continue;
+            float nx = -dy / len * hw, ny = dx / len * hw;
+            if (o->glow > 0.5f) {
+                v23_rgba_t gc2 = o->glow_col;
+                gc2.a *= 0.25f;
+                float gnx = -dy / len * (hw + o->glow * 0.35f), gny = dx / len * (hw + o->glow * 0.35f);
+                if (nv + 12 > 32 * 6) { v23_draw_solid_tris(gc, verts, nv); nv = 0; }
+                v23_push_quad(verts, &nv, x1 + gnx, y1 + gny, x2 + gnx, y2 + gny, x2 - gnx, y2 - gny, x1 - gnx, y1 - gny, ww, wh, gc2);
+            }
+            if (nv + 6 > 32 * 6) { v23_draw_solid_tris(gc, verts, nv); nv = 0; }
+            v23_push_quad(verts, &nv, x1 + nx, y1 + ny, x2 + nx, y2 + ny, x2 - nx, y2 - ny, x1 - nx, y1 - ny, ww, wh, o->stroke);
         }
+        if (nv > 0) v23_draw_solid_tris(gc, verts, nv);
     }
 }
 
@@ -841,7 +978,11 @@ static void v23_op_arc(void *u, float cx, float cy, float r, float start_deg, fl
 }
 
 static void v23_op_ticks(void *u, float cx, float cy, float r_in, float r_out, float start_deg, float end_deg, int count, const v23_ticks_opts_t *o) {
+    v23_gl_ctx_t *gc = (v23_gl_ctx_t *)u;
     const float D2R = 0.0174532925f;
+    float ww = (float)gc->win_w, wh = (float)gc->win_h;
+    float verts[32 * 6 * 6];
+    int nv = 0;
     for (int i = 0; i <= count; i++) {
         float f = (float)i / (float)count;
         float ang = (start_deg + (end_deg - start_deg) * f) * D2R;
@@ -849,14 +990,16 @@ static void v23_op_ticks(void *u, float cx, float cy, float r_in, float r_out, f
         int is_red = o->has_red && (f >= o->red_from_frac);
         float r0 = is_maj ? (r_in - o->major_len) : r_in;
         float ca = nav_cosf(ang), sa = nav_sinf(ang);
-        v23_line_opts_t lo = {
-            is_red ? o->red_col : o->color,
-            is_red ? o->red_col : o->color,
-            is_maj ? o->major_width : o->line_width,
-            0.0f, 1
-        };
-        v23_op_line(u, cx + ca * r0, cy + sa * r0, cx + ca * r_out, cy + sa * r_out, &lo);
+        float x1 = cx + ca * r0, y1 = cy + sa * r0;
+        float x2 = cx + ca * r_out, y2 = cy + sa * r_out;
+        float lw = is_maj ? o->major_width : o->line_width;
+        float hw = (lw > 0.5f ? lw : 1.0f) * 0.5f;
+        float nx = -sa * hw, ny = ca * hw;
+        v23_rgba_t col = is_red ? o->red_col : o->color;
+        if (nv + 6 > 32 * 6) { v23_draw_solid_tris(gc, verts, nv); nv = 0; }
+        v23_push_quad(verts, &nv, x1 + nx, y1 + ny, x2 + nx, y2 + ny, x2 - nx, y2 - ny, x1 - nx, y1 - ny, ww, wh, col);
     }
+    if (nv > 0) v23_draw_solid_tris(gc, verts, nv);
 }
 
 static void v23_op_needle(void *u, float cx, float cy, float len, float tail, float angle_deg, const v23_needle_opts_t *o) {
@@ -903,10 +1046,13 @@ static void v23_op_seg_bar(void *u, float x, float y, float w, float h, float fr
     if (sw < 1.0f) sw = 1.0f;
     float lit_pos = frac * (float)o->segs;
     float pulse = o->pulse ? (0.72f + 0.28f * nav_sinf((float)gc->cur_bus.sys_time * 20.0f)) : 1.0f;
+    float ww = (float)gc->win_w, wh = (float)gc->win_h;
 
     v23_rgba_t bg_norm = { 42.0f/255.0f, 56.0f/255.0f, 70.0f/255.0f, 0.62f, 1 };
     v23_rgba_t bg_red  = { 138.0f/255.0f, 32.0f/255.0f, 48.0f/255.0f, 0.75f, 1 };
 
+    float verts[32 * 6 * 6];
+    int nv = 0;
     for (int s = 0; s < o->segs; s++) {
         int is_red = (s >= o->segs - o->red_segs);
         int is_warn = (!is_red && o->red_segs >= 3 && s >= o->segs - o->red_segs - 2);
@@ -914,63 +1060,76 @@ static void v23_op_seg_bar(void *u, float x, float y, float w, float h, float fr
         if (fill < 0.0f) fill = 0.0f;
         if (fill > 1.0f) fill = 1.0f;
         float sx = x + (float)s * (sw + gap);
-        v23_draw_quad_solid(gc, sx + slant, y, sx + slant + sw, y, sx + sw, y + h, sx, y + h, is_red ? bg_red : bg_norm);
+        if (nv + 12 > 32 * 6) { v23_draw_solid_tris(gc, verts, nv); nv = 0; }
+        v23_push_quad(verts, &nv, sx + slant, y, sx + slant + sw, y, sx + sw, y + h, sx, y + h, ww, wh, is_red ? bg_red : bg_norm);
         if (fill > 0.02f) {
             v23_rgba_t c = is_red ? o->red_col : (is_warn ? o->warn_col : o->color);
             c.a *= fill * pulse;
-            v23_draw_quad_solid(gc, sx + slant, y, sx + slant + sw, y, sx + sw, y + h, sx, y + h, c);
+            v23_push_quad(verts, &nv, sx + slant, y, sx + slant + sw, y, sx + sw, y + h, sx, y + h, ww, wh, c);
         }
     }
+    if (nv > 0) v23_draw_solid_tris(gc, verts, nv);
 }
 
 static void v23_op_bi_bar(void *u, float x, float y, float w, float h, float sf, const v23_bibar_opts_t *o) {
     v23_gl_ctx_t *gc = (v23_gl_ctx_t *)u;
     if (sf < -1.0f) sf = -1.0f;
     if (sf > 1.0f) sf = 1.0f;
-    float mid = x + w * 0.5f;
+    float mid = x + w * 0.5f, ww = (float)gc->win_w, wh = (float)gc->win_h;
+    float verts[4 * 6 * 6];
+    int nv = 0;
     v23_rgba_t bg = { 42.0f/255.0f, 56.0f/255.0f, 70.0f/255.0f, 0.65f, 1 };
-    v23_draw_quad_solid(gc, x, y + 1, x + w, y + 1, x + w, y + h - 1, x, y + h - 1, bg);
+    v23_push_quad(verts, &nv, x, y + 1, x + w, y + 1, x + w, y + h - 1, x, y + h - 1, ww, wh, bg);
     float cur = mid + sf * (w * 0.5f - 4.0f);
     float lx = cur < mid ? cur : mid, rx = cur > mid ? cur : mid;
-    v23_draw_quad_solid(gc, lx, y + 1, rx, y + 1, rx, y + h - 1, lx, y + h - 1, sf >= 0.0f ? o->pos_col : o->neg_col);
+    v23_push_quad(verts, &nv, lx, y + 1, rx, y + 1, rx, y + h - 1, lx, y + h - 1, ww, wh, sf >= 0.0f ? o->pos_col : o->neg_col);
     v23_rgba_t mk = { 0.92f, 0.96f, 1.0f, 1.0f, 1 };
-    v23_draw_quad_solid(gc, cur - 2, y - 1, cur + 2, y - 1, cur + 2, y + h + 1, cur - 2, y + h + 1, mk);
+    v23_push_quad(verts, &nv, cur - 2, y - 1, cur + 2, y - 1, cur + 2, y + h + 1, cur - 2, y + h + 1, ww, wh, mk);
     v23_rgba_t ct = { 0.86f, 0.91f, 0.96f, 0.85f, 1 };
-    v23_draw_quad_solid(gc, mid - 1, y - 2, mid + 1, y - 2, mid + 1, y + h + 2, mid - 1, y + h + 2, ct);
+    v23_push_quad(verts, &nv, mid - 1, y - 2, mid + 1, y - 2, mid + 1, y + h + 2, mid - 1, y + h + 2, ww, wh, ct);
+    v23_draw_solid_tris(gc, verts, nv);
 }
 
 static void v23_op_range_bar(void *u, float x, float y, float w, float h, float f, const v23_rangebar_opts_t *o) {
     v23_gl_ctx_t *gc = (v23_gl_ctx_t *)u;
     if (f < 0.0f) f = 0.0f;
     if (f > 1.0f) f = 1.0f;
+    float ww = (float)gc->win_w, wh = (float)gc->win_h;
+    float verts[4 * 6 * 6];
+    int nv = 0;
     v23_rgba_t bg = { 42.0f/255.0f, 56.0f/255.0f, 70.0f/255.0f, 0.65f, 1 };
-    v23_draw_quad_solid(gc, x, y + 1, x + w, y + 1, x + w, y + h - 1, x, y + h - 1, bg);
-    if (f > 0.005f) v23_draw_quad_solid(gc, x, y + 1, x + w * f, y + 1, x + w * f, y + h - 1, x, y + h - 1, o->color);
+    v23_push_quad(verts, &nv, x, y + 1, x + w, y + 1, x + w, y + h - 1, x, y + h - 1, ww, wh, bg);
+    if (f > 0.005f) v23_push_quad(verts, &nv, x, y + 1, x + w * f, y + 1, x + w * f, y + h - 1, x, y + h - 1, ww, wh, o->color);
     if (o->tick_lo > 0.0f && o->tick_lo < 1.0f) {
         v23_rgba_t tk = { 0.76f, 0.82f, 0.88f, 0.75f, 1 };
         float tx = x + w * o->tick_lo;
-        v23_draw_quad_solid(gc, tx, y - 1, tx + 2, y - 1, tx + 2, y + h + 1, tx, y + h + 1, tk);
+        v23_push_quad(verts, &nv, tx, y - 1, tx + 2, y - 1, tx + 2, y + h + 1, tx, y + h + 1, ww, wh, tk);
     }
     if (o->tick_hi > 0.0f && o->tick_hi < 1.0f) {
         v23_rgba_t tk = { 1.0f, 0.43f, 0.43f, 0.8f, 1 };
         float tx = x + w * o->tick_hi;
-        v23_draw_quad_solid(gc, tx, y - 1, tx + 2, y - 1, tx + 2, y + h + 1, tx, y + h + 1, tk);
+        v23_push_quad(verts, &nv, tx, y - 1, tx + 2, y - 1, tx + 2, y + h + 1, tx, y + h + 1, ww, wh, tk);
     }
+    v23_draw_solid_tris(gc, verts, nv);
 }
 
 static void v23_op_text(void *u, const char *str, float x, float y, const v23_text_opts_t *o) {
     v23_gl_ctx_t *gc = (v23_gl_ctx_t *)u;
     if (!str || !str[0] || !gc->prog_text || !gc->atlas.inited) return;
     int px = (int)(o->size + 0.5f);
+    if (gc->atlas.count + 48 >= V23_ATLAS_MAX) v23_atlas_reset(&gc->atlas);
 
-    /* 第一遍量总宽（支持 left/center/right 与 maxWidth 缩放） */
+    /* 第一遍量总宽并预热字形（O(1) 哈希查找；若触发新字形上传同步更新 cur_tex0） */
+    int did_up = 0;
     float total_w = 0.0f;
     const char *p = str;
     uint32_t cp;
     while ((cp = nav_utf8_next(&p)) != 0) {
-        const v23_aglyph_t *g = v23_atlas_get(&gc->atlas, cp, px, o->bold);
+        const v23_aglyph_t *g = v23_atlas_get(&gc->atlas, cp, px, o->bold, &did_up);
         if (g) total_w += (float)g->adv;
     }
+    if (did_up) gc->cur_tex0 = gc->atlas.tex;
+
     float scale_x = 1.0f;
     if (o->max_width > 4.0f && total_w > o->max_width) scale_x = o->max_width / total_w;
     float draw_w = total_w * scale_x;
@@ -983,37 +1142,53 @@ static void v23_op_text(void *u, const char *str, float x, float y, const v23_te
     if (o->baseline == 1) base_y += (float)px * 0.35f;
     else if (o->baseline == 2) base_y += (float)px * 0.85f;
 
-    gl_UseProgram(gc->prog_text);
-    gl_ActiveTexture(GL_TEXTURE0);
-    gl_BindTexture(GL_TEXTURE_2D, gc->atlas.tex);
-    gl_Uniform1i(gl_GetUniformLocation(gc->prog_text, "u_tex"), 0);
-    v23gl.Uniform4f(gl_GetUniformLocation(gc->prog_text, "u_col"), o->color.r, o->color.g, o->color.b, o->color.a);
-    GLint lp = gl_GetAttribLocation(gc->prog_text, "a_pos");
-    GLint lu = gl_GetAttribLocation(gc->prog_text, "a_uv");
+    v23_use_prog(gc, gc->prog_text);
+    v23_bind_tex0(gc, gc->atlas.tex);
+    gl_Uniform1i(gc->loc.text_tex, 0);
+    v23gl.Uniform4f(gc->loc.text_col, o->color.r, o->color.g, o->color.b, o->color.a);
+    GLint lp = gc->loc.text_pos;
+    GLint lu = gc->loc.text_uv;
     gl_EnableVertexAttribArray(lp);
     gl_EnableVertexAttribArray(lu);
 
+    /* 整串合批绘制（最多 64 字符一次 glDrawArrays，大幅降低 Tegra K1 Draw Call 负载） */
+    float batch[64 * 24];
+    int nq = 0;
     float ww = (float)gc->win_w, wh = (float)gc->win_h;
     p = str;
     while ((cp = nav_utf8_next(&p)) != 0) {
-        const v23_aglyph_t *g = v23_atlas_get(&gc->atlas, cp, px, o->bold);
+        const v23_aglyph_t *g = v23_atlas_get(&gc->atlas, cp, px, o->bold, &did_up);
         if (!g) continue;
         if (g->w > 0 && g->h > 0) {
+            if (nq >= 64) {
+                if (did_up) { gc->cur_tex0 = gc->atlas.tex; did_up = 0; }
+                gl_VertexAttribPointer(lp, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), batch);
+                gl_VertexAttribPointer(lu, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), batch + 2);
+                gl_DrawArrays(GL_TRIANGLES, 0, nq * 6);
+                nq = 0;
+            }
             float gx0 = pen_x + (float)g->xoff * scale_x;
             float gy0 = base_y + (float)g->yoff;
             float gx1 = gx0 + (float)g->w * scale_x;
             float gy1 = gy0 + (float)g->h;
             float x0 = v23_px_nx(gx0, ww), x1 = v23_px_nx(gx1, ww);
             float y0 = v23_px_ny(gy0, wh), y1 = v23_px_ny(gy1, wh);
-            float q[24] = {
-                x0, y0, g->u0, g->v0,  x1, y0, g->u1, g->v0,  x0, y1, g->u0, g->v1,
-                x1, y0, g->u1, g->v0,  x1, y1, g->u1, g->v1,  x0, y1, g->u0, g->v1
-            };
-            gl_VertexAttribPointer(lp, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q);
-            gl_VertexAttribPointer(lu, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q + 2);
-            gl_DrawArrays(GL_TRIANGLES, 0, 6);
+            float *q = batch + nq * 24;
+            q[0]  = x0; q[1]  = y0; q[2]  = g->u0; q[3]  = g->v0;
+            q[4]  = x1; q[5]  = y0; q[6]  = g->u1; q[7]  = g->v0;
+            q[8]  = x0; q[9]  = y1; q[10] = g->u0; q[11] = g->v1;
+            q[12] = x1; q[13] = y0; q[14] = g->u1; q[15] = g->v0;
+            q[16] = x1; q[17] = y1; q[18] = g->u1; q[19] = g->v1;
+            q[20] = x0; q[21] = y1; q[22] = g->u0; q[23] = g->v1;
+            nq++;
         }
         pen_x += (float)g->adv * scale_x;
+    }
+    if (nq > 0) {
+        if (did_up) gc->cur_tex0 = gc->atlas.tex;
+        gl_VertexAttribPointer(lp, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), batch);
+        gl_VertexAttribPointer(lu, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), batch + 2);
+        gl_DrawArrays(GL_TRIANGLES, 0, nq * 6);
     }
 }
 
@@ -1021,13 +1196,12 @@ static void v23_draw_bgra_quad(v23_gl_ctx_t *gc, GLuint tex, float x, float y, f
     if (!tex || !gc->prog_bgra || w <= 1.0f || h <= 1.0f) return;
     float q[24];
     v23_ndc_quad(q, x, y, w, h, (float)gc->win_w, (float)gc->win_h);
-    gl_UseProgram(gc->prog_bgra);
-    gl_ActiveTexture(GL_TEXTURE0);
-    gl_BindTexture(GL_TEXTURE_2D, tex);
-    gl_Uniform1i(gl_GetUniformLocation(gc->prog_bgra, "u_tex"), 0);
-    v23gl.Uniform1f(gl_GetUniformLocation(gc->prog_bgra, "u_alpha"), alpha);
-    GLint lp = gl_GetAttribLocation(gc->prog_bgra, "a_pos");
-    GLint lu = gl_GetAttribLocation(gc->prog_bgra, "a_uv");
+    v23_use_prog(gc, gc->prog_bgra);
+    v23_bind_tex0(gc, tex);
+    gl_Uniform1i(gc->loc.bgra_tex, 0);
+    v23gl.Uniform1f(gc->loc.bgra_alpha, alpha);
+    GLint lp = gc->loc.bgra_pos;
+    GLint lu = gc->loc.bgra_uv;
     gl_EnableVertexAttribArray(lp);
     gl_EnableVertexAttribArray(lu);
     gl_VertexAttribPointer(lp, 2, GL_FLOAT, GL_FALSE, 4 * (GLsizei)sizeof(float), q);
@@ -1093,22 +1267,25 @@ static void v23_draw_banner(v23_gl_ctx_t *gc, uint64_t now_u) {
     memset(&ro, 0, sizeof(ro));
     ro.fill = (gc->banner_level == 2) ? bg_err : (gc->banner_level == 1 ? bg_warn : bg_info);
     ro.stroke = bd; ro.line_width = 2.0f; ro.radius = 14.0f;
-    v23_op_rect(gc, 280.0f, 66.0f, 1360.0f, 54.0f, &ro);
+    /* 避开原车顶部信息栏/路名区（y = 0..156），固定画在黄金安全区顶边 y = 162 */
+    v23_op_rect(gc, 320.0f, 162.0f, 1280.0f, 52.0f, &ro);
     v23_text_opts_t to;
     memset(&to, 0, sizeof(to));
-    to.size = 22.0f; to.bold = 1; to.align = 1; to.baseline = 1; to.max_width = 1320.0f;
+    to.size = 22.0f; to.bold = 1; to.align = 1; to.baseline = 1; to.max_width = 1240.0f;
     to.color = (v23_rgba_t){ 1.0f, 1.0f, 1.0f, 1.0f, 1 };
-    v23_op_text(gc, gc->banner_text, 960.0f, 93.0f, &to);
+    v23_op_text(gc, gc->banner_text, 960.0f, 188.0f, &to);
 }
 
 /* ---- 编译用户可选 GLSL 光效（仅影响 drawShader，失败不拖垮主皮肤） ---- */
 static void v23_compile_user_shader(v23_gl_ctx_t *gc, const v23_theme_meta_t *meta) {
     if (gc->prog_user && v23gl.DeleteProgram) {
+        if (gc->cur_prog == gc->prog_user) gc->cur_prog = 0;
         v23gl.DeleteProgram(gc->prog_user);
         gc->prog_user = 0;
     }
     gc->user_shader_ok = 0;
     gc->shader_err[0] = '\0';
+    v23_cache_user_locs(gc);
     if (!meta || !meta->has_shader || !meta->shader[0]) return;
     if (strlen(meta->shader) > V23_MAX_SHADER_BYTES) {
         snprintf(gc->shader_err, sizeof(gc->shader_err), "Shader 超 8KB 上限");
@@ -1122,6 +1299,7 @@ static void v23_compile_user_shader(v23_gl_ctx_t *gc, const v23_theme_meta_t *me
         return;
     }
     gc->prog_user = p;
+    v23_cache_user_locs(gc);
     gc->user_shader_ok = 1;
 }
 
@@ -1433,6 +1611,8 @@ static int v23_run_gl_loop(int with_carplay_map) {
         free(user_sb); free(fb_sb); free(gc);
         return 19;
     }
+    v23_cache_core_locs(gc);
+    v23_cache_user_locs(gc);
     v23_diag("[6] core shaders ok (solid=%u rrect=%u circle=%u map=%u bgra=%u text=%u)",
              gc->prog_solid, gc->prog_rrect, gc->prog_circle, gc->prog_map, gc->prog_bgra, gc->prog_text);
 
@@ -1542,6 +1722,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
     int using_user = 0;
     int fallback_active = 0;
     int slow_frames = 0;
+    int timeout_streak = 0;
     int clean_boot_frames = 0;
     int boot_sentinel_active = 0;
     int ready_written = 0;
@@ -1605,7 +1786,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
 
             if (need_reload) {
                 if (using_user) { v23_sandbox_destroy(user_sb); using_user = 0; }
-                fallback_active = 0; slow_frames = 0; cur_err[0] = '\0';
+                fallback_active = 0; slow_frames = 0; timeout_streak = 0; cur_err[0] = '\0';
                 snprintf(cur_source, sizeof(cur_source), "%s", load_src);
                 if (load_path) {
                     /* 写冷启动哨兵（10 帧稳定后清除） */
@@ -1658,7 +1839,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                             fallback_active = 1;
                             v23_compile_user_shader(gc, NULL);
                         } else if (want < user_sb->entry_count) {
-                            fallback_active = 0; slow_frames = 0; cur_err[0] = '\0';
+                            fallback_active = 0; slow_frames = 0; timeout_streak = 0; cur_err[0] = '\0';
                             user_sb->active_idx = want;
                             v23_compile_user_shader(gc, &user_sb->metas[want]);
                             char bm[200];
@@ -1700,6 +1881,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                         src_px = gc->map_tight_buf;
                     }
                     gl_BindTexture(GL_TEXTURE_2D, gc->map_tex_fb);
+                    gc->cur_tex0 = 0;
                     if (v23gl.PixelStorei) v23gl.PixelStorei(GL_UNPACK_ALIGNMENT, 4);
                     gl_TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gc->map_w, gc->map_h,
                                      GL_RGBA, GL_UNSIGNED_BYTE, src_px);
@@ -1716,6 +1898,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
                 for (int b = 0; b < 2; b++) {
                     if (gc->dash_en[b]) {
                         gl_BindTexture(GL_TEXTURE_2D, gc->dash_tex[b]);
+                        gc->cur_tex0 = 0;
                         gl_TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gc->dash_w[b], gc->dash_h[b],
                                          GL_RGBA, GL_UNSIGNED_BYTE, g_dash_pxbuf[b]);
                     }
@@ -1723,6 +1906,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
             }
             if (nav_poll() && g_nav_active && g_nav_dirty) {
                 gl_BindTexture(GL_TEXTURE_2D, gc->nav_tex);
+                gc->cur_tex0 = 0;
                 if (g_nav_w != gc->nav_w || g_nav_h != gc->nav_h) {
                     gc->nav_w = g_nav_w; gc->nav_h = g_nav_h;
                     gl_TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gc->nav_w, gc->nav_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_nav_px);
@@ -1736,7 +1920,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
         v23_update_telemetry(&gc->cur_bus, dt, with_carplay_map, cur_night, meas_fps, meas_map_fps,
                              (double)(t_now - t_start) * 1e-6);
 
-        /* 5. 执行 60fps 皮肤渲染（带 10ms 强杀 / 掉帧看门狗 / 同帧零黑屏补画保底） */
+        /* 5. 执行 60fps 皮肤渲染（带 35ms 硬中断 / 连续超时容错 / 掉帧看门狗 / 同帧零黑屏补画保底） */
         gl_Viewport(0, 0, ww, wh);
         if (v23gl.Enable) v23gl.Enable(GL_BLEND);
         if (v23gl.BlendFunc) v23gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1745,23 +1929,30 @@ static int v23_run_gl_loop(int with_carplay_map) {
             uint64_t js_us = 0;
             int rrc = v23_sandbox_render_frame(user_sb, &gc->cur_bus, &js_us, NULL);
             if (rrc != 0) {
-                fallback_active = 1;
-                snprintf(cur_err, sizeof(cur_err), "%s", user_sb->last_err);
-                char bm[320];
-                snprintf(bm, sizeof(bm), "AI 皮肤运行异常（%.180s）· 已自动回退官方默认皮肤", cur_err);
-                v23_set_banner(gc, bm, 2, 8);
-                v23_write_status_json(user_sb, gc, cur_source, 1, cur_err, meas_fps, meas_map_fps);
-                v23_diag("theme runtime error: %s", cur_err);
-                /* 同帧立即用官方默认经典版补画，0 黑帧！ */
-                v23_sandbox_render_frame(fb_sb, &gc->cur_bus, NULL, NULL);
+                if (user_sb->guard.timed_out && ++timeout_streak < 3) {
+                    /* 偶发 1~2 帧超 35ms（如 QNX 调度/GC/字形首次光栅化毛刺）：当帧补画默认版防黑屏，不永久踢掉用户皮肤 */
+                    v23_diag("theme timeout spike (%d/3, %.1fms), keeping user skin", timeout_streak, (double)js_us / 1000.0);
+                    v23_sandbox_render_frame(fb_sb, &gc->cur_bus, NULL, NULL);
+                } else {
+                    fallback_active = 1;
+                    snprintf(cur_err, sizeof(cur_err), "%s", user_sb->last_err);
+                    char bm[320];
+                    snprintf(bm, sizeof(bm), "AI 皮肤运行异常（%.180s）· 已自动回退官方默认皮肤", cur_err);
+                    v23_set_banner(gc, bm, 2, 8);
+                    v23_write_status_json(user_sb, gc, cur_source, 1, cur_err, meas_fps, meas_map_fps);
+                    v23_diag("theme runtime error: %s", cur_err);
+                    /* 同帧立即用官方默认经典版补画，0 黑帧！ */
+                    v23_sandbox_render_frame(fb_sb, &gc->cur_bus, NULL, NULL);
+                }
             } else {
-                if (js_us > 14000ULL) {
-                    if (++slow_frames >= 30) {
+                timeout_streak = 0;
+                if (js_us > 25000ULL) {
+                    if (++slow_frames >= 60) {
                         fallback_active = 1;
-                        snprintf(cur_err, sizeof(cur_err), "连续 30 帧 JS 耗时超 14ms，掉帧看门狗已熔断回退默认皮肤");
+                        snprintf(cur_err, sizeof(cur_err), "连续 60 帧 JS 耗时超 25ms，掉帧看门狗已熔断回退默认皮肤");
                         v23_set_banner(gc, cur_err, 2, 8);
                         v23_write_status_json(user_sb, gc, cur_source, 1, cur_err, meas_fps, meas_map_fps);
-                        v23_diag("theme watchdog fallback (>14ms x 30)");
+                        v23_diag("theme watchdog fallback (>25ms x 60)");
                     }
                 } else {
                     slow_frames = 0;

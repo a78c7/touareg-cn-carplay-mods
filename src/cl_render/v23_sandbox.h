@@ -5,7 +5,7 @@
  *   - 零 QNX / EGL / Screen 平台依赖，既可由 cl_render (v23_gles.c) 直接包含运行在车机 Tegra K1 上，
  *     也可在主机/CI 直接编译并用 ASan + UBSan 进行全量单元测试。
  *   - 安全三防线：128 KB 单文件上限 + 4 MB 精确字节内存封顶（JS_NewRuntime2 16B 对齐追踪分配器，
- *     零 malloc_usable_size 依赖）+ 256 KB 栈上限 + 单帧 10 ms 硬中断掐断 + 物理移除 eval / Function。
+ *     零 malloc_usable_size 依赖）+ 256 KB 栈上限 + 单帧 35 ms 硬中断掐断 + 物理移除 eval / Function。
  *   - 兼容单皮肤 (THEME + render) 与单文件多皮肤包 (const THEMES = [ ... ]，最多 8 套)。
  *   - 所有冷车未就绪信号（NaN / -999）强制兜底为有限数字 0 并提供 bus.ready.*，杜绝 .toFixed() 崩溃。
  *
@@ -35,8 +35,8 @@
 
 #define V23_JS_MEM_LIMIT_BYTES   (4u * 1024u * 1024u)  /* 4 MB 严格内存封顶 */
 #define V23_JS_STACK_LIMIT_BYTES (256u * 1024u)        /* 256 KB 递归栈上限 */
-#define V23_FRAME_TIMEOUT_US     10000ULL              /* 10 ms 单帧执行强杀 */
-#define V23_LOAD_TIMEOUT_US      80000ULL              /* 80 ms 编译加载超时 */
+#define V23_FRAME_TIMEOUT_US     35000ULL              /* 35 ms 单帧硬中断（防死循环，同时容忍 ARMv7 偶发 GC/光栅化抖动） */
+#define V23_LOAD_TIMEOUT_US      120000ULL             /* 120 ms 编译加载超时 */
 #define V23_MAX_THEME_BYTES      (128u * 1024u)        /* 128 KB 单文件上限 */
 #define V23_MAX_SHADER_BYTES     8192u                 /* 8 KB 自定义 GLSL 上限 */
 #define V23_MAX_THEMES_PER_FILE  8
@@ -1012,7 +1012,7 @@ static JSValue v23_marshal_bus(JSContext *ctx, const v23_bus_t *in) {
 
 static void v23_extract_js_error(JSContext *ctx, v23_guard_t *g, char *out, size_t cap) {
     if (g && g->timed_out) {
-        snprintf(out, cap, "单帧执行超时 (>10ms / 死循环)，已被 QuickJS 安全中断");
+        snprintf(out, cap, "单帧执行超时 (>35ms / 死循环)，已被 QuickJS 安全中断");
         JSValue exc = JS_GetException(ctx);
         JS_FreeValue(ctx, exc);
         return;
