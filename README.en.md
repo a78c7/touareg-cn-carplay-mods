@@ -11,7 +11,7 @@
 Single-USB, no-disassembly, no-firmware-upgrade toolkit unlocking wireless & full-screen CarPlay, Windshield HUD navigation, Digital Cockpit map & live driving telemetry, plus phone-based wireless setup and updates.
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.3</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.4</b></a> ·
   <a href="#features">Features</a> ·
   <a href="#4-step-usb-installation">4-Step Install</a> ·
   <a href="#compatibility">Compatibility</a> ·
@@ -57,7 +57,7 @@ No command line required — double-click the offline configurator on your USB d
 
 | Category | Feature | What It Does | Compatibility |
 | :--- | :--- | :--- | :---: |
-| **Display & Projection** | **Full-Screen CarPlay** | Removes side black bars so CarPlay fills the 15" center screen (currently requires `P2878`; older versions safely skip without affecting other features) | CN Touareg `P2878` |
+| **Display & Projection** | **Full-Screen CarPlay** | Removes side black bars so CarPlay fills the 15" center screen (exact CRC table verified on `P2878`; other CN 15" `P*` builds such as `P2838`/`P2853`/`P9832` auto-adapt via strict bytecode fingerprinting and safely skip if mismatched) | CN Touareg `P*` |
 | | **Wireless CarPlay** | Unlocks factory-inactive Wireless CarPlay for cable-free auto-connect | MH2p Generic |
 | | **Android Auto** | Unlocks factory-inactive Android Auto (CN 2019–2023 pre-facelift ships without factory Android Auto) | MH2p Generic |
 | **HUD & Cluster** | **Navigation to HUD** | Projects Apple Maps, AMap, or Baidu turn arrows, distance, street names, and lanes onto the Windshield HUD (requires factory HUD; works wired & wireless) | CN Touareg `P*` |
@@ -88,13 +88,14 @@ No command line required — double-click the offline configurator on your USB d
 ## Compatibility
 
 > [!IMPORTANT]
-> **No Firmware Upgrade Needed — Flash Directly on Your Stock System!** 2019–2023 CN 15" Touareg models can install the Cluster Map, HUD Navigation, and Wireless CarPlay directly on stock `P*` firmware (only Full-Screen CarPlay currently requires `P2878`; older versions safely skip it without affecting anything else). **Never flash unofficial `2878` firmware files found online** — full system flashes risk bricking the head unit or introducing shop scripts that cause battery drain (use an official VW dealership if you ever want a firmware update).
+> **No Firmware Upgrade Needed — Flash Directly on Your Stock System!** 2019–2023 CN 15" Touareg models can install the full toolkit directly on stock `P*` firmware (including cross-version Full-Screen CarPlay auto-adaptation; if a skin build doesn't match cleanly it still safely skips without affecting anything else). **Never flash unofficial `2878` firmware files found online** — full system flashes risk bricking the head unit or introducing shop scripts that cause battery drain (use an official VW dealership if you ever want a firmware update).
 
 | Category | Details |
 | :--- | :--- |
-| **Supported** | **Pre-facelift 3rd-gen Touareg (CN 2019–2023)** with **15" center screen + 12" Digital Cockpit** (works directly on stock `P*` builds; `P2878` unlocks all features, older builds safely skip full-screen; Wireless Console & docs apply across MH2p). |
+| **Supported** | **Pre-facelift 3rd-gen Touareg (CN 2019–2023)** with **15" center screen + 12" Digital Cockpit** (works directly on stock `P*` builds; `P2878` is fully end-to-end verified, other CN 15" `P*` builds auto-adapt full-screen via bytecode fingerprinting and safely skip on mismatch; Wireless Console & docs apply across MH2p). |
 | **Not Supported** | Base **9.2" Discover Pro trims** with analog gauges & no HUD (safely exits on plug-in without touching files); **CN 2025–2026 facelift (15.05" Asterix)** and **EU MY2024+ facelift (MIB3)**; **2nd-gen Touareg (7P)**. |
 | **EU / Other MH2p Cars** | Touareg UI patches intentionally abort cleanly without modifying files on EU builds (e.g. `P2869`) or other MH2p brands; the architecture, source code, previewer, docs, and Wireless Console serve directly as a foundation (see the [Touareg-Freunde EU P2869 thread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)). |
+| **iPhone & Cluster Map** | **AMap on Digital Cockpit (2nd screen)**: AMap officially requires **iPhone 12 or newer + iOS 17.4+** (with an updated AMap app); older iPhones or iOS versions only render on the center screen and send no 2nd-screen stream (Apple Maps supports cluster projection on `iOS 15.4+`).<br>**Wireless connection**: Use **factory Wireless CarPlay** unlocked by this toolkit (or wired USB) — most **aftermarket wireless CarPlay dongles (U2W adapters) do not forward the 2nd screen**, projecting only to the center screen while leaving the cluster blank. |
 
 - **Trim & Powertrain Notes**: HUD navigation requires factory Windshield HUD; `pitch`/`roll` require air suspension (unavailable on non-air-suspension trims such as CN 2021–2022 eHybrid); fuel tank defaults to CN ICE `90 L` (set to `76 L` for CN eHybrid or `75 L` for EU stock); 8AT fallback gear ratios & gauge bar scales are calibrated on a 3.0TSI vehicle.
 - **Safety & Free Use**: Built-in 3-crash zero-wear safe mode restores stock behavior automatically (zero eMMC writes on normal boots). Never operate settings while driving; always rely on factory instruments for speed and warnings. Strictly free, open-source, and **non-commercial** — demand a refund if you paid for it.
@@ -122,7 +123,7 @@ No command line required — double-click the offline configurator on your USB d
 
 > [!NOTE]
 > - **Unsigned Binary Warning**: The desktop configurator has no commercial signing certificate (Windows: *More info → Run anyway*; macOS: *System Settings → Privacy & Security → Open Anyway*). Built by GitHub Actions from [`tools/configurator`](tools/configurator) with `SHA256SUMS.txt`; binds only to `127.0.0.1` and never connects to the internet.
-> - **Upgrading from `v22.01` or Earlier**: Flash `v22.1` / `v23.3` **once via USB** (preserves existing `cl.conf` and `web.pin`; if `web.pin` was never set, a 6-digit PIN displays on the cluster on first boot and clears after first login); wireless OTA resumes afterward.
+> - **Upgrading from `v22.01` or Earlier**: Flash `v22.1` / `v23.4` **once via USB** (preserves existing `cl.conf` and `web.pin`; if `web.pin` was never set, a 6-digit PIN displays on the cluster on first boot and clears after first login); wireless OTA resumes afterward.
 > - **Black Borders After First Flash**: Tap *Forget This Car* in iPhone Bluetooth/CarPlay settings and reconnect once.
 
 ---
@@ -137,6 +138,7 @@ No command line required — double-click the offline configurator on your USB d
 
 ### Known AMap Quirks & Troubleshooting
 - **AMap icon centering & zoom**: AMap offsets its car icon toward the destination (~3 cm); vision-based centering restores it below the clock within ~3s. AMap resets zoom level automatically on speed/junctions, and does not send CarPlay lane guidance (use Baidu Maps if lane arrows are needed).
+- **Center Screen Works, But No Cluster Map (2nd Screen)**: (1) If Apple Maps projects to the cluster while AMap does not, verify **iPhone 12+ & iOS 17.4+** (AMap requirement); (2) if using an aftermarket wireless CarPlay dongle, unplug it and use factory Wireless CarPlay or wired USB (most dongles drop `altScreen`).
 - **One-Click Uninstall**: Set unwanted modules to **Uninstall** in the configurator, save, and flash once (uninstalling HUD must also uninstall Cluster Map, `OK` Map Switch, and Short-Press Siri).
 - **Diagnostics for Issues**: Export a sanitized diagnostic bundle from `http://touareg.local:8080` (passwords/PINs/VINs/phones auto-redacted), or create a `cluster_logs` folder on a USB drive for 2 minutes; **never share your vehicle `backup` folder**.
 - **Previously Shop-Modified Car (No Errors, But No Cluster Map / Battery Drain)**: Check `Logs/` on the USB drive after flashing — `WARN: suspected shop` indicates a leftover shop auto-restore script blocking startup. Cleanest fix is an official dealership stock firmware reflash; never use untrusted online firmware packs (technical details & targeted cleanup in [`docs/07` Sec. 12](docs/07-无线控制台与SSH开发.md#12-已改装车与二手车冲突排查改装店锁死入口与残留公钥)).

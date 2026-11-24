@@ -50,7 +50,9 @@ typedef struct {
     double trip_base; /* odometer reading (km) where the cluster's Trip was last reset; Trip = odometer - this */
 } dash_conf_t;
 
-static dash_conf_t g_dash_conf = { 1, 5, 164, 200, 90, 5000, 0, 352, -1, 300, 1, 1, 0 };
+/* 默认 y=200、max_h=308（y=200..508），永久预留原车顶栏在百度/苹果下发车道指引时撑高至 y≈190 的空间，
+ * 上下均与原车边界（y=190 车道底线 / y=518 挡位梯形）保持 10px 对称呼吸缝。 */
+static dash_conf_t g_dash_conf = { 1, 5, 200, 200, 90, 5000, 0, 308, -1, 300, 1, 1, 0 };
 
 /* ---- the item catalogue: config key, label (also accepted in items=), unit, sample for column width ---- */
 enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL, IT_BRAKE, IT_STEER, IT_GEAR,
@@ -211,7 +213,11 @@ static void dash_read_conf_line1(const char *l) {
     if (!strncmp(l, "items", 5)) { const char *eq = strchr(l, '='); if (eq) dash_parse_items(eq + 1); return; }
     if (sscanf(l, "info = %d", &v) == 1 || sscanf(l, "show = %d", &v) == 1) g_dash_conf.enabled = v;
     else if (sscanf(l, "info_x = %d", &v) == 1 || sscanf(l, "x = %d", &v) == 1) g_dash_conf.x = v;
-    else if (sscanf(l, "info_y = %d", &v) == 1 || sscanf(l, "y = %d", &v) == 1) g_dash_conf.y = v;
+    else if (sscanf(l, "info_y = %d", &v) == 1 || sscanf(l, "y = %d", &v) == 1) {
+        /* 自动迁移旧版默认 y=164/172 至 y=200，避免老车 OTA 保留旧 dash.conf 后仍被百度车道指引顶栏压线 */
+        if (v == 164 || v == 172) v = 200;
+        g_dash_conf.y = v;
+    }
     else if (sscanf(l, "info_alpha = %d", &v) == 1 || sscanf(l, "alpha = %d", &v) == 1) g_dash_conf.alpha = v < 0 ? 0 : v > 255 ? 255 : v;
     else if (sscanf(l, "tank_l = %d", &v) == 1) g_dash_conf.tank_l = v;
     else if (sscanf(l, "trip_base = %lf", &g_dash_conf.trip_base) == 1) ;
@@ -315,9 +321,13 @@ static int dash_item_has_bar(int it) {
 }
 
 static void dash_layout(void) {
-    /* Row heights designed so 5 rows = 344px (66px/row, fits 46px digits + inline sport bar cleanly inside 348px!),
-     * 6 rows = 348px (55px/row, fits 41px digits + inline bar), 7-8 rows = 42px, 9-10 rows = 33px. */
-    static const int ROW_H[4] = { 66, 55, 42, 33 }, PAD_Y[4] = { 7, 9, 8, 8 }, BASE[4] = { 16, 14, 12, 10 };
+    /* Row heights tuned for max_h=308 (y=200..508, permanent clearance for OEM lane-guidance top bar y<=190):
+     *   1-4 rows : stretched up to 73px/row (4 rows = 304px)
+     *   5 rows   : 59px/row -> 307px (full 46px XL bold digits + 8px inline sport bar)
+     *   6 rows   : 49px/row -> 308px (full 41px L bold digits + 7px inline sport bar)
+     *   7 rows   : 42px/row -> 308px (35px M bold digits)
+     *   8-10 rows: 30px/row -> up to 308px (29px S bold digits) */
+    static const int ROW_H[4] = { 59, 49, 42, 30 }, PAD_Y[4] = { 6, 7, 7, 4 }, BASE[4] = { 16, 14, 12, 10 };
     int sz = g_dash_conf.compact, autosz = sz < 0 || sz > 2;
     if (!autosz) sz = sz == 0 ? 0 : sz + 1;
     else {
@@ -339,10 +349,10 @@ static void dash_layout(void) {
         sz++;
     }
     L_row_h = ROW_H[szh]; L_pad_y = PAD_Y[szh]; L_base_off = BASE[sz]; L_sz = szh;
-    /* When <= 4 rows, stretch row height up to 76px so bars and huge digits breathe naturally */
+    /* When <= 4 rows, stretch row height up to 73px so bars and huge digits breathe naturally inside 308px */
     if (szh == 0 && g_nrows > 0 && g_nrows <= 4) {
-        int rh = (g_dash_conf.max_h - 16) / g_nrows;
-        if (rh > 76) rh = 76;
+        int rh = (g_dash_conf.max_h - L_pad_y * 2) / g_nrows;
+        if (rh > 73) rh = 73;
         if (rh > L_row_h) L_row_h = rh;
     }
     L_lab_x = pad;
@@ -849,8 +859,9 @@ static void dash_render(const dash_vals_t *v) {
         dash_item_value(it, v, val, &unit);
         int top = L_pad_y + r * L_row_h;
         int has_bar = dash_item_has_bar(it) && (L_row_h >= 46);
-        int bar_h = L_row_h >= 64 ? 9 : (L_row_h >= 52 ? 8 : 6);
-        int txt_h = has_bar ? (L_row_h - bar_h - 6) : L_row_h;
+        int bar_h = L_row_h >= 64 ? 9 : (L_row_h >= 52 ? 8 : (L_row_h >= 49 ? 7 : 6));
+        int bar_pad = L_row_h >= 52 ? 6 : 5;
+        int txt_h = has_bar ? (L_row_h - bar_h - bar_pad) : L_row_h;
         int base = top + txt_h / 2 + L_base_off;
 
         const dash_glyph *lg = dash_find(L_lab, L_nlab, g_items[it].label);
@@ -871,7 +882,7 @@ static void dash_render(const dash_vals_t *v) {
         dash_draw_value(val, val_r, base, C_VAL);
 
         if (has_bar) {
-            int bar_y = top + L_row_h - bar_h - 4;
+            int bar_y = top + L_row_h - bar_h - (L_row_h >= 52 ? 4 : 3);
             dash_draw_row_bar(it, v, L_lab_x, bar_y, g_dash_w - L_lab_x * 2, bar_h);
         }
         /* Subtle horizontal divider between rows (matching the reference photo) */

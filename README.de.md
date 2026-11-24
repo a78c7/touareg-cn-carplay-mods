@@ -11,7 +11,7 @@
 Ein-USB-Stick-Paket ohne Demontage und ohne System-Upgrade für Wireless- & Vollbild-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte, Echtzeit-Fahrdaten sowie drahtlose Einrichtung und Updates per Smartphone.
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.3</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.4</b></a> ·
   <a href="#funktionen">Funktionen</a> ·
   <a href="#4-schritte-installation">4-Schritte-Installation</a> ·
   <a href="#kompatibilität">Kompatibilität</a> ·
@@ -57,7 +57,7 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
 
 | Kategorie | Funktion | Wirkung im Fahrzeug | Kompatibilität |
 | :--- | :--- | :--- | :---: |
-| **Display & Projektion** | **Vollbild-CarPlay** | Entfernt seitliche schwarze Ränder für echte Vollbild-Darstellung auf dem 15"-Display (derzeit für CN `P2878`; ältere Stände überspringen sicher ohne Einfluss auf andere Module) | CN Touareg `P2878` |
+| **Display & Projektion** | **Vollbild-CarPlay** | Entfernt seitliche schwarze Ränder für echte Vollbild-Darstellung auf dem 15"-Display (exakte CRC-Tabelle auf CN `P2878` geprüft; weitere CN-15"-`P*`-Stände wie `P2838`/`P2853`/`P9832` passen sich automatisch per striktem Bytecode-Fingerabdruck an und überspringen bei Abweichung sicher) | CN Touareg `P*` |
 | | **Wireless CarPlay** | Aktiviert werksseitig inaktives Wireless CarPlay für kabelloses Verbinden | MH2p allgemein |
 | | **Android Auto** | Aktiviert werksseitig inaktives Android Auto (CN-Vorfacelift 2019–2023 ab Werk ohne Android Auto) | MH2p allgemein |
 | **HUD & Kombiinstrument** | **Navigation im HUD** | Projiziert Abbiegepfeile, Distanz, Straßennamen & Spurhinweise (Apple/AMap/Baidu) ins Windschutzscheiben-HUD (erfordert Werks-HUD; Kabel & Wireless) | CN Touareg `P*` |
@@ -88,13 +88,14 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
 ## Kompatibilität
 
 > [!IMPORTANT]
-> **Kein System-Upgrade nötig — direkt auf Werks-Firmware nutzbar!** CN-Modelle (2019–2023, 15"-Display) können Kombiinstrument-Karte, HUD-Navigation und Wireless CarPlay direkt ohne Firmware-Update installieren (nur Vollbild-CarPlay setzt aktuell `P2878` voraus; ältere Stände überspringen es sicher). **Niemals inoffizielle `2878`-Systempakete aus dem Netz flashen** — es drohen Totalausfall (Brick) oder manipulierte Händlerskripte mit Batterieentladung (System-Updates nur offiziell beim VW-Partner).
+> **Kein System-Upgrade nötig — direkt auf Werks-Firmware nutzbar!** CN-Modelle (2019–2023, 15"-Display) können das komplette Paket direkt auf Werks-`P*`-Firmware installieren (inkl. versionsübergreifender Vollbild-CarPlay-Auto-Anpassung; weicht der Skin-Stand ab, wird Vollbild weiterhin sicher übersprungen). **Niemals inoffizielle `2878`-Systempakete aus dem Netz flashen** — es drohen Totalausfall (Brick) oder manipulierte Händlerskripte mit Batterieentladung (System-Updates nur offiziell beim VW-Partner).
 
 | Bereich | Details |
 | :--- | :--- |
-| **Unterstützt** | **Touareg III Vorfacelift (CN 2019–2023)** mit **15"-Display & 12"-Digital Cockpit** (direkt auf Werks-`P*`-Firmware nutzbar; `P2878` unterstützt alle Module, ältere Stände überspringen Vollbild sicher; WLAN-Konsole & Doku gelten MH2p-übergreifend). |
+| **Unterstützt** | **Touareg III Vorfacelift (CN 2019–2023)** mit **15"-Display & 12"-Digital Cockpit** (direkt auf Werks-`P*`-Firmware nutzbar; `P2878` end-to-end geprüft, weitere CN-15"-`P*`-Stände nutzen automatische Vollbild-Fingerabdruck-Anpassung mit sicherem Überspringen bei Abweichung; WLAN-Konsole & Doku gelten MH2p-übergreifend). |
 | **Nicht unterstützt** | Basismodelle mit **9,2"-Discover Pro** / Analoginstrument / ohne HUD (beendet sich beim Einstecken sofort sicher ohne Änderungen); **EU-Facelift ab MJ 2024 (MIB3)** und **CN-Facelift 2025–2026 (15,05"-Asterix)**; **Touareg II (7P)**. |
 | **EU- / MH2p-Fahrzeuge** | Die fertigen Touareg-UI-Skripte brechen auf EU-Ständen (z. B. `P2869`) und anderen MH2p-Marken sicher ohne Änderungen ab; Architektur, Quellcode, Previewer, Doku und WLAN-Konsole dienen direkt als Basis (siehe [Touareg-Freunde EU-P2869-Thread](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)). |
+| **iPhone & Cockpit-Karte** | **AMap im Digital Cockpit (2. Bildschirm)**: AMap erfordert offiziell **iPhone 12 oder neuer + iOS 17.4+** (Apple Karten unterstützt das Kombiinstrument ab `iOS 15.4+`); ältere Geräte/iOS-Versionen zeigen AMap nur auf dem Hauptdisplay.<br>**Kabellose Verbindung**: Direkt das freigeschaltete **Werks-Wireless-CarPlay** (oder USB-Kabel) nutzen — die meisten **externen Wireless-CarPlay-Adapter (U2W-Boxen) leiten den 2. Bildschirm nicht weiter**, sodass die Karte nur am Hauptdisplay erscheint. |
 
 - **Ausstattungs- & Antriebshinweise**: HUD-Navigation erfordert Werks-HUD; `pitch`/`roll`-Neigungswinkel erfordern Luftfederung (nicht verfügbar bei Modellen ohne Luftfederung wie CN eHybrid 2021–2022); Tankvolumen standardmäßig `90 L` (CN Verbrenner; für CN eHybrid `76 L`, für EU-Serie `75 L` eintragen); 8-Gang-Ersatzübersetzung & Balkenskalen sind auf 3.0 TSI kalibriert.
 - **Schutzschaltung & Kostenlos-Hinweis**: Integrierte 3-Absturz-Schutzschaltung (Zero-Wear Safe Mode, keine eMMC-Schreibzugriffe bei normalem Start). Einstellungen niemals während der Fahrt bedienen; für Geschwindigkeit und Warnleuchten gilt stets die Werksanzeige. Kostenlos, Open Source & **strikt nicht-kommerziell**.
@@ -122,7 +123,7 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
 
 > [!NOTE]
 > - **Unsignierte Binärdatei**: Der Desktop-Konfigurator besitzt kein kommerzielles Zertifikat (Windows: *Weitere Informationen → Trotzdem ausführen*; macOS: *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*). Per GitHub Actions aus [`tools/configurator`](tools/configurator) mit `SHA256SUMS.txt` gebaut; lauscht nur auf `127.0.0.1`, völlig offline.
-> - **Upgrade von `v22.01` oder älter**: Einmaliges USB-Upgrade auf `v22.1` / `v23.3` erforderlich (bestehende `cl.conf` und `web.pin` bleiben erhalten; ist keine PIN gesetzt, zeigt das Cockpit beim ersten Start eine 6-stellige Einmal-PIN an). Danach funktioniert drahtloses OTA weiter.
+> - **Upgrade von `v22.01` oder älter**: Einmaliges USB-Upgrade auf `v22.1` / `v23.4` erforderlich (bestehende `cl.conf` und `web.pin` bleiben erhalten; ist keine PIN gesetzt, zeigt das Cockpit beim ersten Start eine 6-stellige Einmal-PIN an). Danach funktioniert drahtloses OTA weiter.
 > - **Schwarze Ränder nach dem ersten Flash**: In den iPhone Bluetooth-/CarPlay-Einstellungen *Dieses Fahrzeug ignorieren* wählen und neu verbinden.
 
 ---
@@ -137,6 +138,7 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
 
 ### Bekannte AMap-Eigenheiten & Deinstallation
 - **AMap-Zentrierung & Zoom**: Die automatische Bilderkennung zentriert den versetzten AMap-Positionspfeil innerhalb von ca. 3 s; Zoomstufen setzt AMap geschwindigkeitsabhängig selbst zurück und übermittelt keine Spurdaten über CarPlay (Baidu Maps unterstützt Spurpfeile).
+- **Hauptdisplay läuft, aber keine Cockpit-Karte (2. Bildschirm)**: (1) Geht Apple Karten im Cockpit, AMap aber nicht → **iPhone 12+ & iOS 17.4+** prüfen (AMap-Vorgabe); (2) externen Wireless-CarPlay-Adapter abziehen und Werks-Wireless-CarPlay oder USB-Kabel nutzen (die meisten Adapter übertragen kein `altScreen`).
 - **Deinstallation**: Gewünschte Module im Konfigurator auf **Deinstallieren** setzen, speichern und einmal im Fahrzeug flashen (beim Entfernen von HUD müssen Cockpit-Karte, `OK`-Kartenwechsel und Kurzdruck-Siri mit deinstalliert werden).
 - **Diagnose für Issues**: Anonymisiertes Diagnosepaket über `http://touareg.local:8080` exportieren (Passwörter/PINs/FIN/Telefonnummern automatisch entfernt) oder Ordner `cluster_logs` auf einem USB-Stick anlegen; **niemals den eigenen `backup`-Ordner veröffentlichen**.
 - **Vorher gewerblich geflashtes Fahrzeug (keine Fehlermeldung, aber keine Cockpit-Karte / Batterieentladung)**: `Logs/` auf dem USB-Stick prüfen — `WARN: suspected shop` weist auf ein altes Händler-Wiederherstellungsskript hin. Sicherste Lösung ist ein offizielles Werks-Update beim VW-Partner; keine inoffiziellen Firmware-Pakete aus dem Netz nutzen (Details & gezielte Bereinigung in [`docs/07` Abschn. 12](docs/07-无线控制台与SSH开发.md#12-已改装车与二手车冲突排查改装店锁死入口与残留公钥)).

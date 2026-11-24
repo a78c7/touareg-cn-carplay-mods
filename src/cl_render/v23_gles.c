@@ -122,7 +122,19 @@ static int v23_load_extra_gl(void) {
     return (gl_CreateShader && gl_DrawArrays && v23gl.Uniform1f && v23gl.Uniform2f && v23gl.Uniform4f) ? 0 : -1;
 }
 
-/* ---- 与 cluster.c 共享的 v23 开关（g_v23_mode 已在 cluster.c 顶部定义）与三缓冲离屏 CarPlay 地图接收器 ---- */
+/* ---- 与 cluster.c 共享的 v23 开关（g_v23_mode 已在 cluster.c 顶部定义）与四缓冲离屏 CarPlay 地图桥接器 ----
+ * v23.4 根治零拷贝 EGL_KHR_image_pixmap 异步读写追尾与 Tegra K1 纹理缓存残留：
+ *   - 槽位从 3 扩至 4（V23_MAP_SLOTS = 4）：
+ *       free_idx    : 解码线程独占写入槽（VIC 2D screen_blit 目标，GL 线程绝不访问）；
+ *       ready_idx   : 最新已完成转换槽（突发多帧时解码线程仅在 free_idx <-> ready_idx 间交换，绝不触碰在显槽）；
+ *       front_idx   : GL 线程当前正在采样的活跃纹理槽；
+ *       retired_idx : 上一轮刚从 front_idx 退下的冷却槽，必须至少经历 1 次完整 eglSwapBuffers 且满 15.5ms 后，
+ *                     确认 Tegra 3D GPU 异步光栅化已彻底排空对旧纹理的读取，才允许归还至 ready_idx 池。
+ *   - GL 显示窗口升级为独立 screen_context_t + 4 个窗口渲染缓冲（V23_WIN_BUFFERS = 4），
+ *     消除双缓冲下 displaymanager 异步合成 Display 4 (LVDS2) 时的扫描线追尾白横条纹。 */
+#define V23_MAP_SLOTS   4
+#define V23_WIN_BUFFERS 4
+
 static volatile sig_atomic_t g_v23_stop = 0;
 static void v23_on_sig(int sig) { (void)sig; g_v23_stop = 1; }
 
@@ -130,16 +142,18 @@ typedef struct {
     pthread_mutex_t mx;
     int initialized;
     int width, height;
-    screen_pixmap_t pix[3];
-    screen_buffer_t buf[3];
-    uint8_t        *ptr[3];
-    int             stride[3];
-    int             free_idx;   /* 解码线程写入槽 */
-    int             ready_idx;  /* 最新已完成槽 */
-    int             front_idx;  /* GL 线程正在显示槽 */
-    uint32_t        seq;        /* 每次新帧 +1 */
+    screen_pixmap_t pix[V23_MAP_SLOTS];
+    screen_buffer_t buf[V23_MAP_SLOTS];
+    uint8_t        *ptr[V23_MAP_SLOTS];
+    int             stride[V23_MAP_SLOTS];
+    int             free_idx;    /* 解码线程独占写入槽 */
+    int             ready_idx;   /* 最新已完成待取槽 */
+    int             front_idx;   /* GL 线程当前显示槽 */
+    int             retired_idx; /* 刚退下等待至少 1 次完整 VSync 排空 GPU 读取的冷却槽 */
+    int             has_fresh;   /* ready_idx 是否存有尚未晋升的新帧 */
+    uint32_t        seq;         /* 每次新帧 +1 */
     uint32_t        frames_in;
-    int             auto_night; /* 亮度滞回自动昼夜 (0=昼, 1=夜) */
+    int             auto_night;  /* 亮度滞回自动昼夜 (0=昼, 1=夜) */
     pthread_t       gl_tid;
     int             gl_started;
 } v23_map_bridge_t;
@@ -147,13 +161,13 @@ typedef struct {
 static v23_map_bridge_t g_v23_map = {
     .mx = PTHREAD_MUTEX_INITIALIZER,
     .initialized = 0,
-    .free_idx = 0, .ready_idx = 1, .front_idx = 2,
+    .free_idx = 0, .ready_idx = 1, .front_idx = 2, .retired_idx = 3, .has_fresh = 0,
     .auto_night = 1
 };
 
 static void *v23_render_thread_entry(void *arg);
 
-/* 由 setup_screen() 在 g_v23_mode==1 末尾调用：创建 3 个离屏 RGBX8888 pixmap 并以 1MB 栈启动 60fps GL 线程 */
+/* 由 setup_screen() 在 g_v23_mode==1 末尾调用：创建 4 个离屏 RGBX8888 pixmap 并以 1MB 栈启动 60fps GL 线程 */
 static int v23_map_setup(int w, int h) {
     if (g_v23_map.initialized) return 0;
     v23_diag_reset();
@@ -164,21 +178,23 @@ static int v23_map_setup(int w, int h) {
     g_v23_map.free_idx = 0;
     g_v23_map.ready_idx = 1;
     g_v23_map.front_idx = 2;
+    g_v23_map.retired_idx = 3;
+    g_v23_map.has_fresh = 0;
     g_v23_map.seq = 0;
     g_v23_map.frames_in = 0;
     g_v23_map.auto_night = 1;
     g_v23_stop = 0;
 
-    /* 实车 Tegra K1 已验证 EGL_KHR_image_pixmap 硬件零拷贝满血 55~59fps 且无反色/花屏；
+    /* 实车 Tegra K1 已验证 EGL_KHR_image_pixmap 硬件零拷贝满血 60fps；
      * 默认开启零拷贝（驱动不兼容时自动无缝降级 glTexSubImage2D，建 v23_no_zerocopy 可手动强制降级）。 */
     int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0);
     int fmt = SCREEN_FORMAT_RGBX8888;
     int usage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ |
                 (want_zc ? SCREEN_USAGE_OPENGL_ES2 : 0);
     int sz[2] = { w, h };
-    v23_diag("v23_map_setup start %dx%d want_zc=%d", w, h, want_zc);
+    v23_diag("v23.4 map_setup start %dx%d slots=%d want_zc=%d", w, h, V23_MAP_SLOTS, want_zc);
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < V23_MAP_SLOTS; i++) {
         if (screen_create_pixmap(&g_v23_map.pix[i], g_dec.scr_ctx) != 0) {
             v23_diag("v23: screen_create_pixmap[%d] failed errno=%d", i, errno);
             return -1;
@@ -206,7 +222,9 @@ static int v23_map_setup(int w, int h) {
         g_v23_map.stride[i] = st;
         if (p && st > 0) memset(p, 0, (size_t)st * (size_t)h);
     }
-    v23_diag("v23: 3 pixmaps ready ptr0=%p stride0=%d", (void *)g_v23_map.ptr[0], g_v23_map.stride[0]);
+    /* 在启动独立 GL 线程跨上下文执行 eglCreateImageKHR 前，强制将 g_dec.scr_ctx 上的 4 个 pixmap 提交到服务端就绪 */
+    screen_flush_context(g_dec.scr_ctx, SCREEN_WAIT_IDLE);
+    v23_diag("v23: %d pixmaps ready ptr0=%p stride0=%d", V23_MAP_SLOTS, (void *)g_v23_map.ptr[0], g_v23_map.stride[0]);
 
     g_v23_map.initialized = 1;
     pthread_attr_t pattr;
@@ -219,7 +237,7 @@ static int v23_map_setup(int w, int h) {
         return -1;
     }
     g_v23_map.gl_started = 1;
-    v23_diag("v23: gl render thread spawned (stack=1MB)");
+    v23_diag("v23: gl render thread spawned (stack=1MB, isolated own_ctx)");
     return 0;
 }
 
@@ -229,17 +247,32 @@ static void v23_map_shutdown(void) {
         pthread_join(g_v23_map.gl_tid, NULL);
         g_v23_map.gl_started = 0;
     }
+    if (g_v23_map.initialized) {
+        for (int i = 0; i < V23_MAP_SLOTS; i++) {
+            if (g_v23_map.pix[i]) {
+                screen_destroy_pixmap(g_v23_map.pix[i]);
+                g_v23_map.pix[i] = NULL;
+                g_v23_map.buf[i] = NULL;
+                g_v23_map.ptr[i] = NULL;
+            }
+        }
+        g_v23_map.initialized = 0;
+    }
 }
 
-/* 由 cb_display_picture() 在 g_v23_mode==1 时调用：把解码帧 screen_blit 到离屏槽并更新自动昼夜 */
+/* 由 cb_display_picture() 在 g_v23_mode==1 时调用（仅运行在解码主线程，独占 g_dec.scr_ctx）：
+ * 把已通过 SurfaceWait 校验的解码帧 screen_blit 到专属 free_idx 槽，同步等待 2D 引擎空闲后只与 ready_idx 交换。 */
 static void v23_map_on_decoded_frame(int didx, const int *blit_attribs) {
     if (!g_v23_map.initialized || didx < 0 || didx >= MAX_SURFACES) return;
     int slot = g_v23_map.free_idx;
     int rc = screen_blit(g_dec.scr_ctx, g_v23_map.buf[slot], g_dec.decode_bufs[didx], blit_attribs);
     cl_flush_blits_idle();
-    if (rc != 0) return;
+    if (rc != 0) {
+        rdbg_err("v23_map_on_decoded_frame: screen_blit failed rc=%d errno=%d slot=%d didx=%d\n", rc, errno, slot, didx);
+        return;
+    }
 
-    /* 每 10 帧（约 0.5 秒）采样一次地图亮度，零 DSI 自动昼夜切换 */
+    /* 每 10 帧（约 0.5~2 秒）采样一次地图亮度，零 DSI 自动昼夜切换 */
     int night = g_v23_map.auto_night;
     if ((g_v23_map.frames_in % 10u) == 0u && g_v23_map.ptr[slot] && g_v23_map.stride[slot] >= g_v23_map.width * 4) {
         night = v23_detect_night_rgbx(g_v23_map.ptr[slot], g_v23_map.width, g_v23_map.height,
@@ -250,6 +283,7 @@ static void v23_map_on_decoded_frame(int didx, const int *blit_attribs) {
     int old_ready = g_v23_map.ready_idx;
     g_v23_map.ready_idx = slot;
     g_v23_map.free_idx = old_ready;
+    g_v23_map.has_fresh = 1;
     g_v23_map.seq++;
     g_v23_map.frames_in++;
     g_v23_map.auto_night = night;
@@ -594,13 +628,15 @@ typedef struct {
     /* CarPlay 地图纹理（默认启用实车已验通的 EGLImage 零拷贝；建 v23_no_zerocopy 或驱动失败时自动降级 glTexSubImage2D） */
     int      map_has_stream;
     int      map_zero_copy;
-    GLuint   map_tex[3];
-    void    *map_egl_img[3];
+    GLuint   map_tex[V23_MAP_SLOTS];
+    void    *map_egl_img[V23_MAP_SLOTS];
     GLuint   map_tex_fb;
     uint8_t *map_tight_buf;
     uint32_t map_last_seq;
     int      map_active_slot;
+    int      map_ever_flipped;
     int      map_w, map_h;
+    int      win_bufs;
 
     /* dash.c 信息框纹理[0..1] + navbox.c 导航卡纹理 */
     GLuint dash_tex[2];
@@ -1298,13 +1334,13 @@ static void v23_draw_banner(v23_gl_ctx_t *gc, uint64_t now_u) {
     memset(&ro, 0, sizeof(ro));
     ro.fill = (gc->banner_level == 2) ? bg_err : (gc->banner_level == 1 ? bg_warn : bg_info);
     ro.stroke = bd; ro.line_width = 2.0f; ro.radius = 14.0f;
-    /* 避开原车顶部信息栏/路名区（y = 0..156），固定画在黄金安全区顶边 y = 162 */
-    v23_op_rect(gc, 320.0f, 162.0f, 1280.0f, 52.0f, &ro);
+    /* 避开原车顶部信息栏/路名区与车道指引扩展栏（y = 0..190），固定画在全天候安全区顶边 y = 200 */
+    v23_op_rect(gc, 320.0f, 200.0f, 1280.0f, 52.0f, &ro);
     v23_text_opts_t to;
     memset(&to, 0, sizeof(to));
     to.size = 22.0f; to.bold = 1; to.align = 1; to.baseline = 1; to.max_width = 1240.0f;
     to.color = (v23_rgba_t){ 1.0f, 1.0f, 1.0f, 1.0f, 1 };
-    v23_op_text(gc, gc->banner_text, 960.0f, 188.0f, &to);
+    v23_op_text(gc, gc->banner_text, 960.0f, 226.0f, &to);
 }
 
 /* ---- 编译用户可选 GLSL 光效（仅影响 drawShader，失败不拖垮主皮肤） ---- */
@@ -1350,10 +1386,12 @@ static void v23_write_status_json(const v23_sandbox_t *cur_sb, const v23_gl_ctx_
 
     char buf[4096];
     int o = snprintf(buf, sizeof(buf),
-        "{\"ok\":%s,\"mode\":\"v23_gles60\",\"source\":\"%s\",\"theme_id\":\"%s\",\"theme_name\":\"%s\","
+        "{\"ok\":%s,\"mode\":\"v23_gles60\",\"engine_ver\":\"v23.4\",\"map_slots\":%d,\"win_bufs\":%d,"
+        "\"source\":\"%s\",\"theme_id\":\"%s\",\"theme_name\":\"%s\","
         "\"active_idx\":%d,\"theme_count\":%d,\"compile_ms\":%.2f,\"fps\":%d,\"map_fps\":%d,"
         "\"map_zero_copy\":%s,\"night\":%s,\"fallback\":%s,\"error\":%s%s%s,\"shader_error\":%s%s%s,\"themes\":[",
         (!fallback && (!err_msg || !err_msg[0])) ? "true" : "false",
+        V23_MAP_SLOTS, gc->win_bufs,
         src_e, id_e, name_e, idx, cur_sb ? cur_sb->entry_count : 1,
         cur_sb ? cur_sb->last_compile_ms : 0.0, fps, map_fps,
         gc->map_zero_copy ? "true" : "false",
@@ -1522,46 +1560,86 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
     snprintf(bus->conf_nav_side, sizeof(bus->conf_nav_side), "%s", g_nav_conf.side == 0 ? "left" : "right");
 }
 
-/* ---- 统一 60fps GLES2 + QuickJS 主循环（with_carplay_map=1 时附着 g_dec.post_win；=0 时自建窗口 58） ---- */
+/* ---- 统一 60fps GLES2 + QuickJS 主循环（v23.4：with_carplay_map=1 与 =0 一律自建独立 own_ctx + 4 缓冲 own_win） ---- */
 static int v23_run_gl_loop(int with_carplay_map) {
     screen_context_t own_ctx = NULL;
     screen_window_t  own_win = NULL;
     screen_window_t  target_win = NULL;
     int ww = V23_CANVAS_W, wh = V23_CANVAS_H;
+    int alloc_win_bufs = 0;
 
     if (with_carplay_map) {
-        target_win = g_dec.post_win;
-        if (g_post_w > 0) ww = g_post_w;
-        if (g_post_h > 0) wh = g_post_h;
+        /* 屏蔽 GL 子线程的 SIGUSR1/SIGUSR2，确保 clusterd 信号仅由解码主线程接收，绝不打断 libscreen/libEGL 阻塞调用 */
+        sigset_t gl_sig_mask;
+        sigemptyset(&gl_sig_mask);
+        sigaddset(&gl_sig_mask, SIGUSR1);
+        sigaddset(&gl_sig_mask, SIGUSR2);
+        pthread_sigmask(SIG_BLOCK, &gl_sig_mask, NULL);
+        ww = (g_post_w > 0) ? g_post_w : V23_CANVAS_W;
+        wh = (g_post_h > 0) ? g_post_h : V23_CANVAS_H;
     } else {
         v23_diag_reset();
         signal(SIGTERM, v23_on_sig);
         signal(SIGINT,  v23_on_sig);
-        if (screen_create_context(&own_ctx, SCREEN_APPLICATION_CONTEXT) != 0) { v23_diag("v23: screen_create_context failed"); return 10; }
-        if (screen_create_window(&own_win, own_ctx) != 0) { v23_diag("v23: screen_create_window failed"); return 11; }
+        ww = DISP_W;
+        wh = DISP_H;
+    }
+
+    /* v23.4 核心隔离：无论是否带 CarPlay 地图流，GL 渲染线程一律创建专属 screen_context_t 与独立窗口，
+     * 彻底杜绝 eglSwapBuffers 与解码线程 screen_blit 并发重入同一个 g_dec.scr_ctx 命令队列。 */
+    if (screen_create_context(&own_ctx, SCREEN_APPLICATION_CONTEXT) != 0) {
+        v23_diag("v23: screen_create_context(own_ctx) failed errno=%d", errno);
+        return 10;
+    }
+    {
+        typedef int (*fn_cwt_t)(screen_window_t *, screen_context_t, int);
+        fn_cwt_t cwt = (fn_cwt_t)dlsym(RTLD_DEFAULT, "screen_create_window_type");
+        int wrc = cwt ? cwt(&own_win, own_ctx, 0) : screen_create_window(&own_win, own_ctx);
+        if (wrc != 0) {
+            v23_diag("v23: screen_create_window(own_win) failed rc=%d errno=%d", wrc, errno);
+            screen_destroy_context(own_ctx);
+            return 11;
+        }
+    }
+    {
         const char *did = cl_disp_id();
-        screen_set_window_property_cv(own_win, SCREEN_PROPERTY_ID_STRING, (int)strlen(did), did);
-        int sz[2] = { DISP_W, DISP_H };
+        int sz[2] = { ww, wh };
         int fmt = SCREEN_FORMAT_RGBX8888;
         int usage = SCREEN_USAGE_OPENGL_ES2;
         int transp = SCREEN_TRANSPARENCY_NONE;
         int vis = 1;
+        int swap_iv = 1;
         screen_set_window_property_iv(own_win, SCREEN_PROPERTY_SIZE, sz);
         screen_set_window_property_iv(own_win, SCREEN_PROPERTY_BUFFER_SIZE, sz);
         screen_set_window_property_iv(own_win, SCREEN_PROPERTY_FORMAT, &fmt);
         screen_set_window_property_iv(own_win, SCREEN_PROPERTY_USAGE, &usage);
         screen_set_window_property_iv(own_win, SCREEN_PROPERTY_TRANSPARENCY, &transp);
+        screen_set_window_property_cv(own_win, SCREEN_PROPERTY_ID_STRING, (int)strlen(did), did);
         screen_set_window_property_iv(own_win, SCREEN_PROPERTY_VISIBLE, &vis);
+        screen_set_window_property_iv(own_win, SCREEN_PROPERTY_SWAP_INTERVAL, &swap_iv);
         screen_flush_context(own_ctx, 0);
-        if (screen_create_window_buffers(own_win, 2) != 0) { v23_diag("v23: screen_create_window_buffers failed"); return 12; }
-        target_win = own_win;
-        ww = DISP_W; wh = DISP_H;
-    }
 
-    v23_diag("[1] eglInit start win=%p %dx%d map=%d", (void *)target_win, ww, wh, with_carplay_map);
+        /* 优先分配 4 个窗口渲染缓冲（V23_WIN_BUFFERS=4），避免双缓冲下 displaymanager 异步扫描 LVDS2 时被 glClear 追尾产生白横条纹 */
+        for (int want_nb = V23_WIN_BUFFERS; want_nb >= 2; want_nb--) {
+            int brc;
+            do { brc = screen_create_window_buffers(own_win, want_nb); } while (brc < 0 && errno == EINTR);
+            if (brc == 0) { alloc_win_bufs = want_nb; break; }
+        }
+        if (alloc_win_bufs < 2) {
+            v23_diag("v23: screen_create_window_buffers failed errno=%d", errno);
+            screen_destroy_window(own_win);
+            screen_destroy_context(own_ctx);
+            return 12;
+        }
+    }
+    target_win = own_win;
+
+    v23_diag("[1] eglInit start own_ctx=%p own_win=%p %dx%d win_bufs=%d map=%d",
+             (void *)own_ctx, (void *)target_win, ww, wh, alloc_win_bufs, with_carplay_map);
     EGLDisplay edpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (edpy == EGL_NO_DISPLAY || !eglInitialize(edpy, NULL, NULL)) {
         v23_diag("[1] eglInitialize failed err=0x%x", eglGetError());
+        screen_destroy_window(own_win); screen_destroy_context(own_ctx);
         return 13;
     }
     eglBindAPI(EGL_OPENGL_ES_API);
@@ -1574,12 +1652,14 @@ static int v23_run_gl_loop(int with_carplay_map) {
     EGLConfig ecfg; EGLint ncfg = 0;
     if (!eglChooseConfig(edpy, cfg_attr, &ecfg, 1, &ncfg) || ncfg < 1) {
         v23_diag("[2] eglChooseConfig failed ncfg=%d err=0x%x", (int)ncfg, eglGetError());
+        eglTerminate(edpy); screen_destroy_window(own_win); screen_destroy_context(own_ctx);
         return 14;
     }
     v23_diag("[2] eglChooseConfig ok ncfg=%d", (int)ncfg);
     EGLSurface esurf = eglCreateWindowSurface(edpy, ecfg, (EGLNativeWindowType)target_win, NULL);
     if (esurf == EGL_NO_SURFACE) {
         v23_diag("[3] eglCreateWindowSurface failed err=0x%x", eglGetError());
+        eglTerminate(edpy); screen_destroy_window(own_win); screen_destroy_context(own_ctx);
         return 15;
     }
     v23_diag("[3] eglCreateWindowSurface ok");
@@ -1587,6 +1667,9 @@ static int v23_run_gl_loop(int with_carplay_map) {
     EGLContext ectx = eglCreateContext(edpy, ecfg, EGL_NO_CONTEXT, ctx_attr);
     if (ectx == EGL_NO_CONTEXT || !eglMakeCurrent(edpy, esurf, esurf, ectx)) {
         v23_diag("[4] eglMakeCurrent failed ctx=%p err=0x%x", (void *)ectx, eglGetError());
+        if (ectx != EGL_NO_CONTEXT) eglDestroyContext(edpy, ectx);
+        eglDestroySurface(edpy, esurf); eglTerminate(edpy);
+        screen_destroy_window(own_win); screen_destroy_context(own_ctx);
         return 16;
     }
     eglSwapInterval(edpy, 1); /* 锁 60fps 垂直同步 */
@@ -1614,9 +1697,13 @@ static int v23_run_gl_loop(int with_carplay_map) {
     gc->edpy = edpy;
     gc->win_w = ww;
     gc->win_h = wh;
+    gc->win_bufs = alloc_win_bufs;
     gc->map_has_stream = with_carplay_map;
     gc->map_w = with_carplay_map ? g_v23_map.width : ww;
     gc->map_h = with_carplay_map ? g_v23_map.height : wh;
+    /* 初始绑定在显槽 front_idx (2)，绝不默认落在解码线程首帧正在写入的 free_idx (0) */
+    gc->map_active_slot = g_v23_map.front_idx;
+    gc->map_ever_flipped = 0;
 
     char sh_err[256];
     gc->prog_solid  = v23_compile_prog(v23_vs_solid, v23_fs_solid, sh_err, sizeof(sh_err));
@@ -1639,14 +1726,14 @@ static int v23_run_gl_loop(int with_carplay_map) {
     v23_atlas_init(&gc->atlas);
     v23_diag("[7] atlas ok tex=%u", gc->atlas.tex);
 
-    /* 初始化 CarPlay 地图纹理：默认启用实车验通的 EGLImage 零拷贝（55~59fps），不兼容自动降级 glTexSubImage2D */
+    /* 初始化 CarPlay 地图四槽纹理：默认启用实车验通的 EGLImage 零拷贝（60fps），不兼容自动降级 glTexSubImage2D */
     if (with_carplay_map && g_v23_map.initialized) {
         int zc_ok = 0;
         int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0);
         if (want_zc && v23gl.EglCreateImageKHR && v23gl.GlEGLImageTargetTex2D) {
             zc_ok = 1;
-            gl_GenTextures(3, gc->map_tex);
-            for (int i = 0; i < 3; i++) {
+            gl_GenTextures(V23_MAP_SLOTS, gc->map_tex);
+            for (int i = 0; i < V23_MAP_SLOTS; i++) {
                 gc->map_egl_img[i] = v23gl.EglCreateImageKHR(edpy, EGL_NO_CONTEXT, EGL_NATIVE_PIXMAP_KHR,
                                                              (EGLClientBuffer)g_v23_map.pix[i], NULL);
                 if (!gc->map_egl_img[i]) { zc_ok = 0; break; }
@@ -1657,13 +1744,14 @@ static int v23_run_gl_loop(int with_carplay_map) {
                 gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
                 v23gl.GlEGLImageTargetTex2D(GL_TEXTURE_2D, gc->map_egl_img[i]);
             }
+            gc->cur_tex0 = 0;
         }
         if (zc_ok) {
             gc->map_zero_copy = 1;
-            v23_diag("[8] map_tex EGL_KHR_image_pixmap ZERO-COPY active");
+            v23_diag("[8] map_tex EGL_KHR_image_pixmap ZERO-COPY active (slots=%d)", V23_MAP_SLOTS);
         } else {
             gc->map_zero_copy = 0;
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < V23_MAP_SLOTS; i++) {
                 if (gc->map_egl_img[i] && v23gl.EglDestroyImageKHR) {
                     v23gl.EglDestroyImageKHR(edpy, gc->map_egl_img[i]);
                     gc->map_egl_img[i] = NULL;
@@ -1714,7 +1802,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
 
     gl_GenTextures(1, &gc->nav_tex);
     gc->nav_w = g_nav_w > 0 ? g_nav_w : 295;
-    gc->nav_h = g_nav_h > 0 ? g_nav_h : 344;
+    gc->nav_h = g_nav_h > 0 ? g_nav_h : 308;
     gl_BindTexture(GL_TEXTURE_2D, gc->nav_tex);
     gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     gl_TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1765,6 +1853,9 @@ static int v23_run_gl_loop(int with_carplay_map) {
     uint64_t t_start = v23_now_us(), t_prev = t_start;
     uint64_t last_hot_ms = 0, last_dash_ms = 0, last_fps_us = t_start, last_stat_ms = 0;
     int fps_frames = 0, fps_map_frames = 0, meas_fps = 60, meas_map_fps = with_carplay_map ? 20 : 0;
+    uint32_t swaps_since_flip = 0;
+    uint64_t last_flip_us = 0;
+    uint64_t next_frame_us = t_start + 16667ULL;
 
     while (!g_v23_stop) {
         if (access("/tmp/vwcn_user_native", F_OK) == 0) {
@@ -1897,23 +1988,39 @@ static int v23_run_gl_loop(int with_carplay_map) {
             }
         }
 
-        /* 2. 交换最新 CarPlay 地图三缓冲槽位（仅新帧到达时更新，~20fps） */
+        /* 2. 四槽单向退役轮转 CarPlay 地图纹理（retired <- front <- ready <- old_retired）：
+         *    仅当 ready_idx 有新帧且距离上一次纹理切换已至少完成 1 次完整 eglSwapBuffers 且满 15.5ms 时才轮转，
+         *    确保刚退进 retired_idx 的旧纹理绝不会在 Tegra 3D GPU 异步光栅化尚未排空时被解码线程提前覆写。 */
         int cur_night = 1;
         if (with_carplay_map && g_v23_map.initialized) {
             pthread_mutex_lock(&g_v23_map.mx);
-            uint32_t seq = g_v23_map.seq;
             cur_night = g_v23_map.auto_night;
-            if (seq != gc->map_last_seq) {
-                int old_front = g_v23_map.front_idx;
-                g_v23_map.front_idx = g_v23_map.ready_idx;
-                g_v23_map.ready_idx = old_front;
-                gc->map_active_slot = g_v23_map.front_idx;
-                gc->map_last_seq = seq;
+            if (g_v23_map.has_fresh &&
+                (!gc->map_ever_flipped || (swaps_since_flip >= 1u && (t_now - last_flip_us) >= 15500ULL))) {
+                uint32_t seq = g_v23_map.seq;
+                int old_retired = g_v23_map.retired_idx;
+                g_v23_map.retired_idx = g_v23_map.front_idx;
+                g_v23_map.front_idx   = g_v23_map.ready_idx;
+                g_v23_map.ready_idx   = old_retired;
+                g_v23_map.has_fresh   = 0;
+                gc->map_active_slot   = g_v23_map.front_idx;
+                gc->map_last_seq      = seq;
+                gc->map_ever_flipped  = 1;
+                swaps_since_flip      = 0;
+                last_flip_us          = t_now;
                 fps_map_frames++;
                 pthread_mutex_unlock(&g_v23_map.mx);
 
                 int sl = gc->map_active_slot;
-                if (!gc->map_zero_copy && g_v23_map.ptr[sl]) {
+                if (gc->map_zero_copy) {
+                    /* 通知 Tegra GLES2 驱动外部 EGLImage 已被 VIC 2D 引擎更新，强制失效 GPU L2 纹理缓存 */
+                    if (gc->map_tex[sl] && gc->map_egl_img[sl] && v23gl.GlEGLImageTargetTex2D) {
+                        gl_ActiveTexture(GL_TEXTURE0);
+                        gl_BindTexture(GL_TEXTURE_2D, gc->map_tex[sl]);
+                        gc->cur_tex0 = gc->map_tex[sl];
+                        v23gl.GlEGLImageTargetTex2D(GL_TEXTURE_2D, gc->map_egl_img[sl]);
+                    }
+                } else if (g_v23_map.ptr[sl]) {
                     const uint8_t *src_px = g_v23_map.ptr[sl];
                     int st = g_v23_map.stride[sl];
                     int row_bytes = gc->map_w * 4;
@@ -2010,9 +2117,22 @@ static int v23_run_gl_loop(int with_carplay_map) {
             v23_sandbox_render_frame(fb_sb, &gc->cur_bus, NULL, NULL);
         }
 
-        /* 6. 叠画顶部安全提示横幅并 60fps VSync 送显 */
+        /* 6. 叠画顶部安全提示横幅并按 16667us 单调绝对网格精准锁 60fps 送显
+         *    （4 缓冲下 libEGL 不阻塞 VSync，扣除 1000us QNX 1ms 时钟向上取整余量避免掉帧至 53fps，慢帧自动重对齐不飙帧） */
         v23_draw_banner(gc, t_now);
         eglSwapBuffers(edpy, esurf);
+        if (swaps_since_flip < 1000000u) swaps_since_flip++;
+        {
+            uint64_t t_after = v23_now_us();
+            if (t_after + 1100ULL < next_frame_us) {
+                usleep((useconds_t)(next_frame_us - t_after - 1000ULL));
+            }
+            next_frame_us += 16667ULL;
+            t_after = v23_now_us();
+            if (next_frame_us < t_after || next_frame_us > t_after + 33334ULL) {
+                next_frame_us = t_after + 16667ULL;
+            }
+        }
 
         if (!ready_written) {
             ready_written = 1;
@@ -2023,8 +2143,10 @@ static int v23_run_gl_loop(int with_carplay_map) {
                 (void)write(rfd, rb, (size_t)rl);
                 close(rfd);
             }
-            v23_diag("[11] first eglSwapBuffers ok -> cl_render_ready written (%dx%d map=%d zc=%d)",
-                     ww, wh, with_carplay_map, gc->map_zero_copy);
+            /* 首帧就绪后关闭常规帧流水日志（仅保留 rdbg_err 异常配额），将稳态 /tmp RAMFS 写入降为 0 */
+            g_rdbg = 0;
+            v23_diag("[11] first eglSwapBuffers ok -> cl_render_ready written (%dx%d win_bufs=%d slots=%d map=%d zc=%d)",
+                     ww, wh, alloc_win_bufs, V23_MAP_SLOTS, with_carplay_map, gc->map_zero_copy);
         }
 
         fps_frames++;
@@ -2044,7 +2166,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
     if (using_user) v23_sandbox_destroy(user_sb);
     v23_sandbox_destroy(fb_sb);
     if (boot_sentinel_active) unlink("/tmp/v23_theme_loading");
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < V23_MAP_SLOTS; i++) {
         if (gc->map_egl_img[i] && v23gl.EglDestroyImageKHR) v23gl.EglDestroyImageKHR(edpy, gc->map_egl_img[i]);
     }
     free(gc->map_tight_buf);

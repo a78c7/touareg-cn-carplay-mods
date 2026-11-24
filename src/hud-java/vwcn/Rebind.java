@@ -63,10 +63,16 @@ public final class Rebind implements Runnable {
     static volatile long lastAssertAt;
     static int ctxLogCnt;
 
-    private static boolean sameIds(int[] a, int[] b) {
-        if (a == null || b == null || a.length != b.length) return false;
-        for (int i = 0; i < a.length; i++) {
-            if (a[i] != b[i]) return false;
+    /** 判断目标顶层窗口列表（如 [58,33]）在 Display 4 上是否仍然在位：
+     *  在 P2869 等固件上，当底层原车地图 33 处于不可见状态时，showDisplayablesResult 会仅回报可见前缀 [58]。
+     *  此时顶层窗口 58 实际稳居第一顺位并未被抢屏；若按整数组严格相等比对会引发 500ms (2Hz) 无限重刷闪屏（#14）。
+     *  只要实际列表非空、长度不超过目标且所有元素与目标前缀逐位一致（即 [58,33] 或 [58]），即视为在位正常；
+     *  一旦顶层被切为 [33]、[]、[33,58] 或其他窗口则立即返回 false 触发 <=100ms 恢复。 */
+    private static boolean isActivePrefix(int[] actual, int[] target) {
+        if (target == null || target.length == 0) return actual == null || actual.length == 0;
+        if (actual == null || actual.length == 0 || actual.length > target.length) return false;
+        for (int i = 0; i < actual.length; i++) {
+            if (actual[i] != target[i]) return false;
         }
         return true;
     }
@@ -99,7 +105,7 @@ public final class Rebind implements Runnable {
                                     Log.log("rebind: DSI display 4 watcher confirmed active " + list(ids));
                                 }
                                 int[] h = hold;
-                                if (h != null && !sameIds(ids, h)) {
+                                if (h != null && !isActivePrefix(ids, h)) {
                                     lastSeenCluster = list(ids);
                                     restoreNeeded = true;
                                 }

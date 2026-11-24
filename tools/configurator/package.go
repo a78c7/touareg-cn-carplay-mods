@@ -127,7 +127,7 @@ func defaultDash() dashConf {
 		Smooth:   true,
 		Items:    []string{"power", "torque", "g", "rpm", "oil", "gearbox"},
 		X:        5,
-		Y:        164,
+		Y:        200,
 		Alpha:    200,
 		TankL:    90,
 		RItems:   []string{},
@@ -317,6 +317,9 @@ func (p pkg) readDash() (dashConf, bool) {
 			}
 		case "y", "info_y":
 			if nerr == nil {
+				if n == 164 || n == 172 {
+					n = 200
+				}
 				d.Y = n
 			}
 		case "alpha", "info_alpha":
@@ -422,9 +425,13 @@ func (p pkg) writeDash(d dashConf) error {
 	text := strings.ReplaceAll(string(b), "\r\n", "\n")
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	for _, line := range lines {
-		k, _, ok := confKV(line)
+		k, val, ok := confKV(line)
 		if ok {
 			if obsolete[k] {
+				continue
+			}
+			if k == "r_y" && (strings.TrimSpace(val) == "164" || strings.TrimSpace(val) == "172") {
+				out = append(out, "r_y=200")
 				continue
 			}
 			if a, isA := aliases[k]; isA {

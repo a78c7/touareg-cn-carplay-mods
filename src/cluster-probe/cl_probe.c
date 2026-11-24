@@ -570,7 +570,13 @@ static void *rx_thread(void *arg) {
                     if (!wait_idr) { wait_idr = 1; wait_since_ms = nm; plog("rx: frame dropped -> holding the picture until a key frame"); }
                 }
                 if (wait_idr && !isidr && nm - kf_req_ms >= 2000) { kf_req_ms = nm; send_cmd("forceKeyFrame", NULL); }
-                else if (!wait_idr && nm - last_idr_ms >= 30000 && nm - kf_req_ms >= 30000) { kf_req_ms = nm; send_cmd("forceKeyFrame", NULL); }
+                /* v23.4: 兼顾 cl_render 热重启 GOP 秒开缓存（上限 8MB）与行车稳态零打扰：
+                 * 无丢包时不再死板每 30s 强发 forceKeyFrame（消除高码率叠加周期 IDR 引起的单帧微掉帧），
+                 * 改为当 g_gop 缓存达 6MB 水位（或失效）时按 >=30s 间隔刷新，静止/低码率放宽至 180s 兜底。 */
+                else if (!wait_idr && (!g_gop_valid || g_gopn >= (6u << 20) || nm - last_idr_ms >= 180000) && nm - kf_req_ms >= 30000) {
+                    kf_req_ms = nm;
+                    send_cmd("forceKeyFrame", NULL);
+                }
                 if (!good) continue;
                 if (wait_idr && !isidr) continue;          /* P frames without their reference: do not decode */
                 if (wait_idr) { wait_idr = 0; plog("rx: key frame after %lld ms, picture resumes", nm - wait_since_ms); }

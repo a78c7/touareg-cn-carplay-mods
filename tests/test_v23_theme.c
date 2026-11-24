@@ -132,8 +132,8 @@ int main(void) {
             "  ctx.biBar(400,540,300,10,-0.4,{});\n"
             "  ctx.rangeBar(400,560,300,10,0.6,{tickLo:0.3,tickHi:0.8});\n"
             "  ctx.text('途锐 ' + bus.speed.toFixed(0), 960, 340, {size:48,bold:true,align:'center'});\n"
-            "  ctx.drawDashBox(5,164,295,'left');\n"
-            "  ctx.drawNavCard(1620,164,295,344,{alpha:200});\n"
+            "  ctx.drawDashBox(5,200,295,'left');\n"
+            "  ctx.drawNavCard(1620,200,295,308,{alpha:200});\n"
             "  ctx.drawTurnArrow(900,200,48,bus.nav.turnType,{color:'#fff'});\n"
             "}\n";
         v23_bus_t bus = make_bus(1, 0);

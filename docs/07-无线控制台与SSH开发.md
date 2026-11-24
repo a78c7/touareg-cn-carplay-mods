@@ -103,7 +103,7 @@
 2. **eMMC 寿命红线（禁止高频写闪存）**：`/mnt/app`、`/mnt/ota`、`/mnt/system` 均为车规 eMMC 闪存。**绝对不要**把每秒数次的传感器数据、心跳计数或状态缓存写进 `/mnt/app`（必须放 `/tmp` 内存盘）；`/mnt/app` 平时始终保持只读挂载，仅在保存配置或 OTA 时短暂 `mount -uw`，用 `.new` + `fsync` + `mv` 原子替换后立即 `sync && mount -ur /mnt/app`。
 3. **锁车休眠与电瓶寄生耗电**：熄火锁车后 MH2p 主机随整车 CAN 总线休眠彻底断电，本仓库所有后台服务均随主机一同停止，**不会产生锁车静态寄生耗电**；开发新功能时严禁尝试阻止车机电源管理（`ooc`）休眠。
 4. **渲染架构与帧率边界（CPU 软渲 vs OpenGL ES 2.0 硬件加速）**：
-   - `cl_render` 默认的 **`capture=h264`** 模式采用 **Tegra K1 NVDEC 硬解 + QNX `screen_blit` 硬件合成**，`dash.c` 仅在 CPU 上绘制两侧 `295×344` 小框。这套架构显示数字与轻量运动条极稳，配合 `v22.0` 的 `10Hz` 采样 + `smooth=1` 指数阻尼插值已足够跟手；**但千万不要让 AI 在 `dash.c` 里用 CPU 循环做全屏 `1920×639` 逐像素动画或高频大面积重绘**，否则必然掉帧发卡！
+   - `cl_render` 默认的 **`capture=h264`** 模式采用 **Tegra K1 NVDEC 硬解 + QNX `screen_blit` 硬件合成**，`dash.c` 仅在 CPU 上绘制两侧 `295×308` 小框。这套架构显示数字与轻量运动条极稳，配合 `v22.0` 的 `10Hz` 采样 + `smooth=1` 指数阻尼插值已足够跟手；**但千万不要让 AI 在 `dash.c` 里用 CPU 循环做全屏 `1920×639` 逐像素动画或高频大面积重绘**，否则必然掉帧发卡！
    - 若要实现 **全屏 60fps 仪表指针、弧形转速表、发光渐变、同屏 CarPlay 地图或自定义动效主题**，优先使用 `v23.0` 正式的单画布 OpenGL ES 2.0 + QuickJS 零拷贝引擎 **`src/cl_render/v23_gles.c`**（启用 `v23_mode`，实车 55–59 fps，详见 `docs/reference/CLUSTER_LAYOUT_SPEC.md`）；若需纯 C 独立渲染通道，也可参考 `v22.0` 新增的 **`src/cl_render/gles60.c`**（运行参数 `capture=gles60`，同一窗口 `58`，以 `eglSwapInterval(dpy, 1)` 锁死硬件 VSync 60fps，并用 `eglGetProcAddress` 动态解析 `gl*` 符号、绝不直接链接 `-lGLESv2`）。
 5. **先本地回放预览，再上车验证**：修改信息框布局或动画参数前，先在电脑双击打开 [`tools/preview/index.html`](../tools/preview/index.html)，拖入真实 `drive_logs/*.csv` 或切换内置场景实时预览，确认观感与帧率后再上车部署，并欢迎把满意的 `dash.conf` 与截图发到仓库 **GitHub Discussions** 共享给车友。
 

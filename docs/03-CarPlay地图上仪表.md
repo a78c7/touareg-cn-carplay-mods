@@ -111,6 +111,8 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
 
 ## 14. 已知限制
 
+- **高德客户端机型与系统门槛**：高德地图要求 **iPhone 12 及以上机型 + iOS 17.4 及以上系统**（并更新高德版本）才会向 CarPlay 第二屏输出视频流（`stream 111`）；旧机型或低版本 iOS 下仅中控第一屏（`stream 110`）正常，仪表不出图（苹果地图自 `iOS 15.4+` 起即支持第二屏，见 [#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)）。
+- **第三方无线 CarPlay 转换盒（U2W）限制**：绝大多数外插有线转无线盒子未透传 `/info` 双屏声明与 `altScreen` 第二路视频流，插盒连接只能投中控第一屏、无法投仪表第二屏（见 [#11](https://github.com/a78c7/touareg-cn-carplay-mods/issues/11)）；直接使用原车有线或解锁后的车机原生无线 CarPlay 即可。
 - 仪表画面内容由手机 App 决定。高德的"全览"按钮会把中控和仪表的全览状态对调（高德自身的问题）。
 - 高德的 `suggestUI` 不给 url，仪表场景由 App 自绘；车机只能 `showUI` + `changeMapZoomLevel`（以屏幕中心缩放），不能"回到车位置"。
 - 高德车标识别偶尔会失败，此时保持当前画面位置。百度巡航时车标位置不受控制。
@@ -134,8 +136,10 @@ clusterd：有流就拉起 cl_render、通知 Java 插件切仪表列表；断�
   ```sh
   CL_DISPID=58 cl_render capture=h264 xres=1920 yres=639 mode=stretch
   ```
-- **`v23.0` 正式单画布 60fps OpenGL ES 2.0 + QuickJS 皮肤引擎（`src/cl_render/v23_gles.c`，启用 `v23_mode` 标记后自动接管）**：
-  - 仍复用窗口 `58`（`[58, 33]`），NVDEC 硬解 CarPlay 实时地图流经 `screen_blit` 写入离屏 RGBX8888 表面并默认通过 `EGL_KHR_image_pixmap` 硬件零拷贝绑定为 GLES2 纹理（不兼容时自动退回 `glTexSubImage2D`），上层矢量仪表、指针、导航卡与文字在 Tegra K1 GPU 上以实车 **55–59 fps** 合成；复用车机原厂 TTF 字体（`ZYHei_GB18030_c.ttf` + `VWTextCarUI-Bold.ttf`）动态光栅化图集，受 QuickJS 沙盒 + 三层自动保险丝保护；坐标规范见 [`docs/reference/CLUSTER_LAYOUT_SPEC.md`](reference/CLUSTER_LAYOUT_SPEC.md)。
+- **`v23.0` / `v23.4` 正式单画布 60fps OpenGL ES 2.0 + QuickJS 皮肤引擎（`src/cl_render/v23_gles.c`，启用 `v23_mode` 标记后自动接管）**：
+  - 仍复用窗口 `58`（`[58, 33]`），NVDEC 硬解 CarPlay 实时地图流经 `screen_blit` 写入离屏 RGBX8888 表面并默认通过 `EGL_KHR_image_pixmap` 硬件零拷贝绑定为 GLES2 纹理（不兼容时自动退回 `glTexSubImage2D`），上层矢量仪表、指针、导航卡与文字在 Tegra K1 GPU 上以实车 **58–60 fps** 合成；复用车机原厂 TTF 字体（`ZYHei_GB18030_c.ttf` + `VWTextCarUI-Bold.ttf`）动态光栅化图集，受 QuickJS 沙盒 + 三层自动保险丝保护；坐标规范见 [`docs/reference/CLUSTER_LAYOUT_SPEC.md`](reference/CLUSTER_LAYOUT_SPEC.md)。
+  - **`v23.4` 跨线程 `screen_context_t` 物理隔离与 4 槽零拷贝同步**：QNX 6.6 `libscreen` 的 `screen_context_t` 命令环并非线程安全。`v23.4` 将 GL 渲染线程改为自建独立 `own_ctx` + `4` 缓冲窗口 `own_win`（解码主线程独占 `g_dec.scr_ctx`，双线程命令队列零共享），将零拷贝离屏桥从 3 槽升至 **4 槽（`free / ready / front / retired`）** 并在退下纹理槽满足 `>=1` 次完整 `eglSwapBuffers` 且 `>=15.5 ms` 后才归还重写，同时在切槽时重绑 `glEGLImageTargetTexture2DOES` 失效 Tegra L2 纹理缓存、强制 YV12 `2×2` 偶数裁剪边界并配合 `16,667 us` 单调时钟网格稳帧，彻底消除偶发 ~0.1s 扫描线白横条纹与 UV 红块。
+  - **多固件 `DSIDisplayManagementListener` 前缀在位守卫（`Rebind.java`）与 GOP 水位关键帧（`cl_probe.c`）**：在 `P2869` 等固件上，底层原车地图 `33` 不可见时 `showDisplayablesResult(4, ...)` 仅回报可见前缀 `[58]`；`Rebind.isActivePrefix()` 将非空前缀匹配视为顶层 `58` 在位，消除 `[58] != [58, 33]` 引起的 `2 Hz` 周期重刷闪屏（[#14](https://github.com/a78c7/touareg-cn-carplay-mods/issues/14)）。`cl_probe.so` 在无丢包稳态下改为按 `g_gop >= 6 MB` 水位（或 `180 s` 兜底）请求 `forceKeyFrame`，兼顾 `8 MB` 热重启秒开缓存与高码率零打扰。
 - **独立 60fps OpenGL ES 2.0 纯 C 通道（`v22.0` 新增，`gles60.c`，由 `8080` 控制台 `gles60_mode` 切换）**：
   ```sh
   CL_DISPID=58 cl_render capture=gles60 xres=1920 yres=639

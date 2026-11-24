@@ -1,17 +1,24 @@
 #!/bin/ksh
-# Undo full-screen CarPlay: viewhandler.zip from this drive's backup (exact original) if present, otherwise the
-# same byte patch is reverted on the car (vhpatch revert) - so any copy of the package can uninstall.
-# info.txt: backup if present, otherwise the two values are changed back in place.
+# Undo full-screen CarPlay: viewhandler.zip from this drive's per-firmware backup if present, otherwise the
+# same patch is reverted in place on the car (vhpatch revert) - so any copy of the package can uninstall
+# safely without mixing backups across different firmware versions.
+# info.txt: per-firmware backup if present, otherwise the two values are changed back in place.
+echo "firmware: $RELEASE_VERSION"
 [[ ! -e "/mnt/app/eso" ]] && mount -t qnx6 /dev/mnanda0t177.1 /mnt/app
 mount -uw /mnt/app
 . $MOD_PATH/common.sh
 vh_setup || { echo "vhpatch cannot run on this unit, viewhandler.zip not touched"; VP=; }
 mkdir -p $MOD_PATH/backup
+BK_VH=$MOD_PATH/backup/viewhandler_${RELEASE_VERSION}.zip
+BK_INFO=$MOD_PATH/backup/info_${RELEASE_VERSION}.txt
 if [ -n "$VP" ]; then
     ST=$(vh_state $VH)
     echo "skin3 viewhandler.zip: $ST"
+    $VP probe $VH $P 2>&1 || true
     if [ "$ST" = "patched" ]; then
-        if [ "$(vh_state $MOD_PATH/backup/viewhandler.zip)" = "stock" ]; then
+        if [ -n "$RELEASE_VERSION" ] && [ -f "$BK_VH" ] && [ "$(vh_state $BK_VH)" = "stock" ]; then
+            cp -v $BK_VH $VH
+        elif [ "$RELEASE_VERSION" = "MH2p_CN_VWG36_P2878" ] && [ -f "$MOD_PATH/backup/viewhandler.zip" ] && [ "$(vh_state $MOD_PATH/backup/viewhandler.zip)" = "stock" ]; then
             cp -v $MOD_PATH/backup/viewhandler.zip $VH
         else
             rm -f $MOD_PATH/backup/viewhandler.rev.zip
@@ -32,9 +39,12 @@ if [ -n "$VP" ]; then
     fi
     vh_cleanup
 fi
-if grep -q "Carplay.Canvas_Dimension.width=1152" $MOD_PATH/backup/info.txt 2>/dev/null && grep -q "width=1673" $INFO; then
-    cp -v $MOD_PATH/backup/info.txt $INFO
+if [ -n "$RELEASE_VERSION" ] && [ -f "$BK_INFO" ] && grep -q "Carplay.Canvas_Dimension.width=1152" $BK_INFO 2>/dev/null && grep -q "width=1673" $INFO; then
+    cp -v $BK_INFO $INFO
     echo "info.txt restored from backup:"; grep Carplay $INFO
+elif [ "$RELEASE_VERSION" = "MH2p_CN_VWG36_P2878" ] && grep -q "Carplay.Canvas_Dimension.width=1152" $MOD_PATH/backup/info.txt 2>/dev/null && grep -q "width=1673" $INFO; then
+    cp -v $MOD_PATH/backup/info.txt $INFO
+    echo "info.txt restored from legacy P2878 backup:"; grep Carplay $INFO
 elif grep -q "Carplay.Canvas_Dimension.width=1673" $INFO; then
     sed -e 's/^Layout.Carplay.Canvas_Dimension.width=1673/Layout.Carplay.Canvas_Dimension.width=1152/' \
         -e 's/^Layout.Carplay.Canvas_Dimension.height=748/Layout.Carplay.Canvas_Dimension.height=592/' $INFO > /tmp/info_stock.txt

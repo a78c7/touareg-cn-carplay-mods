@@ -76,7 +76,7 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 			RShow:    true,
 			RItems:   []string{"tires", "tpfl", "tpfr", "tprl", "tprr", "pitch", "roll", "alt"},
 			X:        5,
-			Y:        164,
+			Y:        200,
 			Alpha:    200,
 			TankL:    90,
 			LatFlip:  0,

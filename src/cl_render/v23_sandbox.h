@@ -221,11 +221,11 @@ static const char V23_DEFAULT_CLASSIC_JS[] =
     "    ctx.text(String(Math.round(bus.speed)), cx, cy + 16, { size: 96, bold: true, color: '#ffffff', align: 'center' });\n"
     "    ctx.text('km/h  ·  ' + bus.gear, cx, cy + 62, { size: 24, bold: true, color: '#38bdf8', align: 'center' });\n"
     "  }\n"
-    "  if (bus.conf.show) ctx.drawDashBox(5, 164, 295, 'left');\n"
+    "  if (bus.conf.show) ctx.drawDashBox(5, 200, 295, 'left');\n"
     "  if (bus.nav.live && bus.conf.nav_box > 0) {\n"
-    "    ctx.drawNavCard(bus.conf.nav_side === 'left' ? 5 : 1620, 164, 295, 344, { alpha: bus.conf.alpha });\n"
+    "    ctx.drawNavCard(bus.conf.nav_side === 'left' ? 5 : 1620, 200, 295, 308, { alpha: bus.conf.alpha });\n"
     "  } else if (bus.conf.r_show) {\n"
-    "    ctx.drawDashBox(1620, 164, 295, 'right');\n"
+    "    ctx.drawDashBox(1620, 200, 295, 'right');\n"
     "  }\n"
     "}\n";
 
@@ -954,7 +954,7 @@ static JSValue v23_fn_dash_box(JSContext *ctx, JSValueConst th, int argc, JSValu
     g->draw_calls++;
     if (g->ops && g->ops->draw_dash_box) {
         float x = v23_arg_f(ctx, argc, argv, 0, 5.0f);
-        float y = v23_arg_f(ctx, argc, argv, 1, 164.0f);
+        float y = v23_arg_f(ctx, argc, argv, 1, 200.0f);
         float w = v23_arg_f(ctx, argc, argv, 2, 295.0f);
         int side = 0;
         if (argc > 3 && JS_IsString(argv[3])) {
@@ -973,9 +973,9 @@ static JSValue v23_fn_nav_card(JSContext *ctx, JSValueConst th, int argc, JSValu
     g->draw_calls++;
     if (g->ops && g->ops->draw_nav_card) {
         float x = v23_arg_f(ctx, argc, argv, 0, 1620.0f);
-        float y = v23_arg_f(ctx, argc, argv, 1, 164.0f);
+        float y = v23_arg_f(ctx, argc, argv, 1, 200.0f);
         float w = v23_arg_f(ctx, argc, argv, 2, 295.0f);
-        float h = v23_arg_f(ctx, argc, argv, 3, 344.0f);
+        float h = v23_arg_f(ctx, argc, argv, 3, 308.0f);
         JSValueConst opt = (argc > 4) ? argv[4] : JS_UNDEFINED;
         int alpha = (int)v23_opt_f(ctx, opt, "alpha", 205.0f);
         g->ops->draw_nav_card(g->ops->user, x, y, w, h, alpha);

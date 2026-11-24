@@ -667,7 +667,7 @@ int g_verbose = 0;
 #include <stdarg.h>
 static int g_rdbg = 1;
 static uint64_t now_us(void);
-static void rdbg_printf(const char *fmt, ...) {
+static void rdbg_write_ex(int is_err, const char *fmt, va_list ap) {
     static int fd = -2;
     if (fd == -2) {
         struct stat st;
@@ -676,11 +676,19 @@ static void rdbg_printf(const char *fmt, ...) {
         if (fd >= 0) { char h[64]; int n = snprintf(h, sizeof h, "=== pid %d\n", (int)getpid()); write(fd, h, n); }
     }
     static int total;
-    if (fd < 0 || total > 48000) return;                         /* a run that never gets its window: keep the start */
+    /* 常规流水上限 48KB 防撑爆 /tmp RAMFS；额外预留 48KB..64KB 专供运行期硬解/送显/溢出异常告警 */
+    int cap = is_err ? 64000 : 48000;
+    if (fd < 0 || total > cap) return;
     char b[320]; int n = snprintf(b, sizeof b, "[%llu] ", (unsigned long long)(now_us() / 1000ULL));
-    va_list ap; va_start(ap, fmt); int m = vsnprintf(b + n, sizeof b - n, fmt, ap); va_end(ap);
+    int m = vsnprintf(b + n, sizeof b - n, fmt, ap);
     if (m > (int)sizeof b - n - 1) m = (int)sizeof b - n - 1;
     if (m > 0) { write(fd, b, n + m); total += n + m; }
+}
+static void rdbg_printf(const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt); rdbg_write_ex(0, fmt, ap); va_end(ap);
+}
+static void rdbg_err(const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt); rdbg_write_ex(1, fmt, ap); va_end(ap);
 }
 #define LOG(...) do { if (g_verbose) printf(__VA_ARGS__); if (g_rdbg) rdbg_printf(__VA_ARGS__); } while(0)
 static volatile int g_wait_idr;
@@ -1659,7 +1667,16 @@ static int setup_screen(int width, int height) {
         return -1;
     }
 
-    /* --- Post window: replicate DINT setup exactly (same as gal's video window) --- */
+    /* --- Post window: replicate DINT setup exactly (same as gal's video window) ---
+     * v23.4 根治跨线程 screen_context_t 并发重入竞态：
+     * QNX libscreen 的 screen_context_t 命令环形队列并非线程安全。当 g_v23_mode==1 时，
+     * 60fps OpenGL ES 2.0 线程若绑定在 g_dec.scr_ctx 创建的 post_win 上调用 eglSwapBuffers，
+     * 会与解码线程的 screen_blit(g_dec.scr_ctx, ...) + cl_flush_blits_idle() 无锁并发写同一上下文
+     * （实车黑匣子 7 分钟捕获 5,911 次碰撞），引发偶发 0.1s 扫描线白横条纹或 UV 色块。
+     * 因此在 v23_mode 下不在 g_dec.scr_ctx 上创建 post_win，改由 GL 线程自建独立 own_ctx + 4 缓冲 own_win。 */
+#ifdef USE_DASH
+    if (!g_v23_mode)
+#endif
     {
         typedef int (*fn_cwt)(screen_window_t*, screen_context_t, int);
         fn_cwt cwt = (fn_cwt)dlsym(RTLD_DEFAULT, "screen_create_window_type");
@@ -1743,89 +1760,63 @@ static int setup_screen(int width, int height) {
         }
     }
     g_post_w = width; g_post_h = height;
-    int win_size[2] = { width, height };
-    int pfmt = SCREEN_FORMAT_RGBX8888;       /* 8 — matches Option A egl_win that bound */
+#ifdef USE_DASH
+    if (g_v23_mode) {
+        LOG("  post_win: skipped on g_dec.scr_ctx in v23_mode (GL thread creates isolated own_ctx + 4-buf own_win %dx%d)\n",
+            width, height);
+    } else
+#endif
+    {
+        int win_size[2] = { width, height };
+        int pfmt = SCREEN_FORMAT_RGBX8888;       /* 8 — matches Option A egl_win that bound */
 #ifdef USE_SCREEN_BLIT
-    /* v3: post_win must accept compositor writes (screen_blit destination)
-     * AND remain a cluster displayable. NATIVE+WRITE for blit dest, OPENGL_ES2
-     * preserved so id_string="33" binding still succeeds.
-     * v23: when g_v23_mode is on, post_win is owned purely by the 60fps EGL/GLES2 thread. */
-    int pusage =
-#ifdef USE_DASH
-        g_v23_mode ? SCREEN_USAGE_OPENGL_ES2 :
-#endif
-        (SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_OPENGL_ES2);
+        /* v3: post_win must accept compositor writes (screen_blit destination)
+         * AND remain a cluster displayable. NATIVE+WRITE for blit dest, OPENGL_ES2
+         * preserved so id_string="33" binding still succeeds. */
+        int pusage = (SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_OPENGL_ES2);
 #else
-    /* OPENGL_ES2 only — keep post_win clean for the NvMedia mixer's HW write
-     * path. Canim is painted by a SEPARATE window (canim_win, created below)
-     * which carries the WRITE flag; post_win never sees a CPU memcpy. */
-    int pusage = SCREEN_USAGE_OPENGL_ES2;
+        /* OPENGL_ES2 only — keep post_win clean for the NvMedia mixer's HW write
+         * path. Canim is painted by a SEPARATE window (canim_win, created below)
+         * which carries the WRITE flag; post_win never sees a CPU memcpy. */
+        int pusage = SCREEN_USAGE_OPENGL_ES2;
 #endif
-    /* In PREPARE stage we create post_win invisible so we don't claim
-     * displayable 33 yet; daemon will flip VISIBLE=1 on resume. After the
-     * first PREPARE→RENDERING flip, VISIBLE stays 1 for the session — pause
-     * just screen_blits canim into the next post_buf and posts it (single
-     * window owns disp 33 throughout, no second-window competition). */
-    int vis = (g_render_stage == STAGE_PREPARE
+        int vis = (g_render_stage == STAGE_PREPARE) ? 0 : 1;
+        int transp = SCREEN_TRANSPARENCY_NONE;
+        screen_set_window_property_iv(g_dec.post_win, 0x28, win_size);   /* SIZE */
+        screen_set_window_property_iv(g_dec.post_win, 0x05, win_size);   /* BUFFER_SIZE = same as SIZE for RGBA */
+        screen_set_window_property_iv(g_dec.post_win, 0x0e, &pfmt);      /* FORMAT=RGBX8888 */
+        screen_set_window_property_iv(g_dec.post_win, 0x30, &pusage);    /* USAGE=OPENGL_ES2 */
+        /* 显式锁定窗口 58 为完全不透明（NONE），杜绝底层原车地图窗口 33 在合成时透底闪出 */
+        screen_set_window_property_iv(g_dec.post_win, SCREEN_PROPERTY_TRANSPARENCY, &transp);
+        int id_rc = screen_set_window_property_cv(g_dec.post_win,
+                                                   SCREEN_PROPERTY_ID_STRING, (int)strlen(cl_disp_id()), cl_disp_id());
+        int vis_rc = screen_set_window_property_iv(g_dec.post_win,
+                                                    SCREEN_PROPERTY_VISIBLE, &vis);
+        screen_flush_context(g_dec.scr_ctx, 0);
+        do {
+            rc = screen_create_window_buffers(g_dec.post_win, MAX_SURFACES);
+        } while (rc < 0 && errno == EINTR);
+        if (rc) {
+            LOG("create post_win buffers failed rc=%d errno=%d\n", rc, errno);
+            sigprocmask(SIG_SETMASK, &old_sig_mask, NULL);
+            return -1;
+        }
+        screen_get_window_property_pv(g_dec.post_win, SCREEN_PROPERTY_RENDER_BUFFERS,
+                                      (void**)g_dec.post_bufs);
 #ifdef USE_DASH
-               && !g_v23_mode
-#endif
-    ) ? 0 : 1;
-    int transp = SCREEN_TRANSPARENCY_NONE;
-    screen_set_window_property_iv(g_dec.post_win, 0x28, win_size);   /* SIZE */
-    screen_set_window_property_iv(g_dec.post_win, 0x05, win_size);   /* BUFFER_SIZE = same as SIZE for RGBA */
-    screen_set_window_property_iv(g_dec.post_win, 0x0e, &pfmt);      /* FORMAT=RGBX8888 */
-    screen_set_window_property_iv(g_dec.post_win, 0x30, &pusage);    /* USAGE=OPENGL_ES2 */
-    /* 显式锁定窗口 58 为完全不透明（NONE），杜绝底层原车地图窗口 33 在合成时透底闪出 */
-    screen_set_window_property_iv(g_dec.post_win, SCREEN_PROPERTY_TRANSPARENCY, &transp);
-    /* OPTION B: post_win IS the cluster displayable. Bind to id_string="33"
-     * and make visible so screen_post_window directly displays YV12 on
-     * cluster (compositor handles YV12→RGB on the display controller).
-     *
-     * NOTE: NO screen_manage_window call — that puts the window into
-     * libdisplayinit's "managed" namespace and seems to bypass the normal
-     * displayable id_string routing. The egl_win that worked under Option A
-     * also did NOT call screen_manage_window. */
-    int id_rc = screen_set_window_property_cv(g_dec.post_win,
-                                               SCREEN_PROPERTY_ID_STRING, (int)strlen(cl_disp_id()), cl_disp_id());
-    int vis_rc = screen_set_window_property_iv(g_dec.post_win,
-                                                SCREEN_PROPERTY_VISIBLE, &vis);
-    /* Flush so property changes are visible to displaymanager BEFORE we
-     * allocate buffers (matches the egl_win pattern). */
-    screen_flush_context(g_dec.scr_ctx, 0);
-    /* Retry on EINTR — see decode_win buffers comment above. */
-    do {
-        rc = screen_create_window_buffers(g_dec.post_win,
-#ifdef USE_DASH
-                                          g_v23_mode ? 2 : MAX_SURFACES
-#else
-                                          MAX_SURFACES
-#endif
-        );
-    } while (rc < 0 && errno == EINTR);
-    if (rc) {
-        LOG("create post_win buffers failed rc=%d errno=%d\n", rc, errno);
-        sigprocmask(SIG_SETMASK, &old_sig_mask, NULL);
-        return -1;
-    }
-    screen_get_window_property_pv(g_dec.post_win, SCREEN_PROPERTY_RENDER_BUFFERS,
-                                  (void**)g_dec.post_bufs);
-#ifdef USE_DASH
-    if (!g_v23_mode) {
         dash_setup(width, height);
-    }
 #endif
-    /* Verify ID_STRING and VISIBLE actually took effect — read back. */
-    char idbuf[16] = {0};
-    int got_vis = 0;
-    screen_get_window_property_cv(g_dec.post_win, SCREEN_PROPERTY_ID_STRING,
-                                   sizeof(idbuf), idbuf);
-    screen_get_window_property_iv(g_dec.post_win, SCREEN_PROPERTY_VISIBLE, &got_vis);
-    LOG("  post_win: %dx%d fmt=%d usage=0x%x set_id_rc=%d set_vis_rc=%d "
-        "got_id=\"%s\" got_visible=%d (n=%d bufs=[%p,%p])\n",
-        width, height, pfmt, pusage,
-        id_rc, vis_rc, idbuf, got_vis, MAX_SURFACES,
-        g_dec.post_bufs[0], g_dec.post_bufs[1]);
+        char idbuf[16] = {0};
+        int got_vis = 0;
+        screen_get_window_property_cv(g_dec.post_win, SCREEN_PROPERTY_ID_STRING,
+                                       sizeof(idbuf), idbuf);
+        screen_get_window_property_iv(g_dec.post_win, SCREEN_PROPERTY_VISIBLE, &got_vis);
+        LOG("  post_win: %dx%d fmt=%d usage=0x%x set_id_rc=%d set_vis_rc=%d "
+            "got_id=\"%s\" got_visible=%d (n=%d bufs=[%p,%p])\n",
+            width, height, pfmt, pusage,
+            id_rc, vis_rc, idbuf, got_vis, MAX_SURFACES,
+            g_dec.post_bufs[0], g_dec.post_bufs[1]);
+    }
 
     /* --- canim_pixmap (upstream Porsche PCM 5 path; unused on Touareg):
      * CPU-writable pixmap holding an optional .canim splash at post_win buffer dimensions. On pause, screen_blit copies it into the
@@ -2206,6 +2197,9 @@ static void cl_translate_h264_pd(const void* parser_pd, void* nv_pic_info_out) {
     }
 }
 
+/* 按硬解目标表面记录最近一次 NvMediaVideoDecoderRender 返回状态，拦截异常解码表面流入 2D Blit */
+static uint8_t g_surf_decode_bad[MAX_SURFACES];
+
 /* DecodePicture: parser prepared picture_info, decode the frame */
 static int cb_decode_picture(void* user, void* pic_info) {
     if (!pic_info || !g_dec.decoder || !nv.DecoderRender) return 1;
@@ -2235,8 +2229,17 @@ static int cb_decode_picture(void* user, void* pic_info) {
     cl_translate_h264_pd(pic_info, nv_pi);
 
     int rc = nv.DecoderRender(g_dec.decoder, target_surface, nv_pi, 1, &bs_desc);
+    for (int i = 0; i < MAX_SURFACES; i++) {
+        if (g_dec.decode_siblings[i] == target_surface) {
+            g_surf_decode_bad[i] = (rc != 0) ? 1u : 0u;
+            break;
+        }
+    }
     g_dec.frames_decoded++;
-    if (g_dec.frames_decoded <= 5 || (g_dec.frames_decoded % 100) == 0) {
+    if (rc != 0) {
+        rdbg_err("DecodePicture ERROR: rc=%d surface=%p frame=%d bs_len=%u\n",
+                 rc, target_surface, g_dec.frames_decoded, bs_desc.nBitstreamDataLen);
+    } else if (g_dec.frames_decoded <= 5 || (g_dec.frames_decoded % 100) == 0) {
         LOG("DecodePicture: rc=%d surface=%p frame=%d bs_len=%u\n",
             rc, target_surface, g_dec.frames_decoded, bs_desc.nBitstreamDataLen);
     }
@@ -2301,10 +2304,10 @@ static void nav_setup(int win_w, int win_h) {
     int w = right > x ? (right - x) : sym_w;
     if (w < 260) w = 260;
     if (w > NAV_MAX_W) w = NAV_MAX_W;
-    int h = 344;
-    if (g_dash_bh[0] >= 320 && g_dash_bh[0] <= 360) h = g_dash_bh[0];
-    else if (g_dash_bh[side] >= 320 && g_dash_bh[side] <= 360) h = g_dash_bh[side];
-    if (h < 320) h = 320;
+    int h = 308;
+    if (g_dash_bh[0] >= 280 && g_dash_bh[0] <= 320) h = g_dash_bh[0];
+    else if (g_dash_bh[side] >= 280 && g_dash_bh[side] <= 320) h = g_dash_bh[side];
+    if (h < 280) h = 280;
     if (h > NAV_MAX_H) h = NAV_MAX_H;
     if (x < 0) x = 0;
     if (x + w > win_w) x = win_w - w;
@@ -2724,7 +2727,7 @@ static void carpos_tick(int didx) {
     /* the band is in canvas pixels around the canvas point under the clock: only for the tall Touareg stream */
     if (g_dec.width < 1920 || !g_post_h || g_dec.height <= g_post_h + 16) { carpos_dbg("not-tall", g_dec.width, g_dec.height); return; }
     if (!g_cp_state) { g_cp_state = carpos_setup(); if (g_cp_state < 0) { carpos_dbg("setup-failed", errno, 0); return; } }
-    int sy = g_crop_top + g_anchor_y - (556 - CARPOS_Y0), sx0 = g_x0 + CARPOS_X0;
+    int sy = (g_crop_top + g_anchor_y - (556 - CARPOS_Y0)) & ~1, sx0 = (g_x0 + CARPOS_X0) & ~1;
     if (sy < 0 || sy + CARPOS_BH > g_dec.height || sx0 + CARPOS_BW > g_dec.width) { carpos_dbg("band-outside", sy, g_dec.height); return; }
     int a[] = {
         SCREEN_BLIT_SOURCE_X, sx0, SCREEN_BLIT_SOURCE_Y, sy,
@@ -2775,8 +2778,8 @@ static int cb_display_picture(void* user, void* disp_info) {
     struct timespec ts0, ts1, ts2, ts3;
     clock_gettime(CLOCK_MONOTONIC, &ts0);
 
-    /* Wait for decoder before mixer reads */
-    if (nv.SurfaceWait) nv.SurfaceWait(yuv_surface, 0);
+    /* Wait for decoder before mixer/blit reads; 与原厂 libairplay.so (0xb8264) 对齐，校验 SurfaceWait 与解码状态 */
+    int sw_rc = nv.SurfaceWait ? nv.SurfaceWait(yuv_surface, 0) : 0;
     clock_gettime(CLOCK_MONOTONIC, &ts1);
 
     int pidx = -1;
@@ -2792,6 +2795,11 @@ static int cb_display_picture(void* user, void* disp_info) {
         if (g_dec.decode_siblings[i] == yuv_surface) { didx = i; break; }
     }
     if (didx < 0) didx = 0;
+    if (sw_rc != 0 || g_surf_decode_bad[didx]) {
+        rdbg_err("DisplayPicture: skip dirty YV12 surface didx=%d sw_rc=%d dec_bad=%u frame=%d\n",
+                 didx, sw_rc, (unsigned)g_surf_decode_bad[didx], g_dec.frames_displayed);
+        return 1;
+    }
     /* Compute src/dst rects from g_h264_args (mode / zoom / pan / xres / yres).
      * Source = visible Y-plane area (g_dec.width × g_dec.height) inside the
      * larger YV12 buffer. Destination = post_win render buffer (xres × yres,
@@ -2860,11 +2868,17 @@ static int cb_display_picture(void* user, void* disp_info) {
         /* pan: shift src origin (positive = image moves left/up) */
         sx += (int)(g_h264_args.panX * (float)sw);
         sy += (int)(g_h264_args.panY * (float)sh);
-        /* clamp src to the visible Y-plane area */
+        /* clamp src to the visible Y-plane area + 强制 YV12 (4:2:0) 2x2 偶数像素边界对齐，
+         * 防止 wide=2688/view=85/pan=214 等产生奇数 sx/sy/sw/sh 导致 Tegra VIC 色度平面错位或偏红 */
         if (sx < 0) sx = 0; if (sy < 0) sy = 0;
+        sx &= ~1;
+        sy &= ~1;
         if (sx + sw > g_dec.width)  sw = g_dec.width  - sx;
         if (sy + sh > g_dec.height) sh = g_dec.height - sy;
-        if (sw < 1) sw = 1; if (sh < 1) sh = 1;
+        sw &= ~1;
+        sh &= ~1;
+        if (sw < 2) sw = (g_dec.width  >= 2) ? 2 : 1;
+        if (sh < 2) sh = (g_dec.height >= 2) ? 2 : 1;
     }
     int blit_attribs[] = {
         SCREEN_BLIT_SOURCE_X,         sx,
@@ -3291,8 +3305,8 @@ int run_h264_mode(int argc, char** argv) {
             uint32_t wp = shm->write_pos;
             __sync_synchronize();
             total = shm->total_bytes;
-            rdbg_printf("ring overrun: %u bytes behind, skipping to the newest data and waiting for a key frame\n",
-                        (unsigned)delta);
+            rdbg_err("ring overrun: %u bytes behind, skipping to the newest data and waiting for a key frame\n",
+                     (unsigned)delta);
             read_pos = wp; last_total = total; g_wait_idr = 1; request_key_frame("overrun");
             continue;
         }
