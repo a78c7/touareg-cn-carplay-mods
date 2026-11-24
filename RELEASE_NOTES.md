@@ -11,7 +11,7 @@
   - 将 `ensure_pf_bcm2()` 从宽泛匹配 `on bcm2` 升级为精确校验 `pass in quick on bcm2 ... port = 8080`（及开启 SSH 时的 `2012`），并按实车 `ifconfig ecm0` 状态自适应轮询 `/etc/pf.ecm0.conf`、`/etc/pf.mlan0.conf` 与 `/etc/pf.conf`，兼容无 4G 模块的同平台 MH2p 车型。
 - **首页大白话瘦身、免升系统防野包提示与社区自制包分享**：
   - 将底层逆向数据、固件演进差异（`P9832`～`P2878`）与排障技术细节统一归档至 `docs/05`、`docs/07` 与 `docs/reference/R3`；三语 `README` 改用通俗直白表述，明确原车 `P` 版免升系统直刷范围并警示切勿自行刷入网传非官方 `2878` 系统包；
-  - 新增 `.github/DISCUSSION_TEMPLATE/show-and-tell.yml` 社区皮肤与模块包 `.zip` 分享表单模板及顶部导航直达入口。
+  - 新增 `.github/DISCUSSION_TEMPLATE/自制包与皮肤分享.yml` 社区皮肤与模块包 `.zip` 分享表单模板及顶部导航直达入口。
 - **车机 QNX 6.6 ARMv7 二进制 & Java 1.4 校验和（全部通过 `DT_HASH+GNU_HASH`、ABI 与 Java `48.0` 校验）**：
   - `VWClusterNav_v6.jar`（`72,460 B`）：`48da5b662a29c55617c06b8579420bcc0ae9edcf49c991f8438ab78b5921cf10`
   - `cl_render`（`1,341,972 B`，与 `v23.1` 一致）：`48e5e0f595c23d4b5f98e1c109cf69576b3625d02d17f3b7d1ea5536b16f3468`
