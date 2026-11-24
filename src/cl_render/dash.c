@@ -48,11 +48,13 @@ typedef struct {
     int bars;      /* 1 = inline sport gauge bars beneath dynamic rows (default), 0 = text only */
     int smooth;    /* v22.0: 1 = exponential damping interpolation on gauge bars (default), 0 = raw step */
     double trip_base; /* odometer reading (km) where the cluster's Trip was last reset; Trip = odometer - this */
+    int acc_r, acc_g, acc_b; /* v23.5: theme accent color (ambient-light match, default #22d3ee) */
+    char accent[12];
 } dash_conf_t;
 
 /* 默认 y=200、max_h=308（y=200..508），永久预留原车顶栏在百度/苹果下发车道指引时撑高至 y≈190 的空间，
  * 上下均与原车边界（y=190 车道底线 / y=518 挡位梯形）保持 10px 对称呼吸缝。 */
-static dash_conf_t g_dash_conf = { 1, 5, 200, 200, 90, 5000, 0, 308, -1, 300, 1, 1, 0 };
+static dash_conf_t g_dash_conf = { 1, 5, 200, 200, 90, 5000, 0, 308, -1, 300, 1, 1, 0, 34, 211, 238, "#22d3ee" };
 
 /* ---- the item catalogue: config key, label (also accepted in items=), unit, sample for column width ---- */
 enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL, IT_BRAKE, IT_STEER, IT_GEAR,
@@ -64,6 +66,8 @@ enum { IT_POWER, IT_TORQUE, IT_G, IT_GLONG, IT_GLAT, IT_RPM, IT_SPEED, IT_PEDAL,
        IT_TRIPKM,                                     /* v19.2: Trip = odometer - trip_base (dash.conf) */
        IT_TIRES, IT_TPFL, IT_TPFR, IT_TPRL, IT_TPRR,  /* v21: 4-wheel & individual tire pressures (bar) */
        IT_PITCH, IT_ROLL, IT_ALT,                     /* v21: offroad pitch/roll angles, GNSS altitude */
+       IT_REALSPEED, IT_YAW, IT_CABIN,                /* v23.5: unscaled speed, yaw rate, cabin temp */
+       IT_WFL, IT_WFR, IT_WRL, IT_WRR, IT_COND,       /* v23.5: 4-wheel speeds & chassis status/warnings */
        IT_N };
 typedef struct { const char *key; const char *label; const char *unit; const char *sample; } dash_item;
 
@@ -111,6 +115,14 @@ static const dash_item g_items[IT_N] = {
     { "pitch",        "俯仰角",         "°",       "-88.8" },
     { "roll",         "侧倾角",         "°",       "-88.8" },
     { "alt",          "海拔",           "m",       "8888" },
+    { "realspeed",    "真实车速",       "km/h",    "888" },
+    { "yaw",          "横摆角速",       "°/s",     "+88.8" },
+    { "cabin",        "车内温度",       "°C",      "88.8" },
+    { "wfl",          "左前轮速",       "km/h",    "888.8" },
+    { "wfr",          "右前轮速",       "km/h",    "888.8" },
+    { "wrl",          "左后轮速",       "km/h",    "888.8" },
+    { "wrr",          "右后轮速",       "km/h",    "888.8" },
+    { "cond",         "底盘工况",       NULL,      "HOT!" },
 };
 static int g_rows[DASH_MAX_ROWS] = { IT_POWER, IT_TORQUE, IT_G, IT_RPM, IT_OIL, IT_GEARBOX };
 static int g_nrows = 6;
@@ -127,6 +139,8 @@ typedef struct {
     int   avgu[3], btime[3];
     int   tpst, alt;
     float tpfl, tpfr, tprl, tprr, pitch, roll;
+    float rspd, yaw, cab, wfl, wfr, wrl, wrr;
+    int   cf, pok, tqok;
 } dash_vals_t;
 
 /* ---- layout (computed once in dash_layout) ---- */
@@ -206,11 +220,44 @@ static void dash_parse_items(const char *v) {
     if (n > 0) g_nrows = n;
 }
 
+static int dash_hex_nibble(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static int dash_parse_accent(const char *s, int *r, int *g, int *b, char out[12]) {
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s == '#') s++;
+    int h[6];
+    for (int i = 0; i < 6; i++) {
+        h[i] = dash_hex_nibble(s[i]);
+        if (h[i] < 0) return 0;
+    }
+    *r = (h[0] << 4) | h[1];
+    *g = (h[2] << 4) | h[3];
+    *b = (h[4] << 4) | h[5];
+    snprintf(out, 12, "#%02x%02x%02x", *r, *g, *b);
+    return 1;
+}
+
 static void dash_read_conf_line1(const char *l) {
     int v;
     while (*l == ' ' || *l == '\t') l++;
     if (*l == '#') return;
     if (!strncmp(l, "items", 5)) { const char *eq = strchr(l, '='); if (eq) dash_parse_items(eq + 1); return; }
+    if (!strncmp(l, "accent", 6)) {
+        const char *eq = strchr(l, '=');
+        if (eq) {
+            int ar, ag, ab; char hex[12];
+            if (dash_parse_accent(eq + 1, &ar, &ag, &ab, hex)) {
+                g_dash_conf.acc_r = ar; g_dash_conf.acc_g = ag; g_dash_conf.acc_b = ab;
+                snprintf(g_dash_conf.accent, sizeof(g_dash_conf.accent), "%s", hex);
+            }
+        }
+        return;
+    }
     if (sscanf(l, "info = %d", &v) == 1 || sscanf(l, "show = %d", &v) == 1) g_dash_conf.enabled = v;
     else if (sscanf(l, "info_x = %d", &v) == 1 || sscanf(l, "x = %d", &v) == 1) g_dash_conf.x = v;
     else if (sscanf(l, "info_y = %d", &v) == 1 || sscanf(l, "y = %d", &v) == 1) {
@@ -240,7 +287,7 @@ static void dash_read_conf_line(const char *l) {
     double dv;
     if (sscanf(l, "tank_l = %d", &v) == 1 || sscanf(l, "lat_flip = %d", &v) == 1 || sscanf(l, "trip_base = %lf", &dv) == 1 ||
         sscanf(l, "alpha = %d", &v) == 1 || sscanf(l, "info_alpha = %d", &v) == 1 ||
-        sscanf(l, "bars = %d", &v) == 1 || sscanf(l, "smooth = %d", &v) == 1) {
+        sscanf(l, "bars = %d", &v) == 1 || sscanf(l, "smooth = %d", &v) == 1 || !strncmp(l, "accent", 6)) {
         dash_use(1 - cur); dash_read_conf_line1(l); dash_use(cur);
     }
 }
@@ -311,8 +358,8 @@ static int dash_item_has_bar(int it) {
     if (!g_dash_conf.bars) return 0;
     switch (it) {
     case IT_RPM: case IT_POWER: case IT_TORQUE: case IT_PEDAL: case IT_BRAKE:
-    case IT_G: case IT_GLONG: case IT_GLAT: case IT_STEER: case IT_PITCH: case IT_ROLL:
-    case IT_OIL: case IT_GEARBOX: case IT_COOLANT: case IT_FUEL:
+    case IT_G: case IT_GLONG: case IT_GLAT: case IT_STEER: case IT_PITCH: case IT_ROLL: case IT_YAW:
+    case IT_OIL: case IT_GEARBOX: case IT_COOLANT: case IT_CABIN: case IT_FUEL:
     case IT_TIRES: case IT_TPFL: case IT_TPFR: case IT_TPRL: case IT_TPRR:
         return 1;
     default:
@@ -373,6 +420,8 @@ static void dash_parse(const char *line, dash_vals_t *o) {
     o->t1 = o->t1r = o->pmx = o->gmx = nanv; o->tqx = -999; o->odo = nanv;
     o->alt = -999; o->tpst = 0;
     o->tpfl = o->tpfr = o->tprl = o->tprr = o->pitch = o->roll = nanv;
+    o->rspd = o->yaw = o->cab = o->wfl = o->wfr = o->wrl = o->wrr = nanv;
+    o->cf = -999; o->pok = -1; o->tqok = -1;
     static const char *BK[3][5] = { { "ca", "au", "td", "ts", "tt" }, { "cr", "cru", "rd", "rs", "rt" },
                                     { "cl", "clu", "ld", "ls", "lt" } };
     const char *s = line;
@@ -420,6 +469,16 @@ static void dash_parse(const char *line, dash_vals_t *o) {
         else if (!strcmp(key, "pitch")) o->pitch = (float)d;
         else if (!strcmp(key, "roll"))  o->roll = (float)d;
         else if (!strcmp(key, "alt"))   o->alt = di;
+        else if (!strcmp(key, "rspd"))  o->rspd = (float)d;
+        else if (!strcmp(key, "yaw"))   o->yaw = (float)d;
+        else if (!strcmp(key, "cab"))   o->cab = (float)d;
+        else if (!strcmp(key, "wfl"))   o->wfl = (float)d;
+        else if (!strcmp(key, "wfr"))   o->wfr = (float)d;
+        else if (!strcmp(key, "wrl"))   o->wrl = (float)d;
+        else if (!strcmp(key, "wrr"))   o->wrr = (float)d;
+        else if (!strcmp(key, "cf"))    o->cf = di;
+        else if (!strcmp(key, "pok"))   o->pok = di;
+        else if (!strcmp(key, "tqok"))  o->tqok = di;
         else {
             for (int m = 0; m < 3; m++) {
                 if      (!strcmp(key, BK[m][0])) o->avg[m] = (float)d;
@@ -471,8 +530,8 @@ static void dash_fill_bg(void) {
             g_dash_px[y * W + x] = dash_px(14, 18, 24, (int)(g_dash_conf.alpha * cov + 0.5f));
         }
     }
-    /* Crisp subtle top & inner edge border like VW Digital Cockpit */
-    for (int x = R; x < W - R; x++) dash_blend_rgb(x, 0, 180, 210, 240, 38);
+    /* Crisp subtle top edge border tinted with user accent color (default #22d3ee) */
+    for (int x = R; x < W - R; x++) dash_blend_rgb(x, 0, g_dash_conf.acc_r, g_dash_conf.acc_g, g_dash_conf.acc_b, 84);
 }
 
 /* Smooth 4-stop dynamic heat color for segmented sport bars:
@@ -573,7 +632,7 @@ static void dash_draw_bipolar_bar(int x0, int y0, int w, int h, float norm_signe
         int lx = cur_x < mid_x ? cur_x : mid_x;
         int rx = cur_x > mid_x ? cur_x : mid_x;
         if (rx > lx) {
-            dash_fill_rect(lx, ty, rx - lx, track_h, 64, 196, 255, 225);
+            dash_fill_rect(lx, ty, rx - lx, track_h, g_dash_conf.acc_r, g_dash_conf.acc_g, g_dash_conf.acc_b, 225);
         }
         /* Bright white/cyan thumb marker */
         dash_fill_rect(cur_x - 2, y0, 5, h, 235, 248, 255, 250);
@@ -608,30 +667,34 @@ static void dash_draw_range_bar(int x0, int y0, int w, int h, float frac, int ha
 }
 
 static void dash_draw_row_bar(int it, const dash_vals_t *v, int x0, int y0, int w, int h) {
+    int ar = g_dash_conf.acc_r, ag = g_dash_conf.acc_g, ab = g_dash_conf.acc_b;
     switch (it) {
     case IT_RPM: {
         float f = (v->rpm > 0) ? ((float)v->rpm / 6500.0f) : 0.0f;
-        dash_draw_seg_bar(x0, y0, w, h, f, 18, 4, 42, 232, 196);
+        dash_draw_seg_bar(x0, y0, w, h, f, 18, 4, ar, ag, ab);
         break;
     }
     case IT_POWER: {
         float f = (!DASH_NAN(v->p) && v->p > 0.0f) ? (v->p / 250.0f) : 0.0f;
-        dash_draw_seg_bar(x0, y0, w, h, f, 18, 3, 56, 212, 255);
+        dash_draw_seg_bar(x0, y0, w, h, f, 18, 3, ar, ag, ab);
         break;
     }
     case IT_TORQUE: {
         float f = (v->tq > 0) ? ((float)v->tq / 450.0f) : 0.0f;
-        dash_draw_seg_bar(x0, y0, w, h, f, 18, 3, 46, 228, 186);
+        dash_draw_seg_bar(x0, y0, w, h, f, 18, 3, ar, ag, ab);
         break;
     }
     case IT_PEDAL: {
-        float f = (v->ped > 0) ? ((float)v->ped / 100.0f) : 0.0f;
-        dash_draw_seg_bar(x0, y0, w, h, f, 18, 2, 64, 204, 255);
+        /* 城市轻油门非线性观感曲线（x^0.75 = sqrt(x)*sqrt(sqrt(x))），数字仍显示真实油门百分比 */
+        float rf = (v->ped > 0) ? ((float)v->ped / 100.0f) : 0.0f;
+        if (rf > 1.0f) rf = 1.0f;
+        float f = (rf > 0.0f) ? (sqrtf(rf) * sqrtf(sqrtf(rf))) : 0.0f;
+        dash_draw_seg_bar(x0, y0, w, h, f, 18, 2, ar, ag, ab);
         break;
     }
     case IT_BRAKE: {
         float f = (!DASH_NAN(v->brk) && v->brk > 0.0f) ? (v->brk / 60.0f) : 0.0f;
-        dash_draw_seg_bar(x0, y0, w, h, f, 18, 4, 64, 204, 255);
+        dash_draw_seg_bar(x0, y0, w, h, f, 18, 4, ar, ag, ab);
         break;
     }
     case IT_G: {
@@ -658,6 +721,18 @@ static void dash_draw_row_bar(int it, const dash_vals_t *v, int x0, int y0, int 
     case IT_ROLL:
         dash_draw_bipolar_bar(x0, y0, w, h, DASH_NAN(v->roll) ? 0.0f : (v->roll / 25.0f), !DASH_NAN(v->roll));
         break;
+    case IT_YAW:
+        dash_draw_bipolar_bar(x0, y0, w, h, DASH_NAN(v->yaw) ? 0.0f : (v->yaw / 30.0f), !DASH_NAN(v->yaw));
+        break;
+    case IT_CABIN: {
+        int ok = !DASH_NAN(v->cab);
+        int r = 68, g = 228, b = 152;
+        if (ok && v->cab < 18.0f)      { r = 72;  g = 192; b = 255; }
+        else if (ok && v->cab >= 28.0f) { r = 255; g = 140; b = 64;  }
+        dash_draw_range_bar(x0, y0, w, h, ok ? ((v->cab - 10.0f) / 25.0f) : 0.0f, ok,
+                            (18.0f - 10.0f) / 25.0f, (26.0f - 10.0f) / 25.0f, r, g, b);
+        break;
+    }
     case IT_OIL: {
         int ok = (v->oil != -999);
         int r = 68, g = 228, b = 152;
@@ -835,9 +910,27 @@ static void dash_item_value(int it, const dash_vals_t *v, char *o, const char **
     case IT_TPFR:    I(DASH_NAN(v->tpfr), "%.1f%s", v->tpfr, (v->tpst & 2) ? "!" : ""); break;
     case IT_TPRL:    I(DASH_NAN(v->tprl), "%.1f%s", v->tprl, (v->tpst & 4) ? "!" : ""); break;
     case IT_TPRR:    I(DASH_NAN(v->tprr), "%.1f%s", v->tprr, (v->tpst & 8) ? "!" : ""); break;
-    case IT_PITCH:   I(DASH_NAN(v->pitch), "%+.1f", v->pitch); break;
-    case IT_ROLL:    I(DASH_NAN(v->roll), "%+.1f", v->roll); break;
-    case IT_ALT:     I(v->alt == -999, "%d", v->alt); break;
+    case IT_PITCH:     I(DASH_NAN(v->pitch), "%+.1f", v->pitch); break;
+    case IT_ROLL:      I(DASH_NAN(v->roll), "%+.1f", v->roll); break;
+    case IT_ALT:       I(v->alt == -999, "%d", v->alt); break;
+    case IT_REALSPEED: I(DASH_NAN(v->rspd), "%d", dash_round(v->rspd)); break;
+    case IT_YAW:       I(DASH_NAN(v->yaw), "%+.1f", v->yaw); break;
+    case IT_CABIN:     I(DASH_NAN(v->cab), "%.1f", v->cab); break;
+    case IT_WFL:       I(DASH_NAN(v->wfl), "%.1f", v->wfl); break;
+    case IT_WFR:       I(DASH_NAN(v->wfr), "%.1f", v->wfr); break;
+    case IT_WRL:       I(DASH_NAN(v->wrl), "%.1f", v->wrl); break;
+    case IT_WRR:       I(DASH_NAN(v->wrr), "%.1f", v->wrr); break;
+    case IT_COND:
+        if (v->cf == -999) snprintf(o, 32, "-");
+        else if (v->cf & ((1 << 6) | (1 << 7) | (1 << 8))) snprintf(o, 32, "HOT!");
+        else if (v->cf & (1 << 3)) snprintf(o, 32, "ESP");
+        else if (v->cf & (1 << 4)) snprintf(o, 32, "EDS");
+        else if (v->cf & (1 << 5)) snprintf(o, 32, "HDC");
+        else if (v->cf & (1 << 0)) snprintf(o, 32, "KD");
+        else if (v->cf & (1 << 1)) snprintf(o, 32, "CST");
+        else if (v->cf & (1 << 2)) snprintf(o, 32, "BRK");
+        else snprintf(o, 32, "OK");
+        break;
     default:
         if (it >= IT_S_AVG && it <= IT_L_TIME) {
             int m = (it - IT_S_AVG) / 4, k = (it - IT_S_AVG) % 4;
@@ -850,11 +943,40 @@ static void dash_item_value(int it, const dash_vals_t *v, char *o, const char **
     #undef I
 }
 
+/* 当本车网关明确不下发功率/扭矩（pok=0 / tqok=0）时，自动原地替补同框尚未显示的实用真数据，避免出现“死 0 格子” */
+static void dash_resolve_rows(const dash_vals_t *v, int out_rows[DASH_MAX_ROWS]) {
+    static const int FB[] = {
+        IT_REALSPEED, IT_PEDAL, IT_CABIN, IT_G, IT_RPM, IT_OIL, IT_COOLANT, IT_SPEED, IT_OUTSIDE, IT_FUEL
+    };
+    int used[IT_N];
+    memset(used, 0, sizeof(used));
+    for (int r = 0; r < g_nrows; r++) {
+        out_rows[r] = g_rows[r];
+        if (g_rows[r] >= 0 && g_rows[r] < IT_N) used[g_rows[r]] = 1;
+    }
+    for (int r = 0; r < g_nrows; r++) {
+        int it = out_rows[r];
+        int dead = ((it == IT_POWER || it == IT_PMAX) && v->pok == 0) ||
+                   ((it == IT_TORQUE || it == IT_TQMAX) && v->tqok == 0);
+        if (!dead) continue;
+        for (size_t k = 0; k < sizeof(FB) / sizeof(FB[0]); k++) {
+            int cand = FB[k];
+            if (!used[cand]) {
+                out_rows[r] = cand;
+                used[cand] = 1;
+                break;
+            }
+        }
+    }
+}
+
 static void dash_render(const dash_vals_t *v) {
     const int C_LAB = 224, C_VAL = 255, C_UNIT = 190;
+    int eff_rows[DASH_MAX_ROWS];
+    dash_resolve_rows(v, eff_rows);
     dash_fill_bg();
     for (int r = 0; r < g_nrows; r++) {
-        int it = g_rows[r];
+        int it = eff_rows[r];
         char val[32]; const char *unit;
         dash_item_value(it, v, val, &unit);
         int top = L_pad_y + r * L_row_h;
@@ -987,6 +1109,7 @@ static int dash_poll(uint64_t now_ms) {
                 g_dash_sm = g_dash_tgt;
                 g_dash_sm.rpm = prev.rpm; g_dash_sm.tq = prev.tq; g_dash_sm.ped = prev.ped; g_dash_sm.str = prev.str;
                 g_dash_sm.p = prev.p; g_dash_sm.brk = prev.brk; g_dash_sm.gx = prev.gx; g_dash_sm.gy = prev.gy;
+                g_dash_sm.rspd = prev.rspd; g_dash_sm.yaw = prev.yaw;
                 int mv = 0;
                 mv |= dash_step_i(&g_dash_sm.rpm, g_dash_tgt.rpm, alpha, 25);
                 mv |= dash_step_i(&g_dash_sm.tq,  g_dash_tgt.tq,  alpha, 4);
@@ -996,6 +1119,8 @@ static int dash_poll(uint64_t now_ms) {
                 mv |= dash_step_f(&g_dash_sm.brk, g_dash_tgt.brk, alpha, 0.4f);
                 mv |= dash_step_f(&g_dash_sm.gx,  g_dash_tgt.gx,  alpha, 0.02f);
                 mv |= dash_step_f(&g_dash_sm.gy,  g_dash_tgt.gy,  alpha, 0.02f);
+                mv |= dash_step_f(&g_dash_sm.rspd, g_dash_tgt.rspd, alpha, 0.3f);
+                mv |= dash_step_f(&g_dash_sm.yaw,  g_dash_tgt.yaw,  alpha, 0.2f);
                 g_dash_animating = mv;
                 if (got_new || mv) { dash_render_all(&g_dash_sm); changed = 1; }
             }

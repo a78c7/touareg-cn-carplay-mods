@@ -20,15 +20,16 @@ def face(style, px):
             raise SystemExit('no SC face in ' + (F % style))
     return _faces[k]
 
-VALUE_CHARS = list('0123456789.-+:!·PRNDSMEB')
+VALUE_CHARS = list('0123456789.-+:!·PRNDSMEBCOHKT')
 LABELS = [
     '功率', '扭矩', 'G 值', '纵向 G', '横向 G', '转速', '车速', '油门', '制动压力', '转向角', '挡位', '变速箱油温',
     '机油温度', '冷却液温度', '车外温度', '当前消耗', '燃油存量', '续驶里程'
 ] + [m + t for m in ('本次', '加油后', '累计') for t in ('油耗', '里程', '均速', '时长')] + [
     '0–100', '最大功率', '最大扭矩', '最大 G 值', 'Trip',
-    '四轮胎压', '左前胎压', '右前胎压', '左后胎压', '右后胎压', '俯仰角', '侧倾角', '海拔'
+    '四轮胎压', '左前胎压', '右前胎压', '左后胎压', '右后胎压', '俯仰角', '侧倾角', '海拔',
+    '真实车速', '横摆角速', '车内温度', '左前轮速', '右前轮速', '左后轮速', '右后轮速', '底盘工况'
 ]
-UNITS = ['kW', 'Nm', 'g', 'rpm', 'km/h', '%', 'bar', '°', '°C', 'L/100km', 'km/L', 'L/h', 'L', 'km', 'm', 'h', 's']
+UNITS = ['kW', 'Nm', 'g', 'rpm', 'km/h', '%', 'bar', '°', '°C', '°/s', 'L/100km', 'km/L', 'L/h', 'L', 'km', 'm', 'h', 's']
 # Tuned so 5 rows (incl. "当前消耗 88.8 L/100km") fit inside the stock 295px (x=5..300) left box at full 46px Bold digits.
 SIZES = [
     ('n', 46, 24, 16),

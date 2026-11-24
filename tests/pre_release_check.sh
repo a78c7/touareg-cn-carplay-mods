@@ -1,7 +1,7 @@
 #!/bin/sh
 # One-command pre-release verification script (mirrors .github/workflows/ci.yml locally).
 # Runs: Go vet + Go race tests, C unit tests (ASan + UBSan), cppcheck,
-#       43-item telemetry alignment / DOM ID / USB script / web_ui sync checks, and shell syntax checks.
+#       51-item telemetry alignment / DOM ID / USB script / web_ui sync checks, and shell syntax checks.
 set -e
 cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"

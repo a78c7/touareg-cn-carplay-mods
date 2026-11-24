@@ -11,7 +11,7 @@
 Single-USB, no-disassembly, no-firmware-upgrade toolkit unlocking wireless & full-screen CarPlay, Windshield HUD navigation, Digital Cockpit map & live driving telemetry, plus phone-based wireless setup and updates.
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.4</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.5</b></a> ·
   <a href="#features">Features</a> ·
   <a href="#4-step-usb-installation">4-Step Install</a> ·
   <a href="#compatibility">Compatibility</a> ·
@@ -61,7 +61,7 @@ No command line required — double-click the offline configurator on your USB d
 | | **Wireless CarPlay** | Unlocks factory-inactive Wireless CarPlay for cable-free auto-connect | MH2p Generic |
 | | **Android Auto** | Unlocks factory-inactive Android Auto (CN 2019–2023 pre-facelift ships without factory Android Auto) | MH2p Generic |
 | **HUD & Cluster** | **Navigation to HUD** | Projects Apple Maps, AMap, or Baidu turn arrows, distance, street names, and lanes onto the Windshield HUD (requires factory HUD; works wired & wireless) | CN Touareg `P*` |
-| | **Cluster Map + Driving Telemetry** | Displays live CarPlay map in the 12" Digital Cockpit (auto-centers AMap, supports steering-wheel zoom) with symmetrical 43-channel driving gauges, navigation card, and 60 fps custom themes | CN Touareg `P*` |
+| | **Cluster Map + Driving Telemetry** | Displays live CarPlay map in the 12" Digital Cockpit (auto-centers AMap, supports steering-wheel zoom) with symmetrical 51-channel driving gauges (ambient accent color & dead-zero auto-fallback), navigation card, and 60 fps custom themes | CN Touareg `P*` |
 | | **Steering-Wheel `OK` Map Switch** | Double-tap right `OK` (`480 ms` window) on the map screen to toggle CarPlay/stock map; triple-tap `OK` cycles custom themes when both are active (without this module, double-tap `OK` switches themes directly) | CN Touareg `P*` |
 | | **Voice Button Short-Press Siri (Experimental)** | Short-press the steering-wheel voice button to invoke Siri during CarPlay (factory long-press unchanged; on some firmwares short-press may also trigger factory voice control) | CN Touareg `P*` |
 | **Wireless & Setup** | **Mobile Wireless Console** | Connects to your phone hotspot so you can edit cluster gauges, switch themes, run signed offline updates, and export diagnostics at `http://touareg.local:8080` (optional key-only SSH) | MH2p Generic |
@@ -123,7 +123,7 @@ No command line required — double-click the offline configurator on your USB d
 
 > [!NOTE]
 > - **Unsigned Binary Warning**: The desktop configurator has no commercial signing certificate (Windows: *More info → Run anyway*; macOS: *System Settings → Privacy & Security → Open Anyway*). Built by GitHub Actions from [`tools/configurator`](tools/configurator) with `SHA256SUMS.txt`; binds only to `127.0.0.1` and never connects to the internet.
-> - **Upgrading from `v22.01` or Earlier**: Flash `v22.1` / `v23.4` **once via USB** (preserves existing `cl.conf` and `web.pin`; if `web.pin` was never set, a 6-digit PIN displays on the cluster on first boot and clears after first login); wireless OTA resumes afterward.
+> - **Upgrading from `v22.01` or Earlier**: Flash `v22.1` / `v23.5` **once via USB** (preserves existing `cl.conf` and `web.pin`; if `web.pin` was never set, a 6-digit PIN displays on the cluster on first boot and clears after first login); wireless OTA resumes afterward.
 > - **Black Borders After First Flash**: Tap *Forget This Car* in iPhone Bluetooth/CarPlay settings and reconnect once.
 
 ---
@@ -157,7 +157,7 @@ No command line required — double-click the offline configurator on your USB d
 <div align="center">
   <img src="docs/img/wireless_console.png" alt="MH2p 8080 Mobile Wireless Console" width="92%">
   <br>
-  <sub><i>Mobile Wireless Console: parked-only lock (≤ 3 km/h), 43-channel gauges & theme switcher, Ed25519-signed offline OTA, and sanitized diagnostics.</i></sub>
+  <sub><i>Mobile Wireless Console: parked-only lock (≤ 3 km/h), 51-channel gauges, live Bento secondary display, theme switcher, Ed25519-signed offline OTA, and sanitized diagnostics.</i></sub>
 </div>
 
 1. Install **Mobile Wireless Console** in the configurator (leave SSH unchecked unless developing), configure 1–5 phone hotspots + 6–16 char PIN, and enable your phone hotspot in-car (iPhone: turn on *Maximize Compatibility* and keep the Hotspot page awake 3–5s on first join — note the same iPhone cannot host Personal Hotspot and run Wireless CarPlay simultaneously, so turn Hotspot off for daily driving or use wired USB CarPlay + Hotspot; Android: WPA2).

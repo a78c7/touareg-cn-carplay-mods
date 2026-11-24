@@ -60,14 +60,15 @@
  *    - ctx.drawTurnArrow(x, y, size, bus.nav.turnType, { color })
  *
  * 4. 可用的 60fps 车辆与导航数据总线 bus（连续量已平滑，加 Raw 后缀可取原始值，如 bus.rpmRaw）：
- *    - 动力速度：rpm, rpmRaw, rpmPeak, speed, power(kW), torque(Nm), pedal(%), brake(bar), gear("D4"/"S1"), steer(°)
- *    - 车身动态：g(合G), glong(纵G), glat(横G), pitch(俯仰°), roll(侧倾°), alt(海拔m)
- *    - 温度油量：oil(机油°C), gearbox(波箱°C), coolant(水温°C), outside(车外°C), cons(L/100km), fuel(L), range(km)
+ *    - 动力速度：rpm, rpmRaw, rpmPeak, speed(表显), realSpeed(真实无虚高车速), power(kW), torque(Nm), pedal(%), brake(bar), gear("D4"/"S1"), steer(°), yaw(横摆角速度°/s)
+ *    - 车身动态：g(合G), glong(纵G), glat(横G), pitch(俯仰°), roll(侧倾°), alt(海拔m), wfl/wfr/wrl/wrr(四轮独立轮速 km/h)
+ *    - 温度油量：oil(机油°C), gearbox(波箱°C), coolant(水温°C), cabin(车内空调温度°C), outside(车外°C), cons(L/100km), fuel(L), range(km)
  *    - 胎压极值：tpfl, tpfr, tprl, tprr(bar), tires, t100(0-100秒), t100Running, pmax, tqmax, gmax
+ *    - 底盘工况：cond.{ kickdown, coasting, braking, esp, eds, hdc, brakeHot, coolantWarn, gearboxWarn }
  *    - 导航状态：nav.{ live, distM, remDistKm, remMin, eta, road, nextRoad, action, turnType, lanes }
- *    - 系统配置：sys.{ mapLive, night, acc, time, dt, fps, mapFps, width, height }, conf(dash.conf 配置)
- *    - 冷车就绪标志：ready.{ oil, gearbox, tires, t100, alt }（车机保证所有数值字段永远为有限数字、不会是 null/NaN，
- *      因此可直接安全调用 .toFixed()；若想在冷车未就绪时显示 "--"，可用 bus.ready.oil ? ... : "--"）
+ *    - 系统配置：sys.{ mapLive, night, acc, time, dt, fps, mapFps, width, height }, conf(dash.conf 配置，含 conf.accent 氛围灯主色)
+ *    - 传感器就绪标志：ready.{ power, torque, oil, gearbox, tires, t100, alt, cabin, wheels }（车机保证所有数值字段永远为有限数字、不会是 null/NaN，
+ *      因此可直接安全调用 .toFixed()；部分车型出厂不上报功率/扭矩时 ready.power/torque 为 false，皮肤可自动隐藏或替补显示）
  *
  * 5. 安全红线（车机端强制校验，违者自动熔断回退内置默认皮肤并报错行号）：
  *    - 禁止使用 window / document / fetch / XMLHttpRequest / WebSocket / localStorage / sessionStorage / eval / Function / importScripts / setTimeout / setInterval
@@ -102,12 +103,13 @@ const THEMES = [
         ctx.rect(0, 0, 1920, 639, { fill: "#070c16", fill2: "#101b2e", gradDir: "v" });
       }
 
-      // 模板占位提示卡（AI 修改时请删除这里，换成你的正式表盘/动效）
+      // 模板占位提示卡（AI 修改时请删除这里，换成你的正式表盘/动效；支持读取 bus.conf.accent 匹配氛围灯主色）
+      var acc = (bus.conf && bus.conf.accent) ? bus.conf.accent : "#22d3ee";
       ctx.rect(580, 210, 760, 200, {
-        fill: "rgba(10,16,28,0.82)", stroke: "rgba(34,211,238,0.45)", lineWidth: 2, radius: 18
+        fill: "rgba(10,16,28,0.82)", stroke: acc, lineWidth: 2, radius: 18
       });
       ctx.text("空白自定义模板已加载 (my_theme.js)", 960, 272, {
-        size: 30, bold: true, color: "#67e8f9", align: "center"
+        size: 30, bold: true, color: acc, align: "center"
       });
       ctx.text("当前车速 " + Math.round(bus.speed) + " km/h · " + Math.round(bus.rpmRaw) + " rpm · " + bus.gear, 960, 326, {
         size: 24, bold: true, color: "#ffffff", align: "center"

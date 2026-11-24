@@ -55,11 +55,12 @@ function render(ctx, bus, state) {
 
 ### 3.1 动态车辆数据（连续量均已做 60fps 阻尼平滑；加 `Raw` 后缀可取 10Hz 原始准确值）
 - 动力：`bus.rpm` (0..7000，按车型动力而异：2.0T/3.0T 最大功率上限 6400–6500 rpm，eHybrid 2.0T 为 6000 rpm), `bus.rpmPeak` (峰值滞留), `bus.power` (kW), `bus.torque` (Nm), `bus.pedal` (0..100%), `bus.brake` (bar)
-- 速度与挡位：`bus.speed` (km/h), `bus.gear` (如 `"D4"`, `"M6"`, `"E4"`, `"P"`), `bus.gearNum` (0..8), `bus.steer` (° 左负右正)
-- 车身动态：`bus.g` (带符号合 G), `bus.glong` (纵向 g), `bus.glat` (横向 g), `bus.pitch` (俯仰 °), `bus.roll` (侧倾 °), `bus.alt` (海拔 m)
-- 温度与油量：`bus.oil` (°C), `bus.gearbox` (°C), `bus.coolant` (°C), `bus.outside` (°C), `bus.cons` (L/100km), `bus.fuel` (L 或 %), `bus.range` (km)
+- 速度与挡位：`bus.speed` (表显车速 km/h), `bus.realSpeed` / `bus.realSpeedRaw` (真实无虚高车速 km/h), `bus.gear` (如 `"D4"`, `"M6"`, `"E4"`, `"P"`), `bus.gearNum` (0..8), `bus.steer` (° 左负右正), `bus.yaw` (横摆角速度 °/s)
+- 车身动态与轮速：`bus.g` (带符号合 G), `bus.glong` (纵向 g), `bus.glat` (横向 g), `bus.pitch` (俯仰 °), `bus.roll` (侧倾 °), `bus.alt` (海拔 m), `bus.wfl` / `bus.wfr` / `bus.wrl` / `bus.wrr` (四轮独立轮速 km/h)
+- 温度与油量：`bus.oil` (°C), `bus.gearbox` (°C), `bus.coolant` (°C), `bus.cabin` (车内空调实测温度 °C), `bus.outside` (°C), `bus.cons` (L/100km), `bus.fuel` (L 或 %), `bus.range` (km)
 - 四轮胎压：`bus.tpfl`, `bus.tpfr`, `bus.tprl`, `bus.tprr` (bar), `bus.tires` (前后均值串)
 - 性能极值：`bus.t100` (最近/实时 0-100 秒), `bus.t100Running` (是否正在冲刺计时), `bus.pmax`, `bus.tqmax`, `bus.gmax`
+- 底盘工况与热告警 `bus.cond`：`{ flags, kickdown, coasting, braking, esp, eds, hdc, brakeHot, coolantWarn, gearboxWarn }`（布尔值，直接可用）
 - 行车电脑：`bus.trip`, `bus.tripdist`, `bus.tripspeed`, `bus.triptime`, `bus.refuel`, `bus.total`, `bus.tripkm`
 
 ### 3.2 导航数据 `bus.nav`
@@ -69,8 +70,8 @@ function render(ctx, bus, state) {
 
 ### 3.3 系统、冷车就绪与用户配置
 - `bus.sys`: `{ mapLive, night, acc, time, dt, fps, mapFps, width: 1920, height: 639 }`
-- `bus.ready`: `{ oil, gearbox, tires, t100, alt }`（车机端强制保证所有数值字段永远为有限数字、绝不传 `null`/`NaN`，冷车未就绪时给 `0` 并置对应 `ready` 为 `false`，防止 `.toFixed()` 抛错崩溃）
-- `bus.conf`: 读取车机 `dash.conf`（`items`, `r_items`, `show`, `r_show`, `bars`, `alpha`, `nav_box`, `nav_side`, `tank_l`）
+- `bus.ready`: `{ power, torque, oil, gearbox, tires, t100, alt, cabin, wheels }`（车机端强制保证所有数值字段永远为有限数字、绝不传 `null`/`NaN`；部分车型出厂网关不上报功率/扭矩时 `power`/`torque` 自动置 `false`，皮肤可据此自动切换显示其他真数据）
+- `bus.conf`: 读取车机 `dash.conf`（`items`, `r_items`, `show`, `r_show`, `bars`, `alpha`, `nav_box`, `nav_side`, `tank_l`, `accent`；其中 `accent` 为车主在「改装设置」或 `8080` 控制台选定的氛围灯同款主题色 `#RRGGBB`，默认 `"#22d3ee"`）
 
 > 提示：单个 `.js` 文件既支持单皮肤（`const THEME = {...}; function render(ctx, bus, state) {...}`），也支持多皮肤包（`const THEMES = [ { id, name, shader, render(ctx, bus, state) {...} }, ... ]`，最多 8 套，见 [`my_theme.js`](./my_theme.js)）。实车切换手势：默认双击方向盘 `OK` 键零延迟切换下一套皮肤；若同时选装了「切原车地图」模块（`VW_HUD_4_OkMapSwitch`），则双击 `OK` 切原车地图、三连击 `OK` 切下一套皮肤（亦可在手机 `8080` 控制台一键点选）。
 

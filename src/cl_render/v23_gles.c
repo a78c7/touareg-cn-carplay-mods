@@ -1438,7 +1438,7 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
     static dash_vals_t raw_v;
     static int raw_inited = 0;
     static double rpm_peak = 0.0, rpm_hold = 0.0;
-    static double sm_rpm = 0, sm_spd = 0, sm_pwr = 0, sm_tq = 0, sm_ped = 0, sm_brk = 0, sm_str = 0;
+    static double sm_rpm = 0, sm_spd = 0, sm_rspd = 0, sm_pwr = 0, sm_tq = 0, sm_ped = 0, sm_brk = 0, sm_str = 0, sm_yaw = 0;
     static double sm_g = 0, sm_glong = 0, sm_glat = 0, sm_pitch = 0, sm_roll = 0, sm_oil = 0, sm_gb = 0, sm_alt = 0;
 
     uint64_t now_ms = v23_now_us() / 1000ULL;
@@ -1476,14 +1476,21 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
         }
     }
 
-    int dummy = 0;
-    double r_rpm = v23_sanitize_num((double)raw_v.rpm, &dummy);
-    double r_spd = v23_sanitize_num((double)raw_v.spd, &dummy);
-    double r_pwr = v23_sanitize_num((double)raw_v.p, &dummy);
-    double r_tq  = v23_sanitize_num((double)raw_v.tq, &dummy);
+    int dummy = 0, p_has = 0, tq_has = 0, w_has = 0;
+    double r_rpm  = v23_sanitize_num((double)raw_v.rpm, &dummy);
+    double r_spd  = v23_sanitize_num((double)raw_v.spd, &dummy);
+    double r_rspd = v23_sanitize_num((double)raw_v.rspd, &dummy);
+    if (DASH_NAN(raw_v.rspd)) r_rspd = r_spd;
+    double r_pwr  = v23_sanitize_num((double)raw_v.p, &p_has);
+    double r_tq   = v23_sanitize_num((double)raw_v.tq, &tq_has);
+    bus->ready_power  = (p_has  && raw_v.pok  != 0) ? 1 : 0;
+    bus->ready_torque = (tq_has && raw_v.tqok != 0) ? 1 : 0;
+    if (!bus->ready_power)  r_pwr = 0.0;
+    if (!bus->ready_torque) r_tq  = 0.0;
     double r_ped = v23_sanitize_num((double)raw_v.ped, &dummy);
     double r_brk = v23_sanitize_num((double)raw_v.brk, &dummy);
     double r_str = v23_sanitize_num((double)raw_v.str, &dummy);
+    double r_yaw = v23_sanitize_num((double)raw_v.yaw, &dummy);
     double r_gx  = v23_sanitize_num((double)raw_v.gx, &dummy);
     double r_gy  = v23_sanitize_num(g_dash_conf.lat_flip ? -(double)raw_v.gy : (double)raw_v.gy, &dummy);
     double r_g   = nav_sqrt(r_gx * r_gx + r_gy * r_gy);
@@ -1491,29 +1498,38 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
     double r_oil = v23_sanitize_num((double)raw_v.oil, &bus->ready_oil);
     double r_gb  = v23_sanitize_num((double)raw_v.gbt, &bus->ready_gearbox);
     double r_alt = v23_sanitize_num((double)raw_v.alt, &bus->ready_alt);
+    double r_cab = v23_sanitize_num((double)raw_v.cab, &bus->ready_cabin);
     double r_tpfl = v23_sanitize_num((double)raw_v.tpfl, &dummy);
     double r_tpfr = v23_sanitize_num((double)raw_v.tpfr, &dummy);
     double r_tprl = v23_sanitize_num((double)raw_v.tprl, &dummy);
     double r_tprr = v23_sanitize_num((double)raw_v.tprr, &dummy);
+    int w0 = 0, w1 = 0, w2 = 0, w3 = 0;
+    double r_wfl = v23_sanitize_num((double)raw_v.wfl, &w0);
+    double r_wfr = v23_sanitize_num((double)raw_v.wfr, &w1);
+    double r_wrl = v23_sanitize_num((double)raw_v.wrl, &w2);
+    double r_wrr = v23_sanitize_num((double)raw_v.wrr, &w3);
+    w_has = (w0 || w1 || w2 || w3) ? 1 : 0;
     double r_pit = v23_sanitize_num((double)raw_v.pitch, &dummy);
     double r_rol = v23_sanitize_num((double)raw_v.roll, &dummy);
 
     double a = 1.0 - (double)v23_exp_negf(15.0f * dt);
-    sm_rpm += (r_rpm - sm_rpm) * a;
-    sm_spd += (r_spd - sm_spd) * a;
-    sm_pwr += (r_pwr - sm_pwr) * a;
-    sm_tq  += (r_tq  - sm_tq)  * a;
-    sm_ped += (r_ped - sm_ped) * a;
-    sm_brk += (r_brk - sm_brk) * a;
-    sm_str += (r_str - sm_str) * a;
-    sm_g   += (r_g   - sm_g)   * a;
+    sm_rpm  += (r_rpm  - sm_rpm)  * a;
+    sm_spd  += (r_spd  - sm_spd)  * a;
+    sm_rspd += (r_rspd - sm_rspd) * a;
+    sm_pwr  += (r_pwr  - sm_pwr)  * a;
+    sm_tq   += (r_tq   - sm_tq)   * a;
+    sm_ped  += (r_ped  - sm_ped)  * a;
+    sm_brk  += (r_brk  - sm_brk)  * a;
+    sm_str  += (r_str  - sm_str)  * a;
+    sm_yaw  += (r_yaw  - sm_yaw)  * a;
+    sm_g    += (r_g    - sm_g)    * a;
     sm_glong += (r_gx - sm_glong) * a;
     sm_glat  += (r_gy - sm_glat)  * a;
     sm_pitch += (r_pit - sm_pitch) * a;
     sm_roll  += (r_rol - sm_roll)  * a;
-    sm_oil += (r_oil - sm_oil) * a;
-    sm_gb  += (r_gb  - sm_gb)  * a;
-    sm_alt += (r_alt - sm_alt) * a;
+    sm_oil  += (r_oil  - sm_oil)  * a;
+    sm_gb   += (r_gb   - sm_gb)   * a;
+    sm_alt  += (r_alt  - sm_alt)  * a;
 
     if (sm_rpm >= rpm_peak) { rpm_peak = sm_rpm; rpm_hold = 0.45; }
     else if (rpm_hold > 0.0) { rpm_hold -= dt; }
@@ -1521,9 +1537,10 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
 
     bus->rpm = sm_rpm; bus->rpm_raw = r_rpm; bus->rpm_peak = rpm_peak;
     bus->speed = sm_spd; bus->speed_raw = r_spd;
-    bus->power = sm_pwr; bus->torque = sm_tq; bus->pedal = sm_ped; bus->brake = sm_brk; bus->steer = sm_str;
+    bus->real_speed = sm_rspd; bus->real_speed_raw = r_rspd;
+    bus->power = sm_pwr; bus->torque = sm_tq; bus->pedal = sm_ped; bus->brake = sm_brk; bus->steer = sm_str; bus->yaw = sm_yaw;
     bus->g = sm_g; bus->glong = sm_glong; bus->glat = sm_glat;
-    bus->oil = sm_oil; bus->gearbox = sm_gb; bus->alt = sm_alt;
+    bus->oil = sm_oil; bus->gearbox = sm_gb; bus->alt = sm_alt; bus->cabin = r_cab;
     bus->coolant = v23_sanitize_num((double)raw_v.cool, &dummy);
     bus->outside = v23_sanitize_num((double)raw_v.out, &dummy);
     bus->cons    = v23_sanitize_num((double)raw_v.cv, &dummy);
@@ -1531,12 +1548,15 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
     bus->range   = v23_sanitize_num((double)raw_v.rng, &dummy);
     bus->pitch = sm_pitch; bus->roll = sm_roll;
     bus->tpfl = r_tpfl; bus->tpfr = r_tpfr; bus->tprl = r_tprl; bus->tprr = r_tprr;
+    bus->wfl = r_wfl; bus->wfr = r_wfr; bus->wrl = r_wrl; bus->wrr = r_wrr;
+    bus->ready_wheels = w_has;
+    bus->cond_flags = (raw_v.cf >= 0) ? raw_v.cf : 0;
     v23_calc_tires((double)raw_v.tpfl, (double)raw_v.tpfr, (double)raw_v.tprl, (double)raw_v.tprr,
                    &bus->ready_tires, bus->tires, sizeof(bus->tires));
     bus->t100 = v23_sanitize_num((double)raw_v.t1, &bus->ready_t100);
     bus->t100_running = (!DASH_NAN(raw_v.t1r) && raw_v.t1r > 0.0f) ? 1 : 0;
-    bus->pmax = v23_sanitize_num((double)raw_v.pmx, &dummy);
-    bus->tqmax = v23_sanitize_num((double)raw_v.tqx, &dummy);
+    bus->pmax = bus->ready_power ? v23_sanitize_num((double)raw_v.pmx, &dummy) : 0.0;
+    bus->tqmax = bus->ready_torque ? v23_sanitize_num((double)raw_v.tqx, &dummy) : 0.0;
     bus->gmax = v23_sanitize_num((double)raw_v.gmx, &dummy);
     v23_fill_board_computer(bus, raw_v.avg, raw_v.dist, raw_v.bspd, raw_v.btime,
                             raw_v.odo, g_dash_conf.trip_base);
@@ -1558,6 +1578,7 @@ static void v23_update_telemetry(v23_bus_t *bus, float dt, int map_live, int aut
     bus->conf_nav_box = g_nav_conf.enabled;
     bus->conf_tank_l = g_dash_conf.tank_l;
     snprintf(bus->conf_nav_side, sizeof(bus->conf_nav_side), "%s", g_nav_conf.side == 0 ? "left" : "right");
+    snprintf(bus->conf_accent, sizeof(bus->conf_accent), "%s", g_dash_conf.accent[0] ? g_dash_conf.accent : "#22d3ee");
 }
 
 /* ---- 统一 60fps GLES2 + QuickJS 主循环（v23.4：with_carplay_map=1 与 =0 一律自建独立 own_ctx + 4 缓冲 own_win） ---- */

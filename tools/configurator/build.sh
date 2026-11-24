@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")"
 V=${1:?usage: build.sh <version>}
 
-# 1) 校验 43 项指标清单与 dash.c / web_ui.html 一致（含 t100），并检查前端 DOM ID 完整性
+# 1) 校验 51 项指标清单与 dash.c / web_ui.html 一致（含 t100），并检查前端 DOM ID 完整性
 python3 - <<'PY'
 import re, sys
 

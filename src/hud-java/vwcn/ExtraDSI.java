@@ -28,8 +28,12 @@ final class ExtraDSI {
     // 海拔（米）
     static volatile int altM = Integer.MIN_VALUE;
 
-    private static Slot sDrv, sComf, sNav;
-    private static boolean rdkLogged, drvLogged, navLogged;
+    // 高频 ViewOptions 功率/扭矩可用性探测（-1=未知, 0=网关明确不下发, 1=可用）
+    static volatile int pwrOpt = -1;
+    static volatile int tqOpt = -1;
+
+    private static Slot sDrv, sComf, sNav, sVsOpt;
+    private static boolean rdkLogged, drvLogged, navLogged, vsOptLogged;
 
     private ExtraDSI() {}
 
@@ -67,15 +71,26 @@ final class ExtraDSI {
                 new NavHandler()
             );
         }
+        if (sVsOpt == null) {
+            sVsOpt = new Slot(
+                "org.dsi.ifc.carvehiclestates.DSICarVehicleStates",
+                "org.dsi.ifc.carvehiclestates.DSICarVehicleStatesListener",
+                new String[] { "ATTR_DYNAMICVEHICLEINFOHIGHFREQUENTVIEWOPTIONS" },
+                new int[] { 12 },
+                new VsOptHandler()
+            );
+        }
         sDrv.subscribe();
         sComf.subscribe();
         sNav.subscribe();
+        sVsOpt.subscribe();
     }
 
     static synchronized void unsubscribeAll() {
         if (sDrv != null) sDrv.unsubscribe();
         if (sComf != null) sComf.unsubscribe();
         if (sNav != null) sNav.unsubscribe();
+        if (sVsOpt != null) sVsOpt.unsubscribe();
     }
 
     static int getIntField(Object obj, String name, int defVal) {
@@ -351,6 +366,39 @@ final class ExtraDSI {
                     if (!navLogged && h != Integer.MIN_VALUE) {
                         navLogged = true;
                         Log.log("extradsi: sopos height=" + h);
+                    }
+                }
+            } catch (Throwable t) {
+            }
+            return null;
+        }
+    }
+
+    private static int readViewOptState(Object vo, String fieldName) {
+        Object opt = getObjField(vo, fieldName);
+        if (opt == null) return -1;
+        return getIntField(opt, "state", -1);
+    }
+
+    private static final class VsOptHandler implements InvocationHandler {
+        public Object invoke(Object proxy, Method m, Object[] args) throws Throwable {
+            String name = m.getName();
+            Object b = baseObjMethod(proxy, name, args, "vwcn.ExtraDSI.VsOpt");
+            if (b != null || "equals".equals(name)) return b;
+            try {
+                if ("updateDynamicVehicleInfoHighFrequentViewOptions".equals(name) && args != null && args.length >= 2) {
+                    int valid = (args[1] instanceof Number) ? ((Number) args[1]).intValue() : 0;
+                    Object vo = args[0];
+                    if (valid != 1 || vo == null) return null;
+                    int ps = readViewOptState(vo, "currentOutputPower");
+                    int ts = readViewOptState(vo, "currentTorque");
+                    if (ps == 0) pwrOpt = 0;
+                    else if (ps == 2) pwrOpt = 1;
+                    if (ts == 0) tqOpt = 0;
+                    else if (ts == 2) tqOpt = 1;
+                    if (!vsOptLogged) {
+                        vsOptLogged = true;
+                        Log.log("extradsi: hf viewOptions power=" + ps + " torque=" + ts);
                     }
                 }
             } catch (Throwable t) {

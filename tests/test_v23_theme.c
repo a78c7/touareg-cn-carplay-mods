@@ -407,6 +407,39 @@ int main(void) {
         v23_sandbox_destroy(&sb);
     }
 
-    if (fails == 0) printf("test_v23_theme: ALL PASSED (17 ctx ops + 7 fuses + cold-start + 72KB/140KB + night + gear/iAP2/fuel/13-BC/ETA/tires)\n");
+    /* 11. v23.5 new telemetry (realSpeed/yaw/cabin/4-wheel/cond/ready.power&torque/conf.accent) */
+    {
+        v23_bus_t bus = make_bus(1, 0);
+        bus.real_speed = 83.1; bus.real_speed_raw = 83.1;
+        bus.yaw = 6.2; bus.cabin = 24.5;
+        bus.wfl = 83.2; bus.wfr = 83.4; bus.wrl = 83.1; bus.wrr = 83.3;
+        bus.cond_flags = (1 << 0) | (1 << 3) | (1 << 6); /* kickdown + esp + brakeHot */
+        bus.ready_power = 0; bus.ready_torque = 0; bus.ready_cabin = 1; bus.ready_wheels = 1;
+        snprintf(bus.conf_accent, sizeof(bus.conf_accent), "%s", "#d926ef");
+
+        mock_rec_t rec; memset(&rec, 0, sizeof(rec));
+        v23_draw_ops_t ops = make_ops(&rec);
+        v23_sandbox_t sb;
+        v23_sandbox_init(&sb, &ops);
+        const char *v235js =
+            "const THEME={id:'v235'};\n"
+            "function render(ctx,b){\n"
+            "  var s = [b.realSpeed.toFixed(1), b.yaw.toFixed(1), b.cabin.toFixed(1),\n"
+            "           b.wfl.toFixed(1), b.wrr.toFixed(1),\n"
+            "           b.ready.power?1:0, b.ready.torque?1:0, b.ready.cabin?1:0, b.ready.wheels?1:0,\n"
+            "           b.cond.kickdown?1:0, b.cond.esp?1:0, b.cond.brakeHot?1:0, b.cond.hdc?1:0,\n"
+            "           b.conf.accent].join('|');\n"
+            "  ctx.text(s, 0, 0);\n"
+            "}\n";
+        const char *want = "83.1|6.2|24.5|83.2|83.3|0|0|1|1|1|1|1|0|#d926ef";
+        if (v23_sandbox_load_code(&sb, "v235.js", v235js, strlen(v235js)) != 0 ||
+            v23_sandbox_render_frame(&sb, &bus, NULL, NULL) != 0 ||
+            strcmp(rec.last_text, want) != 0) {
+            fprintf(stderr, "FAIL v23.5 fields: got '%s' want '%s' err=%s\n", rec.last_text, want, sb.last_err); fails++;
+        }
+        v23_sandbox_destroy(&sb);
+    }
+
+    if (fails == 0) printf("test_v23_theme: ALL PASSED (17 ctx ops + 7 fuses + cold-start + 72KB/140KB + night + gear/iAP2/fuel/13-BC/ETA/tires + v23.5)\n");
     return fails;
 }

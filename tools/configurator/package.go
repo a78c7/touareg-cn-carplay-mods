@@ -28,7 +28,7 @@ var features = []feature{
 	{"carplay", "无线 CarPlay", "开启原厂未激活的无线 CarPlay（LawPaul 作品）", []string{"AppleCarPlay"}},
 	{"aa", "Android Auto", "开启原厂未激活的 Android Auto，安卓手机投屏（2019–2023 中规改款前原厂不含 AA，按需解锁；LawPaul 作品）", []string{"AndroidAuto"}},
 	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在平视显示器（HUD）上（需实车配备 HUD；无 HUD 车型如领航版不投射风挡）", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
-	{"cluster", "仪表地图 + 大字运动信息框", "手机导航地图投屏到 12 英寸全液晶仪表（数字驾驶舱）中央，左右两侧自由定制 43 项真实行车数据（大号粗体 + 运动刻度条）与大字导航卡；不含 9.2 英寸指针仪表领航版，需配合「导航上 HUD」", []string{"VW_HUD_3_CarPlayCluster"}},
+	{"cluster", "仪表地图 + 大字运动信息框", "手机导航地图投屏到 12 英寸全液晶仪表（数字驾驶舱）中央，左右两侧自由定制 51 项真实行车数据（大号粗体 + 运动刻度条 + 氛围灯主题色）与大字导航卡；不含 9.2 英寸指针仪表领航版，需配合「导航上 HUD」", []string{"VW_HUD_3_CarPlayCluster"}},
 	{"mapswitch", "方向盘 OK 双击切换 CarPlay / 原车地图", "方向盘右侧 OK 键双击（480 ms 判定窗）在 CarPlay 导航地图与原车自带地图之间来回切换（装本模块后，v23 多皮肤切换顺延为三连击 OK；2019–2020 为实体键、2021–2023 为触控键）；需配合「导航上 HUD」与「仪表地图 + 大字运动信息框」", []string{"VW_HUD_4_OkMapSwitch"}},
 	{"siri", "方向盘语音键短按直接唤 Siri（试验）", "连接 CarPlay 时短按方向盘语音键直接唤出手机 Siri（无需长按；原厂长按唤 Siri 不受影响，2019–2020 为实体键、2021–2023 为触控键；试验功能：部分固件短按可能并触原车语音）；需配合「导航上 HUD」", []string{"VW_HUD_5_SiriShortPress"}},
 	{"wifi5gfix", "老固件升 P2878 无线 CarPlay 5GHz 区域修复", "仅从旧版本（如 P9832）升级 P2878 后、有线正常但无线 CarPlay 连不上时勾选：解除 5GHz 国家码校验拦截（出厂即 P2878 车辆在启用本包无线 CarPlay 后连接正常，无需勾选）", []string{"VW_Wireless5GHzFix"}},
@@ -91,6 +91,14 @@ var catalogue = []item{
 	{"pitch", "俯仰角", "°", "+1.2", "胎压与越野", "车身前后俯仰坡度角（需空气悬架，无空悬如中规 eHybrid 无上报；上坡 + / 下坡 -）"},
 	{"roll", "侧倾角", "°", "-0.5", "胎压与越野", "车身左右侧倾坡度角（需空气悬架，无空悬如中规 eHybrid 无上报）"},
 	{"alt", "海拔", "m", "68", "胎压与越野", "原车 GNSS 海拔高度"},
+	{"realspeed", "真实车速", "km/h", "83", "行驶", "无虚高真实车速（可与表显欢乐表对照）"},
+	{"yaw", "横摆角速", "°/s", "+6.2", "加速度", "车身横摆角速度（居中双向刻度条）"},
+	{"cabin", "车内温度", "°C", "24.5", "温度", "车内空调实测温度（区间状态条）"},
+	{"wfl", "左前轮速", "km/h", "83.2", "胎压与越野", "左前轮独立轮速（雨雪/越野打滑监测）"},
+	{"wfr", "右前轮速", "km/h", "83.4", "胎压与越野", "右前轮独立轮速"},
+	{"wrl", "左后轮速", "km/h", "83.1", "胎压与越野", "左后轮独立轮速"},
+	{"wrr", "右后轮速", "km/h", "83.3", "胎压与越野", "右后轮独立轮速"},
+	{"cond", "底盘工况", "", "OK", "胎压与越野", "热告警(HOT!) / ESP / EDS / HDC / KickDown(KD) / 滑行(CST) / 制动(BRK)"},
 }
 
 const maxRows = 10
@@ -99,6 +107,7 @@ type dashConf struct {
 	Show    bool     `json:"show"`
 	Bars    bool     `json:"bars"`
 	Smooth  bool     `json:"smooth"`
+	Accent  string   `json:"accent"`
 	Items   []string `json:"items"`
 	X       int      `json:"x"`
 	Y       int      `json:"y"`
@@ -120,11 +129,29 @@ type dashConf struct {
 	OkSwitch bool   `json:"ok_switch"`
 }
 
+func normAccent(s string) string {
+	t := strings.TrimSpace(s)
+	if strings.HasPrefix(t, "#") {
+		t = t[1:]
+	}
+	if len(t) != 6 {
+		return "#22d3ee"
+	}
+	for i := 0; i < 6; i++ {
+		c := t[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return "#22d3ee"
+		}
+	}
+	return "#" + strings.ToLower(t)
+}
+
 func defaultDash() dashConf {
 	return dashConf{
 		Show:     true,
 		Bars:     true,
 		Smooth:   true,
+		Accent:   "#22d3ee",
 		Items:    []string{"power", "torque", "g", "rpm", "oil", "gearbox"},
 		X:        5,
 		Y:        200,
@@ -268,7 +295,13 @@ func (p pkg) readDash() (dashConf, bool) {
 		if !ok {
 			continue
 		}
-		if i := strings.IndexByte(v, '#'); i >= 0 {
+		if k == "accent" {
+			if len(v) > 1 {
+				if i := strings.IndexByte(v[1:], '#'); i >= 0 {
+					v = strings.TrimSpace(v[:i+1])
+				}
+			}
+		} else if i := strings.IndexByte(v, '#'); i >= 0 {
 			v = strings.TrimSpace(v[:i])
 		}
 		n, nerr := strconv.Atoi(v)
@@ -311,6 +344,8 @@ func (p pkg) readDash() (dashConf, bool) {
 			if nerr == nil {
 				d.Smooth = n != 0
 			}
+		case "accent":
+			d.Accent = normAccent(v)
 		case "x", "info_x":
 			if nerr == nil {
 				d.X = n
@@ -404,6 +439,7 @@ func (p pkg) writeDash(d dashConf) error {
 		{"show", strconv.Itoa(show)},
 		{"bars", strconv.Itoa(bars)},
 		{"smooth", strconv.Itoa(smooth)},
+		{"accent", normAccent(d.Accent)},
 		{"x", strconv.Itoa(d.X)},
 		{"y", strconv.Itoa(d.Y)},
 		{"alpha", strconv.Itoa(clamp(d.Alpha, 0, 255))},

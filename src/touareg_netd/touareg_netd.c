@@ -661,10 +661,28 @@ static void json_escape(const char *src, char *dst, size_t dsz) {
     dst[di] = '\0';
 }
 
+static void norm_accent(const char *src, char out[12]) {
+    snprintf(out, 12, "#22d3ee");
+    if (!src) return;
+    while (*src == ' ' || *src == '\t') src++;
+    if (*src == '#') src++;
+    char hex[7];
+    for (int i = 0; i < 6; i++) {
+        char c = src[i];
+        if (c >= '0' && c <= '9') hex[i] = c;
+        else if (c >= 'a' && c <= 'f') hex[i] = c;
+        else if (c >= 'A' && c <= 'F') hex[i] = (char)(c - 'A' + 'a');
+        else return;
+    }
+    hex[6] = '\0';
+    snprintf(out, 12, "#%s", hex);
+}
+
 typedef struct {
     char items[256];
     char r_items[256];
     char nav_side[16];
+    char accent[12];
     int show, r_show, bars, smooth, car_up, acc_up, amap_turn, alpha, tank_l, lat_flip, nav_box, nav_tz;
     double trip_base;
 } dash_cfg_t;
@@ -673,6 +691,7 @@ static void parse_dash_conf(dash_cfg_t *c) {
     memset(c, 0, sizeof(*c));
     snprintf(c->items, sizeof(c->items), "%s", "power,torque,g,rpm,oil,gearbox");
     snprintf(c->nav_side, sizeof(c->nav_side), "%s", "right");
+    snprintf(c->accent, sizeof(c->accent), "%s", "#22d3ee");
     c->show = 1; c->r_show = 0; c->bars = 1; c->smooth = 1; c->car_up = 35; c->acc_up = 55;
     c->amap_turn = 3; c->alpha = 200; c->tank_l = 90; c->lat_flip = 0;
     c->nav_box = 1; c->nav_tz = 8;
@@ -699,6 +718,7 @@ static void parse_dash_conf(dash_cfg_t *c) {
         else if (strcmp(k, "r_show") == 0) c->r_show = atoi(v);
         else if (strcmp(k, "bars") == 0) c->bars = atoi(v);
         else if (strcmp(k, "smooth") == 0) c->smooth = atoi(v);
+        else if (strcmp(k, "accent") == 0) norm_accent(v, c->accent);
         else if (strcmp(k, "car_up") == 0) c->car_up = atoi(v);
         else if (strcmp(k, "acc_up") == 0) c->acc_up = atoi(v);
         else if (strcmp(k, "amap_turn") == 0) c->amap_turn = atoi(v);
@@ -762,34 +782,37 @@ static int save_dash_conf(const char *body) {
         nav_side = "left";
     }
     int nav_tz = clamp_int(form_get(body, "nav_tz", bufv, sizeof(bufv)) ? bufv : "8", -12, 14, 8);
+    char accent[12];
+    norm_accent(form_get(body, "accent", bufv, sizeof(bufv)) ? bufv : "#22d3ee", accent);
     double trip_base = 0.0;
     if (form_get(body, "trip_base", bufv, sizeof(bufv)) && bufv[0]) {
         trip_base = strtod(bufv, NULL);
         if (trip_base != trip_base || trip_base < 0.0 || trip_base > 9999999.0) trip_base = 0.0;
     }
 
-    const char *keys[16] = {
-        "items", "show", "r_items", "r_show", "bars", "smooth", "car_up", "acc_up",
+    const char *keys[17] = {
+        "items", "show", "r_items", "r_show", "bars", "smooth", "accent", "car_up", "acc_up",
         "amap_turn", "alpha", "tank_l", "lat_flip", "trip_base", "nav_box", "nav_side", "nav_tz"
     };
-    char vals[16][280];
+    char vals[17][280];
     snprintf(vals[0], sizeof(vals[0]), "%s", items);
     snprintf(vals[1], sizeof(vals[1]), "%d", show);
     snprintf(vals[2], sizeof(vals[2]), "%s", r_items);
     snprintf(vals[3], sizeof(vals[3]), "%d", r_show);
     snprintf(vals[4], sizeof(vals[4]), "%d", bars);
     snprintf(vals[5], sizeof(vals[5]), "%d", smooth);
-    snprintf(vals[6], sizeof(vals[6]), "%d", car_up);
-    snprintf(vals[7], sizeof(vals[7]), "%d", acc_up);
-    snprintf(vals[8], sizeof(vals[8]), "%d", amap_turn);
-    snprintf(vals[9], sizeof(vals[9]), "%d", alpha);
-    snprintf(vals[10], sizeof(vals[10]), "%d", tank_l);
-    snprintf(vals[11], sizeof(vals[11]), "%d", lat_flip);
-    snprintf(vals[12], sizeof(vals[12]), "%.1f", trip_base);
-    snprintf(vals[13], sizeof(vals[13]), "%d", nav_box);
-    snprintf(vals[14], sizeof(vals[14]), "%s", nav_side);
-    snprintf(vals[15], sizeof(vals[15]), "%d", nav_tz);
-    int seen[16];
+    snprintf(vals[6], sizeof(vals[6]), "%s", accent);
+    snprintf(vals[7], sizeof(vals[7]), "%d", car_up);
+    snprintf(vals[8], sizeof(vals[8]), "%d", acc_up);
+    snprintf(vals[9], sizeof(vals[9]), "%d", amap_turn);
+    snprintf(vals[10], sizeof(vals[10]), "%d", alpha);
+    snprintf(vals[11], sizeof(vals[11]), "%d", tank_l);
+    snprintf(vals[12], sizeof(vals[12]), "%d", lat_flip);
+    snprintf(vals[13], sizeof(vals[13]), "%.1f", trip_base);
+    snprintf(vals[14], sizeof(vals[14]), "%d", nav_box);
+    snprintf(vals[15], sizeof(vals[15]), "%s", nav_side);
+    snprintf(vals[16], sizeof(vals[16]), "%d", nav_tz);
+    int seen[17];
     memset(seen, 0, sizeof(seen));
 
     char *out = malloc(65536);
@@ -808,7 +831,7 @@ static int save_dash_conf(const char *body) {
                 if (eq) {
                     size_t kl = (size_t)(eq - p);
                     while (kl > 0 && (p[kl - 1] == ' ' || p[kl - 1] == '\t')) kl--;
-                    for (int i = 0; i < 16; i++) {
+                    for (int i = 0; i < 17; i++) {
                         if (strlen(keys[i]) == kl && memcmp(p, keys[i], kl) == 0) {
                             matched = i;
                             break;
@@ -829,7 +852,7 @@ static int save_dash_conf(const char *body) {
         }
         fclose(fp);
     }
-    for (int i = 0; i < 16 && ol + 320 < 65536; i++) {
+    for (int i = 0; i < 17 && ol + 320 < 65536; i++) {
         if (!seen[i]) ol += (size_t)snprintf(out + ol, 65536 - ol, "%s=%s\n", keys[i], vals[i]);
     }
 
@@ -1029,12 +1052,12 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], ota_ver[48];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.1");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.5");
 
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v23.1 ota_version=%s bcm2_ip=%s\n"
+        "netd_version=v23.5 ota_version=%s bcm2_ip=%s\n"
         "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d v23_fallback=%d\n"
         "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d v23_mode=%d\n\n",
         ota_ver, ipstr,
@@ -1118,7 +1141,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     size_t l = 0;
     char ipstr[32], esc1[320], esc2[320], ota_ver[48], esc_ov[64];
     ip_to_str(bcm2_ip, ipstr, sizeof(ipstr));
-    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.1");
+    read_small_text(WIFI_DIR "/ota_version", ota_ver, sizeof(ota_ver), "v23.5");
     json_escape(ota_ver, esc_ov, sizeof(esc_ov));
     double spd = -1.0, odo = -1.0;
     read_dash_state(&spd, &odo);
@@ -1136,13 +1159,13 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     refresh_proc_flags(&p_cld, &p_ren, &p_dio);
 
     l += (size_t)snprintf(j + l, 32768 - l,
-        "{\"ok\":true,\"version\":\"v23.1\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
+        "{\"ok\":true,\"version\":\"v23.5\",\"ota_ver\":\"%s\",\"has_ota_backup\":%d,"
         "\"bcm2_ip\":\"%s\",\"speed\":%.1f,\"odo\":%.1f,"
         "\"has_cluster_mod\":%d,\"ssh_enabled\":%d,"
         "\"clusterd\":%d,\"cl_render\":%d,\"dio_manager\":%d,\"wifi_count\":%d,"
         "\"safe_mode\":{\"manual\":%d,\"hmi\":%d,\"dio\":%d,\"cluster\":%d,\"render_fused\":%d},"
         "\"v23\":{\"fallback_v22\":%d,\"has_live\":%d,\"has_saved\":%d},"
-        "\"dash\":{\"items\":\"%s\",\"show\":%d,\"r_items\":\"%s\",\"r_show\":%d,\"bars\":%d,\"smooth\":%d,"
+        "\"dash\":{\"items\":\"%s\",\"show\":%d,\"r_items\":\"%s\",\"r_show\":%d,\"bars\":%d,\"smooth\":%d,\"accent\":\"%s\","
         "\"car_up\":%d,\"acc_up\":%d,\"amap_turn\":%d,\"alpha\":%d,\"tank_l\":%d,\"lat_flip\":%d,\"trip_base\":%.1f,"
         "\"nav_box\":%d,\"nav_side\":\"%s\",\"nav_tz\":%d},"
         "\"cl\":{\"wide_on\":%d,\"wide\":%d,\"view\":%d},"
@@ -1159,7 +1182,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         file_exists("/tmp/v23_fallback_v22"),
         file_exists("/tmp/theme_live.js"),
         file_exists(CLUSTER_DIR "/themes_user/my_theme.js"),
-        esc1, dc.show, esc2, dc.r_show, dc.bars, dc.smooth,
+        esc1, dc.show, esc2, dc.r_show, dc.bars, dc.smooth, dc.accent,
         dc.car_up, dc.acc_up, dc.amap_turn, dc.alpha, dc.tank_l, dc.lat_flip, dc.trip_base,
         dc.nav_box, dc.nav_side, dc.nav_tz,
         wide_on, wide, view,
@@ -1212,6 +1235,38 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
     l += (size_t)snprintf(j + l, 32768 - l, "]}");
     send_resp(fd, 200, "OK", "application/json; charset=utf-8", j, l);
     free(j);
+}
+
+static void handle_live(int fd) {
+    const char *st_path = getenv("NETD_DASH_STATE_PATH");
+    if (!st_path || !st_path[0]) st_path = DASH_STATE_PATH;
+    char raw[2048], esc[2400], body[2800];
+    raw[0] = '\0';
+    int live = 0;
+    struct stat st;
+    if (stat(st_path, &st) == 0 && st.st_size > 0) {
+        time_t now = time(NULL);
+        if (now <= 0 || st.st_mtime <= 0 || (now - st.st_mtime) < 15) {
+            FILE *fp = fopen(st_path, "r");
+            if (fp) {
+                if (fgets(raw, sizeof(raw), fp)) {
+                    char *nl = strpbrk(raw, "\r\n");
+                    if (nl) *nl = '\0';
+                    if (raw[0]) live = 1;
+                }
+                fclose(fp);
+            }
+        }
+    }
+    dash_cfg_t dc;
+    parse_dash_conf(&dc);
+    json_escape(raw, esc, sizeof(esc));
+    int n = snprintf(body, sizeof(body),
+        "{\"ok\":true,\"live\":%s,\"accent\":\"%s\",\"tank_l\":%d,\"lat_flip\":%d,\"raw\":\"%s\"}",
+        live ? "true" : "false", dc.accent, dc.tank_l, dc.lat_flip, esc);
+    if (n < 0) n = 0;
+    if ((size_t)n >= sizeof(body)) n = (int)sizeof(body) - 1;
+    send_resp(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)n);
 }
 
 static int valid_filename(const char *s) {
@@ -1492,6 +1547,7 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
 
     if (strcmp(method, "GET") == 0 || strcmp(method, "HEAD") == 0) {
         if (strcmp(target, "/api/status") == 0) handle_status(cfd, bcm2_ip);
+        else if (strcmp(target, "/api/live") == 0) handle_live(cfd);
         else if (strcmp(target, "/api/dl") == 0) handle_download(cfd, query);
         else if (strcmp(target, "/api/diag") == 0) handle_diag_bundle(cfd, bcm2_ip);
         else if (strcmp(target, "/api/theme/status") == 0) {
@@ -1693,7 +1749,7 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v23.1 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
+    nlog("touareg_netd v23.5 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
 
     int pin_init_rc = ensure_web_pin_boot();
     if (pin_init_rc == 1) {

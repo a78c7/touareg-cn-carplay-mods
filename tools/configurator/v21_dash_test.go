@@ -72,9 +72,10 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 			Show:     true,
 			Bars:     true,
 			Smooth:   true,
-			Items:    []string{"torque", "rpm", "g", "oil", "cons"},
+			Accent:   "#d926ef",
+			Items:    []string{"realspeed", "rpm", "yaw", "cabin", "cond"},
 			RShow:    true,
-			RItems:   []string{"tires", "tpfl", "tpfr", "tprl", "tprr", "pitch", "roll", "alt"},
+			RItems:   []string{"tires", "wfl", "wfr", "wrl", "wrr", "pitch", "roll", "alt"},
 			X:        5,
 			Y:        200,
 			Alpha:    200,
@@ -103,13 +104,13 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 	if !found {
 		t.Fatalf("expected dash.conf to be found")
 	}
-	if !got.Bars || !got.Smooth || !got.OkSwitch || got.NavBox != 2 || got.NavSide != "right" {
-		t.Fatalf("unexpected v22 dash fields: %+v", got)
+	if !got.Bars || !got.Smooth || !got.OkSwitch || got.NavBox != 2 || got.NavSide != "right" || got.Accent != "#d926ef" {
+		t.Fatalf("unexpected v23.5 dash fields: %+v", got)
 	}
-	if strings.Join(got.Items, ",") != "torque,rpm,g,oil,cons" {
+	if strings.Join(got.Items, ",") != "realspeed,rpm,yaw,cabin,cond" {
 		t.Fatalf("unexpected left items: %v", got.Items)
 	}
-	if strings.Join(got.RItems, ",") != "tires,tpfl,tpfr,tprl,tprr,pitch,roll,alt" {
+	if strings.Join(got.RItems, ",") != "tires,wfl,wfr,wrl,wrr,pitch,roll,alt" {
 		t.Fatalf("unexpected right items: %v", got.RItems)
 	}
 

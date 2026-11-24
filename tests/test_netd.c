@@ -110,14 +110,14 @@ static void test_http_security_and_routing(void) {
 
     uint32_t ip_owner    = htonl(0xC0A82B02u); /* 192.168.43.2 */
     uint32_t ip_attacker = htonl(0xC0A82B63u); /* 192.168.43.99 */
-    char resp[65536];
+    char resp[131072];
 
-    /* 1) Landing page "/" does not require PIN and serves refreshed v23.1 UI without "官方默认经典" */
+    /* 1) Landing page "/" does not require PIN and serves refreshed v23.5 UI without "官方默认经典" */
     const char *req_home = "GET / HTTP/1.1\r\nHost: touareg.local\r\n\r\n";
     run_http_req(req_home, strlen(req_home), ip_owner, resp, sizeof(resp));
     assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
     assert(strstr(resp, "MH2p") != NULL);
-    assert(strstr(resp, "v23.1") != NULL);
+    assert(strstr(resp, "v23.5") != NULL);
     assert(strstr(resp, "内置默认经典") != NULL);
     assert(strstr(resp, "官方默认经典") == NULL);
 
@@ -324,6 +324,30 @@ static void test_http_security_and_routing(void) {
         run_http_req(req_tst, strlen(req_tst), ip_owner, resp, sizeof(resp));
         assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
         unsetenv("NETD_THEME_LIVE_PATH");
+    }
+
+    /* 11) v23.5 GET /api/live returns raw dash.state telemetry + accent (PIN protected) */
+    {
+        char st_path[320];
+        snprintf(st_path, sizeof(st_path), "%s/dash.state", tmpdir);
+        FILE *sf = fopen(st_path, "w");
+        assert(sf != NULL);
+        fputs("n=7 pok=0 tqok=0 spd=86.0 rspd=83.1 yaw=6.2 cab=24.5 wfl=83.2 cf=9\n", sf);
+        fclose(sf);
+        setenv("NETD_DASH_STATE_PATH", st_path, 1);
+
+        const char *req_live_nopin = "GET /api/live HTTP/1.1\r\nHost: touareg.local\r\n\r\n";
+        run_http_req(req_live_nopin, strlen(req_live_nopin), ip_owner, resp, sizeof(resp));
+        assert(strstr(resp, "HTTP/1.1 401") != NULL);
+
+        const char *req_live_ok = "GET /api/live HTTP/1.1\r\nHost: touareg.local\r\nX-Pin: 839201\r\n\r\n";
+        run_http_req(req_live_ok, strlen(req_live_ok), ip_owner, resp, sizeof(resp));
+        assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
+        assert(strstr(resp, "\"live\":true") != NULL);
+        assert(strstr(resp, "rspd=83.1") != NULL);
+        assert(strstr(resp, "cab=24.5") != NULL);
+        assert(strstr(resp, "\"accent\":\"#22d3ee\"") != NULL);
+        unsetenv("NETD_DASH_STATE_PATH");
     }
 
     /* Cleanup */

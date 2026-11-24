@@ -142,19 +142,20 @@ typedef struct {
 /* 统一 60fps 车辆/导航/系统数据总线 */
 typedef struct {
     double rpm, rpm_raw, rpm_peak;
-    double speed, speed_raw;
-    double power, torque, pedal, brake, steer;
+    double speed, speed_raw, real_speed, real_speed_raw;
+    double power, torque, pedal, brake, steer, yaw;
     double g, glong, glat;
-    double oil, gearbox, coolant, outside, cons, fuel, range;
+    double oil, gearbox, coolant, outside, cabin, cons, fuel, range;
     double pitch, roll, alt;
     double tpfl, tpfr, tprl, tprr;
+    double wfl, wfr, wrl, wrr;
     double t100, pmax, tqmax, gmax;
     double trip, tripdist, tripspeed, refuel, refueldist, refuelspeed, total, totaldist, totalspeed, tripkm;
-    int    gear_num, t100_running;
+    int    gear_num, t100_running, cond_flags;
     char   gear[12], tires[24], triptime[16], refueltime[16], totaltime[16];
 
-    /* 冷车传感器就绪标志 */
-    int ready_oil, ready_gearbox, ready_tires, ready_alt, ready_t100;
+    /* 传感器/网关就绪标志 */
+    int ready_power, ready_torque, ready_oil, ready_gearbox, ready_tires, ready_alt, ready_t100, ready_cabin, ready_wheels;
 
     /* 导航状态 */
     int    nav_live, nav_dist_m, nav_rem_min;
@@ -167,7 +168,7 @@ typedef struct {
 
     /* 兼容 dash.conf */
     int    conf_show, conf_r_show, conf_bars, conf_alpha, conf_nav_box, conf_tank_l;
-    char   conf_nav_side[12];
+    char   conf_nav_side[12], conf_accent[12];
 } v23_bus_t;
 
 typedef struct {
@@ -199,16 +200,17 @@ typedef struct {
     double     last_compile_ms;
 } v23_sandbox_t;
 
-/* 内置唯一默认皮肤（100% 沿用老用户 dash.conf 43 项勾选与大字导航卡） */
+/* 内置唯一默认皮肤（100% 沿用老用户 dash.conf 51 项勾选、氛围灯主题色与大字导航卡） */
 static const char V23_DEFAULT_CLASSIC_JS[] =
     "const THEME = {\n"
     "  id: 'default_classic',\n"
     "  name: '内置默认 60fps 经典版',\n"
     "  author: 'touareg-cn-carplay-mods',\n"
-    "  version: '23.0',\n"
+    "  version: '23.5',\n"
     "  shader: ''\n"
     "};\n"
     "function render(ctx, bus) {\n"
+    "  var acc = (bus.conf && bus.conf.accent) ? bus.conf.accent : '#22d3ee';\n"
     "  ctx.clear(6, 10, 16, 1);\n"
     "  if (bus.sys.mapLive) {\n"
     "    ctx.drawMap(0, 0, 1920, 639, { alpha: 1.0 });\n"
@@ -217,9 +219,9 @@ static const char V23_DEFAULT_CLASSIC_JS[] =
     "    var cx = 960, cy = 345, r = 160;\n"
     "    ctx.arc(cx, cy, r, 135, 405, { color: 'rgba(148,163,184,0.18)', lineWidth: 16, cap: 'round' });\n"
     "    var rf = Math.min(1, bus.rpm / 6800);\n"
-    "    ctx.arc(cx, cy, r, 135, 135 + 270 * rf, { color: rf > 0.82 ? '#ef4444' : '#22d3ee', lineWidth: 16, cap: 'round', glow: 14 });\n"
+    "    ctx.arc(cx, cy, r, 135, 135 + 270 * rf, { color: rf > 0.82 ? '#ef4444' : acc, lineWidth: 16, cap: 'round', glow: 14 });\n"
     "    ctx.text(String(Math.round(bus.speed)), cx, cy + 16, { size: 96, bold: true, color: '#ffffff', align: 'center' });\n"
-    "    ctx.text('km/h  ·  ' + bus.gear, cx, cy + 62, { size: 24, bold: true, color: '#38bdf8', align: 'center' });\n"
+    "    ctx.text('km/h  ·  ' + bus.gear, cx, cy + 62, { size: 24, bold: true, color: acc, align: 'center' });\n"
     "  }\n"
     "  if (bus.conf.show) ctx.drawDashBox(5, 200, 295, 'left');\n"
     "  if (bus.nav.live && bus.conf.nav_box > 0) {\n"
@@ -1040,11 +1042,14 @@ static JSValue v23_marshal_bus(JSContext *ctx, const v23_bus_t *in) {
     JS_SetPropertyStr(ctx, b, "rpmPeak",     JS_NewFloat64(ctx, in->rpm_peak));
     JS_SetPropertyStr(ctx, b, "speed",       JS_NewFloat64(ctx, in->speed));
     JS_SetPropertyStr(ctx, b, "speedRaw",    JS_NewFloat64(ctx, in->speed_raw));
+    JS_SetPropertyStr(ctx, b, "realSpeed",   JS_NewFloat64(ctx, in->real_speed));
+    JS_SetPropertyStr(ctx, b, "realSpeedRaw",JS_NewFloat64(ctx, in->real_speed_raw));
     JS_SetPropertyStr(ctx, b, "power",       JS_NewFloat64(ctx, in->power));
     JS_SetPropertyStr(ctx, b, "torque",      JS_NewFloat64(ctx, in->torque));
     JS_SetPropertyStr(ctx, b, "pedal",       JS_NewFloat64(ctx, in->pedal));
     JS_SetPropertyStr(ctx, b, "brake",       JS_NewFloat64(ctx, in->brake));
     JS_SetPropertyStr(ctx, b, "steer",       JS_NewFloat64(ctx, in->steer));
+    JS_SetPropertyStr(ctx, b, "yaw",         JS_NewFloat64(ctx, in->yaw));
     JS_SetPropertyStr(ctx, b, "gear",        JS_NewString(ctx, in->gear[0] ? in->gear : "-"));
     JS_SetPropertyStr(ctx, b, "gearNum",     JS_NewInt32(ctx, in->gear_num));
     JS_SetPropertyStr(ctx, b, "g",           JS_NewFloat64(ctx, in->g));
@@ -1054,6 +1059,7 @@ static JSValue v23_marshal_bus(JSContext *ctx, const v23_bus_t *in) {
     JS_SetPropertyStr(ctx, b, "gearbox",     JS_NewFloat64(ctx, in->gearbox));
     JS_SetPropertyStr(ctx, b, "coolant",     JS_NewFloat64(ctx, in->coolant));
     JS_SetPropertyStr(ctx, b, "outside",     JS_NewFloat64(ctx, in->outside));
+    JS_SetPropertyStr(ctx, b, "cabin",       JS_NewFloat64(ctx, in->cabin));
     JS_SetPropertyStr(ctx, b, "cons",        JS_NewFloat64(ctx, in->cons));
     JS_SetPropertyStr(ctx, b, "fuel",        JS_NewFloat64(ctx, in->fuel));
     JS_SetPropertyStr(ctx, b, "range",       JS_NewFloat64(ctx, in->range));
@@ -1064,6 +1070,10 @@ static JSValue v23_marshal_bus(JSContext *ctx, const v23_bus_t *in) {
     JS_SetPropertyStr(ctx, b, "tpfr",        JS_NewFloat64(ctx, in->tpfr));
     JS_SetPropertyStr(ctx, b, "tprl",        JS_NewFloat64(ctx, in->tprl));
     JS_SetPropertyStr(ctx, b, "tprr",        JS_NewFloat64(ctx, in->tprr));
+    JS_SetPropertyStr(ctx, b, "wfl",         JS_NewFloat64(ctx, in->wfl));
+    JS_SetPropertyStr(ctx, b, "wfr",         JS_NewFloat64(ctx, in->wfr));
+    JS_SetPropertyStr(ctx, b, "wrl",         JS_NewFloat64(ctx, in->wrl));
+    JS_SetPropertyStr(ctx, b, "wrr",         JS_NewFloat64(ctx, in->wrr));
     JS_SetPropertyStr(ctx, b, "tires",       JS_NewString(ctx, in->tires[0] ? in->tires : "--"));
     JS_SetPropertyStr(ctx, b, "t100",        JS_NewFloat64(ctx, in->t100));
     JS_SetPropertyStr(ctx, b, "t100Running", JS_NewBool(ctx, in->t100_running));
@@ -1085,12 +1095,30 @@ static JSValue v23_marshal_bus(JSContext *ctx, const v23_bus_t *in) {
     JS_SetPropertyStr(ctx, b, "tripkm",      JS_NewFloat64(ctx, in->tripkm));
 
     JSValue ready = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, ready, "power",   JS_NewBool(ctx, in->ready_power));
+    JS_SetPropertyStr(ctx, ready, "torque",  JS_NewBool(ctx, in->ready_torque));
     JS_SetPropertyStr(ctx, ready, "oil",     JS_NewBool(ctx, in->ready_oil));
     JS_SetPropertyStr(ctx, ready, "gearbox", JS_NewBool(ctx, in->ready_gearbox));
     JS_SetPropertyStr(ctx, ready, "tires",   JS_NewBool(ctx, in->ready_tires));
     JS_SetPropertyStr(ctx, ready, "alt",     JS_NewBool(ctx, in->ready_alt));
     JS_SetPropertyStr(ctx, ready, "t100",    JS_NewBool(ctx, in->ready_t100));
+    JS_SetPropertyStr(ctx, ready, "cabin",   JS_NewBool(ctx, in->ready_cabin));
+    JS_SetPropertyStr(ctx, ready, "wheels",  JS_NewBool(ctx, in->ready_wheels));
     JS_SetPropertyStr(ctx, b, "ready", ready);
+
+    int cf = in->cond_flags > 0 ? in->cond_flags : 0;
+    JSValue cond = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, cond, "flags",       JS_NewInt32(ctx, cf));
+    JS_SetPropertyStr(ctx, cond, "kickdown",    JS_NewBool(ctx, (cf & (1 << 0)) != 0));
+    JS_SetPropertyStr(ctx, cond, "coasting",    JS_NewBool(ctx, (cf & (1 << 1)) != 0));
+    JS_SetPropertyStr(ctx, cond, "braking",     JS_NewBool(ctx, (cf & (1 << 2)) != 0));
+    JS_SetPropertyStr(ctx, cond, "esp",         JS_NewBool(ctx, (cf & (1 << 3)) != 0));
+    JS_SetPropertyStr(ctx, cond, "eds",         JS_NewBool(ctx, (cf & (1 << 4)) != 0));
+    JS_SetPropertyStr(ctx, cond, "hdc",         JS_NewBool(ctx, (cf & (1 << 5)) != 0));
+    JS_SetPropertyStr(ctx, cond, "brakeHot",    JS_NewBool(ctx, (cf & (1 << 6)) != 0));
+    JS_SetPropertyStr(ctx, cond, "coolantWarn", JS_NewBool(ctx, (cf & (1 << 7)) != 0));
+    JS_SetPropertyStr(ctx, cond, "gearboxWarn", JS_NewBool(ctx, (cf & (1 << 8)) != 0));
+    JS_SetPropertyStr(ctx, b, "cond", cond);
 
     JSValue nav = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, nav, "live",      JS_NewBool(ctx, in->nav_live));
@@ -1125,6 +1153,7 @@ static JSValue v23_marshal_bus(JSContext *ctx, const v23_bus_t *in) {
     JS_SetPropertyStr(ctx, conf, "nav_box",  JS_NewInt32(ctx, in->conf_nav_box));
     JS_SetPropertyStr(ctx, conf, "tank_l",   JS_NewInt32(ctx, in->conf_tank_l));
     JS_SetPropertyStr(ctx, conf, "nav_side", JS_NewString(ctx, in->conf_nav_side[0] ? in->conf_nav_side : "right"));
+    JS_SetPropertyStr(ctx, conf, "accent",   JS_NewString(ctx, in->conf_accent[0] ? in->conf_accent : "#22d3ee"));
     JS_SetPropertyStr(ctx, b, "conf", conf);
 
     return b;

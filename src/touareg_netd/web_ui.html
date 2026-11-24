@@ -64,6 +64,40 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--acc);flex-shrink:
 details.opt-card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px}
 details.opt-card>summary{cursor:pointer;font-size:14px;font-weight:700;color:var(--mut);list-style:none;display:flex;align-items:center;justify-content:space-between}
 input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px dashed var(--bd);border-radius:9px;padding:10px;font-size:13px}
+.sw-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0 4px}
+.sw{display:inline-flex;align-items:center;gap:5px;padding:5px 9px 5px 6px;border-radius:99px;border:1px solid var(--bd);background:var(--card2);color:var(--mut);font-size:12px;cursor:pointer}
+.sw i{display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid rgba(255,255,255,.25)}
+.sw.on{border-color:var(--cyan);color:#fff;background:rgba(34,211,238,.14);font-weight:600}
+.bento-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.bento-grid{display:grid;grid-template-columns:1fr;gap:10px;--lv-acc:#22d3ee}
+@media(min-width:680px){.bento-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:960px){.bento-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+body.live-on main,body.live-on .tabs{max-width:1120px}
+.bcard{background:linear-gradient(180deg,#171922,#0d0f16);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:13px 14px;display:flex;flex-direction:column;gap:9px;min-width:0}
+.bcard-hd{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;color:#9aa3b5;font-weight:600;white-space:nowrap}
+.bcard-tag{font-size:11px;padding:2px 7px;border-radius:99px;background:rgba(255,255,255,.06);color:var(--lv-acc);white-space:nowrap;flex-shrink:0}
+.b-hero{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.b-spd{font-size:52px;font-weight:800;line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums;color:#fff}
+.b-gear{min-width:52px;height:44px;border-radius:12px;border:1.5px solid var(--lv-acc);background:rgba(255,255,255,.06);display:grid;place-items:center;font-size:22px;font-weight:800;color:#fff}
+.b-trk{height:8px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden}
+.b-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#e5e7eb,var(--lv-acc));transition:width .16s linear}
+.b-fill.red{background:linear-gradient(90deg,#fb923c,#ef4444)}
+.b-kv{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.b-mini{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:11px;padding:8px 10px;min-width:0}
+.b-mini .k{font-size:11px;color:#8b95a8;white-space:nowrap}.b-mini .v{font-size:18px;font-weight:750;color:#fff;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap}
+.b-t3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.b-whl{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.b-gbox{display:flex;align-items:center;gap:12px}
+.b-gdisc{position:relative;width:82px;height:82px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:radial-gradient(circle,rgba(255,255,255,.05) 0 45%,transparent 46%);flex-shrink:0}
+.b-gdisc::before{content:"";position:absolute;left:50%;top:4px;bottom:4px;width:1px;background:rgba(255,255,255,.1)}
+.b-gdisc::after{content:"";position:absolute;top:50%;left:4px;right:4px;height:1px;background:rgba(255,255,255,.1)}
+.b-gdot{position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--lv-acc);box-shadow:0 0 12px var(--lv-acc);transition:transform .14s linear}
+.b-flags{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.b-flg{padding:6px 8px;border-radius:9px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);font-size:11.5px;display:flex;justify-content:space-between;gap:4px;white-space:nowrap;color:#8b95a8}
+.b-flg.on{border-color:var(--lv-acc);color:#fff;background:rgba(255,255,255,.08)}
+.b-flg.hot{border-color:#ef4444;color:#fecaca;background:rgba(239,68,68,.2)}
+body.live-fs header,body.live-fs .foss-bar,body.live-fs .tabs,body.live-fs .foss-foot,body.live-fs #safeBanner{display:none!important}
+body.live-fs main{max-width:1200px;padding:10px}
 #toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#1f2937;color:#fff;border:1px solid var(--bd);padding:10px 16px;border-radius:10px;font-size:13px;z-index:99;display:none;max-width:92vw;box-shadow:0 10px 28px rgba(0,0,0,.55)}
 </style>
 </head>
@@ -71,7 +105,7 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
 <div class="foss-bar"><b>免费开源项目 · 严禁倒卖</b>｜官方源码 github.com/a78c7/touareg-cn-carplay-mods｜如花钱购买本程序或改装包请立即退款</div>
 <header>
   <h1>
-    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v23.1</span></span>
+    <span>MH2p 无线控制台 <span id="verTxt" class="sub-tag">v23.5</span></span>
     <span id="spdBadge" class="badge">连接中...</span>
   </h1>
   <div class="meta">
@@ -91,6 +125,7 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
 
 <div class="tabs">
   <div class="tab on" data-t="dash">仪表配置</div>
+  <div class="tab" data-t="live">实时大屏</div>
   <div class="tab" data-t="ctrl">开关运维</div>
   <div class="tab" data-t="logs">日志导出</div>
   <div class="tab" data-t="dev">Wi-Fi/SSH</div>
@@ -120,16 +155,30 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
         <div class="presets">
           <button type="button" class="btn sm" data-p="torque,rpm,g,oil,cons">推荐 5 项大字</button>
           <button type="button" class="btn sm" data-p="power,torque,g,rpm,oil,gearbox">经典动力 6 项</button>
+          <button type="button" class="btn sm" data-p="realspeed,rpm,pedal,cabin,tires,cond">真车速·底盘 6 项</button>
           <button type="button" class="btn sm" data-p="tires,pitch,roll,alt,oil">胎压越野 5 项</button>
           <button type="button" class="btn sm" data-p="t100,pmax,tqmax,gmax,power">性能极值</button>
           <button type="button" class="btn sm dan" data-p="">清空</button>
         </div>
+        <div class="sub" style="margin:6px 0 4px">共 51 项实车真数据；若本车出厂不上报功率/扭矩，仪表会自动替补为真实车速/油门/车内温，不显示死 0。</div>
         <div id="poolWrap"></div>
       </div>
 
       <div class="card">
-        <h2>运动条、导航卡与车标参数</h2>
-        <div class="row"><label>行内运动刻度进度条<span class="sub">转速/扭矩斜切分段条、G 值/坡度中心游标、油温/胎压区间条</span></label><input type="checkbox" id="bars" checked></div>
+        <h2>运动条、氛围灯主色与车标参数</h2>
+        <div class="row stack">
+          <label>氛围灯主题主色 (accent)<span class="sub">一键匹配途锐车内氛围灯，仪表信息框顶边、进度条与默认 60fps 皮肤同步变色</span></label>
+          <div class="sw-row" id="accSw">
+            <button type="button" class="sw" data-acc="#22d3ee"><i style="background:#22d3ee"></i>冰川青</button>
+            <button type="button" class="sw" data-acc="#e6be00"><i style="background:#e6be00"></i>香槟金</button>
+            <button type="button" class="sw" data-acc="#d926ef"><i style="background:#d926ef"></i>电光紫</button>
+            <button type="button" class="sw" data-acc="#3b82f6"><i style="background:#3b82f6"></i>R 蓝</button>
+            <button type="button" class="sw" data-acc="#ff453a"><i style="background:#ff453a"></i>赛道红</button>
+            <button type="button" class="sw" data-acc="#30d158"><i style="background:#30d158"></i>极光绿</button>
+            <input type="color" id="accent" value="#22d3ee" style="width:36px;height:28px;border:1px solid var(--bd);border-radius:8px;background:var(--card2);padding:2px">
+          </div>
+        </div>
+        <div class="row"><label>行内运动刻度进度条<span class="sub">油门条非线性更跟脚、G 值/横摆中心游标、油温/车内温/胎压区间条</span></label><input type="checkbox" id="bars" checked></div>
         <div class="row"><label>运动条阻尼平滑动画 (smooth)<span class="sub">指数阻尼补间 + 10Hz 遥测，转速/扭矩/G 值条流畅过渡不跳格</span></label><input type="checkbox" id="smooth" checked></div>
         <div class="row stack">
           <label>大字导航信息卡<span class="sub">与左框严格等宽对称（295px），可选仅导航弹出或常驻待机框</span></label>
@@ -181,6 +230,87 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
     </div>
   </section>
 
+  <section id="p-live" class="pane">
+    <div class="bento-bar">
+      <div>
+        <span id="lvState" class="badge warn">等待车机实时数据</span>
+        <span id="lvHint" class="sub" style="display:inline;margin-left:6px">实时读取实车总线，行车可用（只读）</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="btn sm" id="btnLvDemo">模拟演示</button>
+        <button type="button" class="btn sm pri" id="btnLvFs">全屏副屏</button>
+      </div>
+    </div>
+    <div class="bento-grid" id="lvGrid">
+      <div class="bcard">
+        <div class="bcard-hd"><span>真实无虚高车速 · 转速</span><span class="bcard-tag" id="lvSpdSub">表显 --</span></div>
+        <div class="b-hero">
+          <div><span class="b-spd" id="lvRspd">--</span> <span style="color:#8b95a8;font-size:14px">km/h</span></div>
+          <div class="b-gear" id="lvGear">-</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#9aa3b5"><span>发动机转速</span><b id="lvRpm" style="color:#fff">-- rpm</b></div>
+        <div class="b-trk"><div class="b-fill" id="lvRpmBar" style="width:0%"></div></div>
+        <div class="b-kv">
+          <div class="b-mini"><div class="k">油门开度</div><div class="v" id="lvPed">--%</div><div class="b-trk" style="margin-top:5px;height:5px"><div class="b-fill" id="lvPedBar" style="width:0%"></div></div></div>
+          <div class="b-mini"><div class="k">制动油压</div><div class="v" id="lvBrk">-- bar</div><div class="b-trk" style="margin-top:5px;height:5px"><div class="b-fill red" id="lvBrkBar" style="width:0%"></div></div></div>
+        </div>
+        <div class="b-kv" id="lvPwrRow">
+          <div class="b-mini"><div class="k">实时功率</div><div class="v" id="lvPwr">-- kW</div></div>
+          <div class="b-mini"><div class="k">实时扭矩</div><div class="v" id="lvTq">-- Nm</div></div>
+        </div>
+        <div class="b-mini" style="display:flex;justify-content:space-between;align-items:center">
+          <div><div class="k">0–100 km/h 加速纪录</div><div style="font-size:11px;color:#34d399">基于真实车速精准计时</div></div>
+          <div class="v" id="lvT100" style="font-size:22px">-- s</div>
+        </div>
+      </div>
+
+      <div class="bcard">
+        <div class="bcard-hd"><span>四轮胎压与独立轮速</span><span class="bcard-tag" id="lvSteer">转向 0°</span></div>
+        <div class="b-whl">
+          <div class="b-mini"><div class="k">左前 FL</div><div class="v" id="lvTpFl">-- bar</div><div class="k" id="lvWsFl" style="margin-top:2px">轮速 -- km/h</div></div>
+          <div class="b-mini"><div class="k">右前 FR</div><div class="v" id="lvTpFr">-- bar</div><div class="k" id="lvWsFr" style="margin-top:2px">轮速 -- km/h</div></div>
+          <div class="b-mini"><div class="k">左后 RL</div><div class="v" id="lvTpRl">-- bar</div><div class="k" id="lvWsRl" style="margin-top:2px">轮速 -- km/h</div></div>
+          <div class="b-mini"><div class="k">右后 RR</div><div class="v" id="lvTpRr">-- bar</div><div class="k" id="lvWsRr" style="margin-top:2px">轮速 -- km/h</div></div>
+        </div>
+        <div class="bcard-hd" style="margin-top:2px"><span>G 值动态与横摆角速度</span><span class="bcard-tag" id="lvYaw">0.0 °/s</span></div>
+        <div class="b-gbox">
+          <div class="b-gdisc"><div class="b-gdot" id="lvGdot"></div></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:5px;font-size:12.5px">
+            <div style="display:flex;justify-content:space-between"><span style="color:#8b95a8">合 G / 峰值</span><b id="lvGval">-- / -- g</b></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#8b95a8">纵 / 横向 G</span><b id="lvGxy">-- / -- g</b></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#8b95a8">瞬时油耗</span><b id="lvCons">--</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bcard">
+        <div class="bcard-hd"><span>姿态 · 热管理</span><span class="bcard-tag" id="lvFuel">-- L · -- km</span></div>
+        <div class="b-t3">
+          <div class="b-mini"><div class="k">俯仰角</div><div class="v" id="lvPit">--°</div></div>
+          <div class="b-mini"><div class="k">侧倾角</div><div class="v" id="lvRol">--°</div></div>
+          <div class="b-mini"><div class="k">海拔</div><div class="v" id="lvAlt">-- m</div></div>
+        </div>
+        <div class="b-t3">
+          <div class="b-mini"><div class="k">机油</div><div class="v" id="lvOil">--°C</div></div>
+          <div class="b-mini"><div class="k">变速箱</div><div class="v" id="lvGbt">--°C</div></div>
+          <div class="b-mini"><div class="k">冷却液</div><div class="v" id="lvCool">--°C</div></div>
+        </div>
+        <div class="b-kv">
+          <div class="b-mini"><div class="k">车内温度</div><div class="v" id="lvCab">--°C</div></div>
+          <div class="b-mini"><div class="k">车外温度</div><div class="v" id="lvOut">--°C</div></div>
+        </div>
+        <div class="b-flags">
+          <div class="b-flg" id="lvFHot"><span>热告警</span><b>正常</b></div>
+          <div class="b-flg" id="lvFAcc"><span>ACC</span><b>待命</b></div>
+          <div class="b-flg" id="lvFKd"><span>KickDown</span><b>待命</b></div>
+          <div class="b-flg" id="lvFCst"><span>空挡滑行</span><b>关闭</b></div>
+          <div class="b-flg" id="lvFEsp"><span>ESP</span><b>护航</b></div>
+          <div class="b-flg" id="lvFHdc"><span>HDC</span><b>待命</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="p-ctrl" class="pane">
     <div id="ctrlToggles" class="card">
       <h2>仪表功能开关</h2>
@@ -206,7 +336,7 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
       <div id="v23ThemeMsg" class="sub" style="margin-top:8px"></div>
     </div>
     <div class="card">
-      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v23.1</span></h2>
+      <h2>离线无线升级 (OTA) &amp; 一键回滚<span id="otaVerBadge" class="sub-tag">v23.5</span></h2>
       <div class="sub" style="margin-bottom:8px">上传从官方 GitHub Release 下载的 <code>touareg-ota-*.tar</code>（最大 6 MB）。流式直写 eMMC 暂存区，强制校验官方 Ed25519 数字签名与逐文件 SHA-256 并按严格白名单落盘，写入前自动备份当前版本；升级后点下方「软重启车机」生效。</div>
       <input type="file" id="otaFile" accept=".tar">
       <div class="actions">
@@ -295,19 +425,29 @@ input[type=file]{width:100%;background:var(--card2);color:var(--tx);border:1px d
 <script>
 const ITEMS=[
 ["power","功率","kW","动力与加速"],["torque","扭矩","Nm","动力与加速"],["rpm","转速","rpm","动力与加速"],["pedal","油门","%","动力与加速"],["brake","制动压力","bar","动力与加速"],
-["g","G值","g","动力与加速"],["glong","纵向G","g","动力与加速"],["glat","横向G","g","动力与加速"],
+["g","G值","g","动力与加速"],["glong","纵向G","g","动力与加速"],["glat","横向G","g","动力与加速"],["yaw","横摆角速","°/s","动力与加速"],
 ["t100","0-100","s","性能与行驶"],["pmax","最大功率","kW","性能与行驶"],["tqmax","最大扭矩","Nm","性能与行驶"],["gmax","最大G值","g","性能与行驶"],
-["speed","车速","km/h","性能与行驶"],["steer","转向角","°","性能与行驶"],["gear","挡位","","性能与行驶"],["tripkm","Trip","km","性能与行驶"],
+["speed","车速","km/h","性能与行驶"],["realspeed","真实车速","km/h","性能与行驶"],["steer","转向角","°","性能与行驶"],["gear","挡位","","性能与行驶"],["tripkm","Trip","km","性能与行驶"],
 ["tires","四轮胎压","bar","胎压与越野"],["tpfl","左前胎压","bar","胎压与越野"],["tpfr","右前胎压","bar","胎压与越野"],["tprl","左后胎压","bar","胎压与越野"],["tprr","右后胎压","bar","胎压与越野"],
-["pitch","俯仰角","°","胎压与越野"],["roll","侧倾角","°","胎压与越野"],["alt","海拔","m","胎压与越野"],
-["oil","机油温度","°C","温度与油耗"],["gearbox","变速箱油温","°C","温度与油耗"],["coolant","冷却液温度","°C","温度与油耗"],["outside","车外温度","°C","温度与油耗"],
+["wfl","左前轮速","km/h","胎压与越野"],["wfr","右前轮速","km/h","胎压与越野"],["wrl","左后轮速","km/h","胎压与越野"],["wrr","右后轮速","km/h","胎压与越野"],
+["pitch","俯仰角","°","胎压与越野"],["roll","侧倾角","°","胎压与越野"],["alt","海拔","m","胎压与越野"],["cond","底盘工况","","胎压与越野"],
+["oil","机油温度","°C","温度与油耗"],["gearbox","变速箱油温","°C","温度与油耗"],["coolant","冷却液温度","°C","温度与油耗"],["cabin","车内温度","°C","温度与油耗"],["outside","车外温度","°C","温度与油耗"],
 ["cons","当前消耗","L/100km","温度与油耗"],["fuel","燃油存量","L","温度与油耗"],["range","续驶里程","km","温度与油耗"],
 ["trip","本次油耗","L/100km","行车电脑"],["tripdist","本次里程","km","行车电脑"],["tripspeed","本次均速","km/h","行车电脑"],["triptime","本次时长","h","行车电脑"],
 ["refuel","加油后油耗","L/100km","行车电脑"],["refueldist","加油后里程","km","行车电脑"],["refuelspeed","加油后均速","km/h","行车电脑"],["refueltime","加油后时长","h","行车电脑"],
 ["total","累计油耗","L/100km","行车电脑"],["totaldist","累计里程","km","行车电脑"],["totalspeed","累计均速","km/h","行车电脑"],["totaltime","累计时长","h","行车电脑"]
 ];
 const IMAP={};ITEMS.forEach(x=>IMAP[x[0]]=x);
-let S=null,L=[],R=[],lOn=true,rOn=false,curSide='l',PIN=localStorage.getItem('mh2p_pin')||'',busy=false;
+let S=null,L=[],R=[],lOn=true,rOn=false,curSide='l',PIN=localStorage.getItem('mh2p_pin')||'',busy=false,curAcc='#22d3ee',lvTimer=null,lvDemo=false,lvDemoT=0;
+
+function applyAccentUi(hex){
+  curAcc=/^#[0-9a-f]{6}$/i.test(hex||'')?hex.toLowerCase():'#22d3ee';
+  document.getElementById('accent').value=curAcc;
+  document.querySelectorAll('#accSw .sw').forEach(b=>b.classList.toggle('on',(b.dataset.acc||'').toLowerCase()===curAcc));
+  document.getElementById('lvGrid').style.setProperty('--lv-acc',curAcc);
+}
+document.querySelectorAll('#accSw .sw').forEach(b=>{b.onclick=()=>applyAccentUi(b.dataset.acc);});
+document.getElementById('accent').oninput=e=>applyAccentUi(e.target.value);
 
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._tm);t._tm=setTimeout(()=>t.style.display='none',2800);}
 function copyText(s){
@@ -333,6 +473,8 @@ document.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{
   document.querySelectorAll('.pane').forEach(x=>x.classList.remove('on'));
   el.classList.add('on');
   document.getElementById('p-'+el.dataset.t).classList.add('on');
+  document.body.classList.toggle('live-on',el.dataset.t==='live');
+  if(el.dataset.t==='live')startLivePoll();else stopLivePoll();
 });
 
 document.getElementById('tabSideL').onclick=()=>{curSide='l';renderEditor();};
@@ -485,8 +627,8 @@ function updateHeaderStatus(j){
   document.querySelectorAll('.write-act').forEach(btn=>{btn.disabled=driving||busy;});
   const rb=document.getElementById('btnOtaRollback');
   if(rb)rb.disabled=driving||busy||!j.has_ota_backup;
-  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v23.1';
-  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v23.1');
+  document.getElementById('verTxt').textContent=j.ota_ver||j.version||'v23.5';
+  document.getElementById('otaVerBadge').textContent='当前 '+(j.ota_ver||j.version||'v23.5');
   document.getElementById('ipTxt').textContent='地址: touareg.local ('+(j.bcm2_ip||'--')+')';
   document.getElementById('procTxt').textContent='进程: clusterd='+(j.clusterd?'开':'关')+' render='+(j.cl_render?'开':'关');
   document.getElementById('odoTxt').textContent=j.odo>0?('总里程: '+j.odo.toFixed(1)+' km'):'';
@@ -563,6 +705,7 @@ async function loadStatus(){
     lOn=d.show!=0;rOn=d.r_show==1;
     document.getElementById('bars').checked=d.bars!==0;
     document.getElementById('smooth').checked=d.smooth!==0;
+    applyAccentUi(d.accent||'#22d3ee');
     ['car_up','acc_up','amap_turn','alpha','tank_l','trip_base','nav_tz'].forEach(k=>{
       if(d[k]!==undefined)document.getElementById(k).value=d[k];
     });
@@ -618,6 +761,7 @@ document.getElementById('btnSaveDash').onclick=async()=>{
       r_items:R.join(','),r_show:rOn?1:0,
       bars:document.getElementById('bars').checked?1:0,
       smooth:document.getElementById('smooth').checked?1:0,
+      accent:curAcc,
       car_up:document.getElementById('car_up').value||'0',
       acc_up:document.getElementById('acc_up').value||'0',
       amap_turn:document.getElementById('amap_turn').value||'3',
@@ -818,6 +962,128 @@ document.getElementById('btnAddWifi').onclick=async()=>{
     loadStatus();
   }catch(e){toast('添加失败: '+e.message);}
   finally{busy=false;if(S)updateHeaderStatus(S);}
+};
+
+function parseRawKv(raw){
+  const m={};
+  (raw||'').trim().split(/\s+/).forEach(tok=>{
+    const i=tok.indexOf('=');
+    if(i>0)m[tok.slice(0,i)]=Number(tok.slice(i+1));
+  });
+  return m;
+}
+function fmtGear(gm,gc){
+  const mp={1:'P',2:'R',3:'N',4:'D',13:'D',5:'S',11:'S',6:'M',7:'M',10:'M',12:'M',8:'E',9:'B'};
+  const c=mp[gm];
+  if(!c)return '-';
+  if(gm<=3)return c;
+  return (gc>=1&&gc<=10)?(c+gc):c;
+}
+function setFlag(id,active,txt,hot){
+  const el=document.getElementById(id);
+  el.className='b-flg'+(hot?' hot':(active?' on':''));
+  el.lastElementChild.textContent=txt;
+}
+function renderLive(kv,tankL,latFlip,isDemo){
+  const has=k=>kv[k]!==undefined&&isFinite(kv[k]);
+  const rspd=has('rspd')?kv.rspd:(has('spd')?kv.spd:NaN);
+  document.getElementById('lvRspd').textContent=isFinite(rspd)?Math.round(rspd):'--';
+  document.getElementById('lvSpdSub').textContent='表显 '+(has('spd')?Math.round(kv.spd)+' km/h':'--');
+  document.getElementById('lvGear').textContent=has('gm')?fmtGear(kv.gm,kv.gc||0):'-';
+  const rpm=has('rpm')?kv.rpm:0;
+  document.getElementById('lvRpm').textContent=has('rpm')?(Math.round(rpm)+' rpm'):'-- rpm';
+  const rf=Math.max(0,Math.min(1,rpm/6500));
+  const rbar=document.getElementById('lvRpmBar');
+  rbar.style.width=(rf*100).toFixed(1)+'%';
+  rbar.className='b-fill'+(rf>0.82?' red':'');
+  const ped=has('ped')?Math.max(0,Math.min(100,kv.ped)):0;
+  document.getElementById('lvPed').textContent=has('ped')?(Math.round(ped)+'%'):'--%';
+  document.getElementById('lvPedBar').style.width=(Math.pow(ped/100,0.72)*100).toFixed(1)+'%';
+  const brk=has('brk')?Math.max(0,kv.brk):0;
+  document.getElementById('lvBrk').textContent=has('brk')?(brk.toFixed(1)+' bar'):'-- bar';
+  document.getElementById('lvBrkBar').style.width=(Math.min(1,brk/60)*100).toFixed(1)+'%';
+  const showPwr=kv.pok!==0||kv.tqok!==0;
+  document.getElementById('lvPwrRow').style.display=showPwr?'grid':'none';
+  document.getElementById('lvPwr').textContent=(kv.pok!==0&&has('p'))?(Math.round(kv.p)+' kW'):'--';
+  document.getElementById('lvTq').textContent=(kv.tqok!==0&&has('tq'))?(Math.round(kv.tq)+' Nm'):'--';
+  document.getElementById('lvT100').textContent=has('t1r')?(kv.t1r.toFixed(1)+' s'):(has('t1')?(kv.t1.toFixed(2)+' s'):'-- s');
+  const str=has('str')?kv.str:0;
+  document.getElementById('lvSteer').textContent=!has('str')?'转向 --':(Math.abs(str)<1?'回正 0°':(str<0?('左 '+Math.round(-str)+'°'):('右 '+Math.round(str)+'°')));
+  const tpst=has('tpst')?kv.tpst:0;
+  [['lvTpFl','tpfl',1],['lvTpFr','tpfr',2],['lvTpRl','tprl',4],['lvTpRr','tprr',8]].forEach(([id,k,bit])=>{
+    document.getElementById(id).textContent=has(k)?(kv[k].toFixed(1)+' bar'+(tpst&bit?' !':'')):'-- bar';
+  });
+  [['lvWsFl','wfl'],['lvWsFr','wfr'],['lvWsRl','wrl'],['lvWsRr','wrr']].forEach(([id,k])=>{
+    document.getElementById(id).textContent='轮速 '+(has(k)?kv[k].toFixed(1):'--')+' km/h';
+  });
+  const gx=has('gx')?kv.gx:0, gy=(has('gy')?kv.gy:0)*(latFlip?-1:1);
+  const gt=Math.hypot(gx,gy);
+  document.getElementById('lvGdot').style.transform=`translate(${Math.max(-32,Math.min(32,-gy*40)).toFixed(1)}px,${Math.max(-32,Math.min(32,-gx*40)).toFixed(1)}px)`;
+  document.getElementById('lvGval').textContent=(has('gx')?gt.toFixed(2):'--')+' / '+(has('gmx')?kv.gmx.toFixed(2):'--')+' g';
+  document.getElementById('lvGxy').textContent=(has('gx')?((gx>=0?'+':'')+gx.toFixed(2)):'--')+' / '+(has('gy')?((gy>=0?'+':'')+gy.toFixed(2)):'--')+' g';
+  document.getElementById('lvYaw').textContent=has('yaw')?((kv.yaw>=0?'+':'')+kv.yaw.toFixed(1)+' °/s'):'-- °/s';
+  const cu=kv.cu===2?' L/h':(kv.cu===1?' km/L':' L/100km');
+  document.getElementById('lvCons').textContent=has('cv')?(kv.cv.toFixed(1)+cu):'--';
+  const fuelTxt=has('tank')?(tankL>0?(Math.round(kv.tank*tankL/100)+' L'):(Math.round(kv.tank)+'%')):'--';
+  document.getElementById('lvFuel').textContent=fuelTxt+' · '+(has('rng')?(Math.round(kv.rng)+' km'):'-- km');
+  document.getElementById('lvPit').textContent=has('pitch')?((kv.pitch>=0?'+':'')+kv.pitch.toFixed(1)+'°'):'--°';
+  document.getElementById('lvRol').textContent=has('roll')?((kv.roll>=0?'+':'')+kv.roll.toFixed(1)+'°'):'--°';
+  document.getElementById('lvAlt').textContent=has('alt')?(Math.round(kv.alt)+' m'):'-- m';
+  document.getElementById('lvOil').textContent=has('oil')?(Math.round(kv.oil)+'°C'):'--°C';
+  document.getElementById('lvGbt').textContent=has('gbt')?(Math.round(kv.gbt)+'°C'):'--°C';
+  document.getElementById('lvCool').textContent=has('cool')?(Math.round(kv.cool)+'°C'):'--°C';
+  document.getElementById('lvCab').textContent=has('cab')?(kv.cab.toFixed(1)+'°C'):'--°C';
+  document.getElementById('lvOut').textContent=has('out')?(Math.round(kv.out)+'°C'):'--°C';
+  const cf=has('cf')?kv.cf:0;
+  const hot=(cf&((1<<6)|(1<<7)|(1<<8)))!==0;
+  setFlag('lvFHot',false,hot?'高温告警!':'正常',hot);
+  setFlag('lvFAcc',kv.acc===1,kv.acc===1?'控车中':'待命',false);
+  setFlag('lvFKd',(cf&1)!==0,(cf&1)!==0?'强制降挡':'待命',false);
+  setFlag('lvFCst',(cf&2)!==0,(cf&2)!==0?'滑行中':'关闭',false);
+  const esp=(cf&8)!==0,eds=(cf&16)!==0;
+  setFlag('lvFEsp',esp||eds,eds?'EDS 锁止':(esp?'ESP 介入':'护航'),false);
+  setFlag('lvFHdc',(cf&32)!==0,(cf&32)!==0?'激活':'待命',false);
+  const st=document.getElementById('lvState');
+  st.textContent=isDemo?'演示模式':'实车实时';
+  st.className='badge '+(isDemo?'warn':'ok');
+}
+async function pollLiveOnce(){
+  if(document.hidden||document.getElementById('pinModal').classList.contains('on'))return;
+  if(lvDemo){
+    lvDemoT+=0.25;
+    const s=83+14*Math.sin(lvDemoT*0.7);
+    const kv={spd:s+3,rspd:s,rpm:2400+1400*Math.abs(Math.sin(lvDemoT*0.7)),ped:28+32*Math.abs(Math.sin(lvDemoT*0.7)),brk:0,p:142,tq:368,pok:1,tqok:1,t1:5.88,gm:4,gc:4,str:Math.round(-18*Math.sin(lvDemoT*0.5)),tpfl:2.2,tpfr:2.3,tprl:2.1,tprr:2.3,wfl:s-0.2,wfr:s+0.3,wrl:s-0.3,wrr:s+0.1,gx:0.18*Math.sin(lvDemoT*0.9),gy:-0.15*Math.cos(lvDemoT*0.6),gmx:0.64,yaw:6.2*Math.cos(lvDemoT*0.6),cv:8.6,cu:0,tank:78,rng:590,pitch:-1.5,roll:-3.2*Math.cos(lvDemoT*0.6),alt:48,oil:94,gbt:73,cool:90,cab:24.5,out:21,acc:1,cf:0};
+    renderLive(kv,90,0,true);
+    return;
+  }
+  try{
+    const r=await fetch('/api/live',{headers:{'X-Pin':PIN}});
+    if(!r.ok)return;
+    const j=await r.json();
+    if(j&&j.accent)document.getElementById('lvGrid').style.setProperty('--lv-acc',j.accent);
+    if(j&&j.live&&j.raw){renderLive(parseRawKv(j.raw),j.tank_l||90,j.lat_flip||0,false);}
+    else{
+      const st=document.getElementById('lvState');
+      st.textContent='等待车机数据';st.className='badge warn';
+    }
+  }catch(_){}
+}
+function startLivePoll(){
+  stopLivePoll();
+  pollLiveOnce();
+  lvTimer=setInterval(pollLiveOnce,250);
+}
+function stopLivePoll(){
+  if(lvTimer){clearInterval(lvTimer);lvTimer=null;}
+}
+document.getElementById('btnLvDemo').onclick=function(){
+  lvDemo=!lvDemo;
+  this.textContent=lvDemo?'切回实车':'模拟演示';
+  pollLiveOnce();
+};
+document.getElementById('btnLvFs').onclick=function(){
+  const on=document.body.classList.toggle('live-fs');
+  this.textContent=on?'退出全屏':'全屏副屏';
 };
 
 loadStatus();

@@ -11,7 +11,7 @@
 Ein-USB-Stick-Paket ohne Demontage und ohne System-Upgrade für Wireless- & Vollbild-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte, Echtzeit-Fahrdaten sowie drahtlose Einrichtung und Updates per Smartphone.
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.4</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.5</b></a> ·
   <a href="#funktionen">Funktionen</a> ·
   <a href="#4-schritte-installation">4-Schritte-Installation</a> ·
   <a href="#kompatibilität">Kompatibilität</a> ·
@@ -61,7 +61,7 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
 | | **Wireless CarPlay** | Aktiviert werksseitig inaktives Wireless CarPlay für kabelloses Verbinden | MH2p allgemein |
 | | **Android Auto** | Aktiviert werksseitig inaktives Android Auto (CN-Vorfacelift 2019–2023 ab Werk ohne Android Auto) | MH2p allgemein |
 | **HUD & Kombiinstrument** | **Navigation im HUD** | Projiziert Abbiegepfeile, Distanz, Straßennamen & Spurhinweise (Apple/AMap/Baidu) ins Windschutzscheiben-HUD (erfordert Werks-HUD; Kabel & Wireless) | CN Touareg `P*` |
-| | **Kombiinstrument-Karte + Fahrdaten** | Zeigt die CarPlay-Karte direkt im 12"-Digital Cockpit (AMap-Zentrierung, Lenkrad-Zoom) mit symmetrischen 43-Kanal-Fahrdaten, Navigationskarte & 60-fps-Custom-Designs | CN Touareg `P*` |
+| | **Kombiinstrument-Karte + Fahrdaten** | Zeigt die CarPlay-Karte direkt im 12"-Digital Cockpit (AMap-Zentrierung, Lenkrad-Zoom) mit symmetrischen 51-Kanal-Fahrdaten (Ambientelicht-Akzentfarbe & automatischer Ersatz fehlender Leistungs-/Drehmomentwerte), Navigationskarte & 60-fps-Custom-Designs | CN Touareg `P*` |
 | | **Lenkrad-`OK` Kartenwechsel** | Doppelklick auf rechte `OK`-Taste (`480-ms`-Fenster) schaltet zwischen CarPlay- und Werkskarte um; bei aktivem `v23`-Design wechselt Dreifachklick das Design (ohne dieses Modul wechselt Doppelklick direkt das Design) | CN Touareg `P*` |
 | | **Sprachtaste Kurzdruck für Siri (Experimentell)** | Kurzdruck auf die Lenkrad-Sprachtaste startet Siri bei aktivem CarPlay (Werks-Langdruck unverändert; je nach Firmwarestand kann zusätzlich die Werkssprachbedienung auslösen) | CN Touareg `P*` |
 | **WLAN & Verwaltung** | **Mobile WLAN-Konsole** | Verbindet sich mit dem Handy-Hotspot für Live-Anpassung der Infoboxen, Designwechsel, signierte Offline-Updates und Diagnose unter `http://touareg.local:8080` (optional Key-only SSH) | MH2p allgemein |
@@ -123,7 +123,7 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
 
 > [!NOTE]
 > - **Unsignierte Binärdatei**: Der Desktop-Konfigurator besitzt kein kommerzielles Zertifikat (Windows: *Weitere Informationen → Trotzdem ausführen*; macOS: *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*). Per GitHub Actions aus [`tools/configurator`](tools/configurator) mit `SHA256SUMS.txt` gebaut; lauscht nur auf `127.0.0.1`, völlig offline.
-> - **Upgrade von `v22.01` oder älter**: Einmaliges USB-Upgrade auf `v22.1` / `v23.4` erforderlich (bestehende `cl.conf` und `web.pin` bleiben erhalten; ist keine PIN gesetzt, zeigt das Cockpit beim ersten Start eine 6-stellige Einmal-PIN an). Danach funktioniert drahtloses OTA weiter.
+> - **Upgrade von `v22.01` oder älter**: Einmaliges USB-Upgrade auf `v22.1` / `v23.5` erforderlich (bestehende `cl.conf` und `web.pin` bleiben erhalten; ist keine PIN gesetzt, zeigt das Cockpit beim ersten Start eine 6-stellige Einmal-PIN an). Danach funktioniert drahtloses OTA weiter.
 > - **Schwarze Ränder nach dem ersten Flash**: In den iPhone Bluetooth-/CarPlay-Einstellungen *Dieses Fahrzeug ignorieren* wählen und neu verbinden.
 
 ---
@@ -157,7 +157,7 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
 <div align="center">
   <img src="docs/img/wireless_console.png" alt="MH2p 8080 Mobile WLAN-Konsole" width="92%">
   <br>
-  <sub><i>Mobile WLAN-Konsole: Park-Sperre (≤ 3 km/h), 43-Kanal-Anzeigen & Designwechsel, Ed25519-signiertes Offline-OTA und anonymisierte Diagnose.</i></sub>
+  <sub><i>Mobile WLAN-Konsole: Park-Sperre (≤ 3 km/h), 51-Kanal-Anzeigen, Live-Bento-Zusatzdisplay & Designwechsel, Ed25519-signiertes Offline-OTA und anonymisierte Diagnose.</i></sub>
 </div>
 
 1. Im Konfigurator **Mobile WLAN-Konsole** aktivieren (SSH für normale Nutzung aus lassen), 1–5 Handy-Hotspots und 6–16-stellige PIN eintragen und im Fahrzeug Hotspot starten (iPhone: *Kompatibilität maximieren* aktivieren und Hotspot-Menü 3–5 s offen lassen — dasselbe iPhone kann nicht gleichzeitig Hotspot und Wireless CarPlay nutzen, im Alltag Hotspot ausschalten oder USB-CarPlay + Hotspot verwenden; Android: WPA2).
