@@ -98,15 +98,21 @@ final class ExtraDSI {
         }
     }
 
-    /** 将大众 RDK 原始整数压力值按单位自适应换算为 bar（过滤哨兵无效值 0/254/255/65535）。 */
+    /** 将大众 RDK 原始整数压力值按 DSI CarConstants 单位换算为 bar（过滤哨兵无效值 0/254/255/65535）。
+     *  实车反汇编 HsmTargetCarService.dsiCarComfortUpdateRDKTireDisplay 确认 DSI pressureUnit 枚举（与 ASL 顺序不同）：
+     *    0 = PRESSUREUNIT_BAR (0.1 bar/LSB, 例 24 -> 2.4 bar)
+     *    1 = PRESSUREUNIT_PSI (0.5 psi/LSB, 例 70 -> 35.0 psi -> 2.41 bar)
+     *    2 = PRESSUREUNIT_KPA (10 kPa/LSB = 0.1 bar/LSB, 例 24 -> 240 kPa -> 2.4 bar) */
     static float toBar(int raw, int unit) {
         if (raw <= 0 || raw == 254 || raw == 255 || raw >= 6000) return Float.NaN;
         float bar;
-        if (unit == 2) {
-            float psi = raw > 120 ? (raw / 10.0f) : (float) raw;
+        if (unit == 1) {
+            float psi = raw * 0.5f;
             bar = psi * 0.0689476f;
-        } else if (unit == 1) {
-            bar = raw > 800 ? (raw / 1000.0f) : (raw / 100.0f);
+        } else if (unit == 2) {
+            if (raw > 800) bar = raw / 1000.0f;
+            else if (raw >= 80) bar = raw / 100.0f;
+            else bar = raw / 10.0f;
         } else {
             bar = raw >= 80 ? (raw / 100.0f) : (raw / 10.0f);
         }
