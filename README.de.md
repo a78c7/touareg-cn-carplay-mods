@@ -11,7 +11,7 @@
 Ein-USB-Stick-Paket ohne Demontage und ohne System-Upgrade für Wireless- & Vollbild-CarPlay, HUD-Navigation, digitale Kombiinstrument-Karte, Echtzeit-Fahrdaten sowie drahtlose Einrichtung und Updates per Smartphone.
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.2</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.3</b></a> ·
   <a href="#funktionen">Funktionen</a> ·
   <a href="#4-schritte-installation">4-Schritte-Installation</a> ·
   <a href="#kompatibilität">Kompatibilität</a> ·
@@ -122,7 +122,7 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
 
 > [!NOTE]
 > - **Unsignierte Binärdatei**: Der Desktop-Konfigurator besitzt kein kommerzielles Zertifikat (Windows: *Weitere Informationen → Trotzdem ausführen*; macOS: *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*). Per GitHub Actions aus [`tools/configurator`](tools/configurator) mit `SHA256SUMS.txt` gebaut; lauscht nur auf `127.0.0.1`, völlig offline.
-> - **Upgrade von `v22.01` oder älter**: Einmaliges USB-Upgrade auf `v22.1` / `v23.2` erforderlich (bestehende `cl.conf` und `web.pin` bleiben erhalten; ist keine PIN gesetzt, zeigt das Cockpit beim ersten Start eine 6-stellige Einmal-PIN an). Danach funktioniert drahtloses OTA weiter.
+> - **Upgrade von `v22.01` oder älter**: Einmaliges USB-Upgrade auf `v22.1` / `v23.3` erforderlich (bestehende `cl.conf` und `web.pin` bleiben erhalten; ist keine PIN gesetzt, zeigt das Cockpit beim ersten Start eine 6-stellige Einmal-PIN an). Danach funktioniert drahtloses OTA weiter.
 > - **Schwarze Ränder nach dem ersten Flash**: In den iPhone Bluetooth-/CarPlay-Einstellungen *Dieses Fahrzeug ignorieren* wählen und neu verbinden.
 
 ---
@@ -158,7 +158,7 @@ Ganz ohne Kommandozeile — einfach den Offline-Konfigurator auf dem USB-Stick d
   <sub><i>Mobile WLAN-Konsole: Park-Sperre (≤ 3 km/h), 43-Kanal-Anzeigen & Designwechsel, Ed25519-signiertes Offline-OTA und anonymisierte Diagnose.</i></sub>
 </div>
 
-1. Im Konfigurator **Mobile WLAN-Konsole** aktivieren (SSH für normale Nutzung aus lassen), 1–5 Handy-Hotspots und 6–16-stellige PIN eintragen und im Fahrzeug Hotspot starten (iPhone: *Kompatibilität maximieren* aktivieren und Hotspot-Menü 3–5 s offen lassen; Android: WPA2).
+1. Im Konfigurator **Mobile WLAN-Konsole** aktivieren (SSH für normale Nutzung aus lassen), 1–5 Handy-Hotspots und 6–16-stellige PIN eintragen und im Fahrzeug Hotspot starten (iPhone: *Kompatibilität maximieren* aktivieren und Hotspot-Menü 3–5 s offen lassen — dasselbe iPhone kann nicht gleichzeitig Hotspot und Wireless CarPlay nutzen, im Alltag Hotspot ausschalten oder USB-CarPlay + Hotspot verwenden; Android: WPA2).
 2. **`http://touareg.local:8080`** öffnen (`X-Pin`-Header-Auth + Park-Sperre `≤ 3 km/h`): Infoboxen/Designs live anpassen, **Ed25519-signierte & SHA-256-geprüfte** `.tar`-OTA-Pakete mit Rollback einspielen, Diagnose exportieren oder Safe Mode zurücksetzen.
 
 ### Systemarchitektur (MH2p-Datenpfad)

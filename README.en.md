@@ -11,7 +11,7 @@
 Single-USB, no-disassembly, no-firmware-upgrade toolkit unlocking wireless & full-screen CarPlay, Windshield HUD navigation, Digital Cockpit map & live driving telemetry, plus phone-based wireless setup and updates.
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.2</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.3</b></a> ·
   <a href="#features">Features</a> ·
   <a href="#4-step-usb-installation">4-Step Install</a> ·
   <a href="#compatibility">Compatibility</a> ·
@@ -122,7 +122,7 @@ No command line required — double-click the offline configurator on your USB d
 
 > [!NOTE]
 > - **Unsigned Binary Warning**: The desktop configurator has no commercial signing certificate (Windows: *More info → Run anyway*; macOS: *System Settings → Privacy & Security → Open Anyway*). Built by GitHub Actions from [`tools/configurator`](tools/configurator) with `SHA256SUMS.txt`; binds only to `127.0.0.1` and never connects to the internet.
-> - **Upgrading from `v22.01` or Earlier**: Flash `v22.1` / `v23.2` **once via USB** (preserves existing `cl.conf` and `web.pin`; if `web.pin` was never set, a 6-digit PIN displays on the cluster on first boot and clears after first login); wireless OTA resumes afterward.
+> - **Upgrading from `v22.01` or Earlier**: Flash `v22.1` / `v23.3` **once via USB** (preserves existing `cl.conf` and `web.pin`; if `web.pin` was never set, a 6-digit PIN displays on the cluster on first boot and clears after first login); wireless OTA resumes afterward.
 > - **Black Borders After First Flash**: Tap *Forget This Car* in iPhone Bluetooth/CarPlay settings and reconnect once.
 
 ---
@@ -158,7 +158,7 @@ No command line required — double-click the offline configurator on your USB d
   <sub><i>Mobile Wireless Console: parked-only lock (≤ 3 km/h), 43-channel gauges & theme switcher, Ed25519-signed offline OTA, and sanitized diagnostics.</i></sub>
 </div>
 
-1. Install **Mobile Wireless Console** in the configurator (leave SSH unchecked unless developing), configure 1–5 phone hotspots + 6–16 char PIN, and enable your phone hotspot in-car (iPhone: turn on *Maximize Compatibility* and keep the Hotspot page awake 3–5s on first join; Android: WPA2).
+1. Install **Mobile Wireless Console** in the configurator (leave SSH unchecked unless developing), configure 1–5 phone hotspots + 6–16 char PIN, and enable your phone hotspot in-car (iPhone: turn on *Maximize Compatibility* and keep the Hotspot page awake 3–5s on first join — note the same iPhone cannot host Personal Hotspot and run Wireless CarPlay simultaneously, so turn Hotspot off for daily driving or use wired USB CarPlay + Hotspot; Android: WPA2).
 2. Visit **`http://touareg.local:8080`** (`X-Pin` header auth + parked-only lock `≤ 3 km/h`) to adjust layouts/themes, flash **Ed25519-signed & SHA-256 verified** offline `.tar` OTA with one-click rollback, export sanitized diagnostics, or manage 3-crash safe mode.
 
 ### System Architecture (MH2p Pipeline)

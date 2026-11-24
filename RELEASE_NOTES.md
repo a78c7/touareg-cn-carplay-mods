@@ -1,5 +1,25 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v23.3
+> **无线 SSH 安装脚本 QNX `tr` 缺失修复 + `sshd` 全网卡监听与 `pf` 防火墙第 3 级兜底 + 浏览器 1:1 模拟器转向修复 + iPhone 热点共存提示**：修复 `VW_WiFi_Dev` 安装脚本在无 `tr` 命令的 QNX 6.6 固件上写入 SSH 公钥报错的问题，增强异构固件 `sshd` 监听与 `pf` 在线规则兜底，修正桌面「改装设置」与独立预览模拟器中 CarPlay 地图弯道与方向盘反向的问题，并补充同一部 iPhone 开个人热点与无线 CarPlay 的单 Wi-Fi 限制说明。本次车机核心二进制与 `v23.2` 完全一致（未勾选无线开发终端或已正常连接 `8080` 的车主无需重刷；勾选了 SSH 开发终端或异构固件连不上 `8080/2012` 的车主用新版 U 盘覆盖刷入 `VW_WiFi_Dev` 即可）。
+
+- **修复 `VW_WiFi_Dev` SSH 公钥写入依赖缺失 `tr` 命令及门禁补强（`VW_WiFi_Dev/Update/install.sh` + `tests/pre_release_check.sh`）**：
+  - 途锐 MH2p 的 QNX 6.6 固件未内置 `tr` 工具；现将 `authorized_keys` 导入从 `tr -d '\r'` 改为原生 `awk` 去 `\r`、跳过空行/注释并幂等打标输出行数，同时将 `tr` 纳入 `pre_release_check.sh` 静态门禁（与 `wc`、`sed -i` 同级拦截）。
+- **增强无线 SSH 监听与 `pf` 防火墙第 3 级在线规则兜底（`VW_WiFi_Dev/Persist/install.sh` + `wifi_test.go`）**：
+  - `sshd` 启动显式附加 `-o ListenAddress=0.0.0.0`，确保跨子网/热点接口稳定监听 `2012` 端口；
+  - `ensure_pf_bcm2()` 在静态底表（`/etc/pf.ecm0.conf`、`/etc/pf.mlan0.conf`、`/etc/pf.conf`）均未命中或预检不过时，新增基于 `pfctl -sr / -sn / -sq` 当前在线生效规则动态叠加 `bcm2` 放行的第 3 级兜底，并补充对应 Go 单元测试。
+- **修复浏览器 1:1 模拟器 CarPlay 地图转向反相（`tools/configurator/web/v23_preview.html` + `tools/preview/index.html`）**：
+  - 修正模拟器按左/右转时前方主干道、绿地与背景纵网偏转符号写反（导致车标往右转、道路往左撇）的问题；同时修正绿色导航主线在弯道处偏出白色主干道边缘及「前方左转」路口分支固定右折的视觉瑕疵。
+- **补充单台 iPhone 个人热点与无线 CarPlay 共存说明（三语 `README` + `docs/07` + `tools/configurator`）**：
+  - 在配置器界面、连接说明与文档中明确提示：同一部 iPhone 受单 Wi-Fi 通道限制，开启个人热点连 `8080/SSH` 时无法同时连无线 CarPlay（日常关掉热点即自动恢复，需边看导航边调试可插线用有线 CarPlay + 开热点，或用备用机开热点）。
+- **车机 QNX 6.6 ARMv7 二进制 & Java 1.4 校验和（与 `v23.2` 完全一致）**：
+  - `VWClusterNav_v6.jar`（`72,460 B`）：`48da5b662a29c55617c06b8579420bcc0ae9edcf49c991f8438ab78b5921cf10`
+  - `cl_render`（`1,341,972 B`）：`48e5e0f595c23d4b5f98e1c109cf69576b3625d02d17f3b7d1ea5536b16f3468`
+  - `touareg_netd`（`120,688 B`）：`47d6c6db23645751d7ad36232f8a7557923cdfe10d1b652d6861f7ff71b57d19`
+  - `clusterd`（`24,344 B`）：`f46edfd3aa8259ac0e4f4a2b0793d7f15487565ce380550b7d211503a652982a8`
+  - `cl_probe.so`（`56,608 B`）：`848da1b7e94d7fe39f60fa93fecea944b453b9ab9e1304c8d6d32917c4c7dc2f`
+  - `VWPopupFilter.jar`（`4,536 B`）：`fe192806e4465c1d83318ca314a19d8ab3526673b3987417e295f5254c5c5b81`
+
 ## v23.2
 > **胎压单位换算修复 + 已改装车暗桩只读体检 + 无线防火墙跨车型兼容 + 首页白话精简与社区分享支持**：修复车机胎压单位设为 `psi` / `kPa` 时仪表信息框胎压偏低的 Bug（#14），新增改装店遗留定时还原脚本与陌生 SSH 公钥只读体检告警（#10），改进无线控制台 `pf` 防火墙规则对无 `ecm0` 车型的兼容，同时将三语首页彻底精简为通俗大白话并开放 GitHub Discussions 社区自制包分享模板。已装 `v22.1+` 与 `8080` 无线控制台的车主直接上传 `touareg-ota-v23.2.tar` 并点「软重启车机」即可完成胎压修复升级；如需对已改装车执行刷机只读体检或更新无线持久化脚本，请使用 U 盘覆盖刷入一次。
 

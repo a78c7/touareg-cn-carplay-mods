@@ -703,8 +703,8 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
     for (let i = -2; i <= 5; i++) {
       const y = ((i * 220 + off * 0.7) % 1300) - 220;
       c.beginPath();
-      c.roundRect(140 - steerShift * 0.25, y, 420, 140, 26);
-      c.roundRect(1360 - steerShift * 0.25, y + 90, 440, 150, 26);
+      c.roundRect(140 + steerShift * 0.25, y, 420, 140, 26);
+      c.roundRect(1360 + steerShift * 0.25, y + 90, 440, 150, 26);
       c.fill();
     }
     // 蓝色江河
@@ -727,7 +727,7 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
     }
     c.lineWidth = 12;
     for (let k = -2; k <= 2; k++) {
-      const xTop = 960 + k * 280 - steerShift * 0.4;
+      const xTop = 960 + k * 280 + steerShift * 0.4;
       const xBot = 960 + k * 460;
       c.beginPath();
       c.moveTo(xTop, 0);
@@ -735,8 +735,8 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
       c.stroke();
     }
 
-    // 主干道高亮带
-    const curveTopX = 960 - steerShift * 0.9;
+    // 主干道高亮带（随方向盘同向弯曲：左转弯向左、右转弯向右）
+    const curveTopX = 960 + steerShift * 0.9;
     c.strokeStyle = night ? "#1f3754" : "#ffffff";
     c.lineWidth = 54;
     c.lineCap = "round";
@@ -745,14 +745,16 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
     c.quadraticCurveTo(960, 380, curveTopX, -20);
     c.stroke();
 
-    // 导航状态：高德经典翠绿路线 + 流动白色导向箭头
+    // 导航状态：高德经典翠绿路线 + 路口转向分支
     if (env.navLive) {
+      const navSplitX = 960 + steerShift * 0.42;
+      const navTurnOffset = NAV_ROADS[phys.navRoadIdx].type === "left" ? -220 : 220;
       c.strokeStyle = "#16a34a";
       c.lineWidth = 26;
       c.beginPath();
       c.moveTo(960, H + 20);
-      c.quadraticCurveTo(960, 370, curveTopX, 220);
-      c.lineTo(curveTopX + 220, 175);
+      c.quadraticCurveTo(960, 420, navSplitX, 220);
+      c.lineTo(navSplitX + navTurnOffset, 175);
       c.stroke();
 
       c.strokeStyle = "#4ade80";
@@ -762,12 +764,12 @@ window.MY_THEME_TEMPLATE = "/*\n * =============================================
       // 路名标签
       c.fillStyle = night ? "rgba(15,23,42,0.85)" : "rgba(255,255,255,0.9)";
       c.beginPath();
-      c.roundRect(curveTopX - 96, 252, 192, 34, 8);
+      c.roundRect(navSplitX - 96, 252, 192, 34, 8);
       c.fill();
       c.fillStyle = night ? "#e2e8f0" : "#0f172a";
       c.font = "700 18px -apple-system,PingFang SC,sans-serif";
       c.textAlign = "center";
-      c.fillText(NAV_ROADS[phys.navRoadIdx].road, curveTopX, 275);
+      c.fillText(NAV_ROADS[phys.navRoadIdx].road, navSplitX, 275);
     }
 
     // 车标（对准途锐实测时钟正下方；开启 ACC 时按实车默认 car_up=35 + acc_up=55 = 90px 上限相对常态再上移 55px 避让原车 ACC 图标）

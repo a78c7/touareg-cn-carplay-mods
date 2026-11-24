@@ -48,11 +48,11 @@ ensure_sshd() {
             kill "$p" 2>/dev/null
         done
         sleep 1
-        /usr/sbin/sshd -p 2012 -h "$ED_KEY" -o PasswordAuthentication=no -o ChallengeResponseAuthentication=no -o PermitRootLogin=without-password </dev/null >> "$LOG" 2>&1
+        /usr/sbin/sshd -p 2012 -h "$ED_KEY" -o ListenAddress=0.0.0.0 -o PasswordAuthentication=no -o ChallengeResponseAuthentication=no -o PermitRootLogin=without-password </dev/null >> "$LOG" 2>&1
         echo "sshd started (ed25519 key-only, port 2012)" >> "$LOG"
     else
         if ! pidin arg 2>/dev/null | grep -q "[/]usr/sbin/sshd"; then
-            /usr/sbin/sshd -p 2012 -o PasswordAuthentication=no -o ChallengeResponseAuthentication=no -o PermitRootLogin=without-password </dev/null >> "$LOG" 2>&1
+            /usr/sbin/sshd -p 2012 -o ListenAddress=0.0.0.0 -o PasswordAuthentication=no -o ChallengeResponseAuthentication=no -o PermitRootLogin=without-password </dev/null >> "$LOG" 2>&1
         fi
     fi
 }
@@ -101,6 +101,37 @@ ensure_pf_bcm2() {
             fi
         fi
     done
+
+    # 第 3 级兜底：异构固件若静态底表均未命中或预检失败，基于当前在线生效规则叠加 bcm2 放行
+    "$PFCTL" -sr 2>/dev/null > /tmp/pf_live_r.tmp
+    "$PFCTL" -sn 2>/dev/null > /tmp/pf_live_n.tmp
+    "$PFCTL" -sq 2>/dev/null > /tmp/pf_live_q.tmp
+    if [ -s /tmp/pf_live_r.tmp ]; then
+        for with_q in 1 0; do
+            {
+                grep "^scrub" /tmp/pf_live_r.tmp 2>/dev/null
+                [ "$with_q" -eq 1 ] && grep -E "^(altq|queue)" /tmp/pf_live_q.tmp 2>/dev/null
+                cat /tmp/pf_live_n.tmp 2>/dev/null
+                echo "pass out quick on bcm2 all keep state"
+                echo "pass in quick on bcm2 inet proto udp from any port bootp to any port bootpc keep state"
+                echo "pass in quick on bcm2 inet proto icmp from any to (bcm2) keep state"
+                echo "pass in quick on bcm2 inet proto tcp from any to (bcm2) port $tcp_ports keep state"
+                echo "pass in quick on bcm2 inet proto udp from any to 224.0.0.251 port 5353"
+                echo "pass in quick on bcm2 inet proto udp from any to (bcm2) port 5353"
+                grep -v "^scrub" /tmp/pf_live_r.tmp 2>/dev/null | grep -v "on bcm2"
+            } > /tmp/pf_bcm2.conf
+            if "$PFCTL" -nf /tmp/pf_bcm2.conf >> "$LOG" 2>&1; then
+                rm -f /tmp/pf_live_r.tmp /tmp/pf_live_n.tmp /tmp/pf_live_q.tmp
+                if "$PFCTL" -f /tmp/pf_bcm2.conf >> "$LOG" 2>&1; then
+                    echo "pf bcm2 loaded (#$pf_tries base=live_sr_q$with_q)" >> "$LOG"
+                    return 0
+                fi
+                break
+            fi
+        done
+    fi
+    rm -f /tmp/pf_live_r.tmp /tmp/pf_live_n.tmp /tmp/pf_live_q.tmp
+
     echo "pf bcm2 dry-run failed (#$pf_tries)" >> "$LOG"
     return 1
 }

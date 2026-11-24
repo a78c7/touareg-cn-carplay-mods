@@ -59,13 +59,14 @@ for root, _, fs in os.walk('USB'):
         if b'\r\n' in raw:
             errors.append(f'{p}: contains CRLF line endings')
         txt = raw.decode('utf-8', errors='replace')
-        if '/Update/' in p.replace('\\', '/'):
-            for ln, line in enumerate(txt.splitlines(), 1):
-                s = line.strip()
-                if s.startswith('#'):
-                    continue
-                if re.search(r'\bmount\s+-ur\s+/mnt/app\b', s):
-                    errors.append(f'{p}:{ln}: Update script must NOT remount /mnt/app read-only')
+        for ln, line in enumerate(txt.splitlines(), 1):
+            s = line.strip()
+            if s.startswith('#'):
+                continue
+            if '/Update/' in p.replace('\\', '/') and re.search(r'\bmount\s+-ur\s+/mnt/app\b', s):
+                errors.append(f'{p}:{ln}: Update script must NOT remount /mnt/app read-only')
+            if re.search(r'(^|[|;&$(`\s])(tr|wc)\s+', s) or re.search(r'\bsed\s+-i\b', s):
+                errors.append(f'{p}:{ln}: QNX 6.6 script uses missing tool (tr / wc / sed -i): {s}')
 
 forbidden_paths = ['/' + 'Users/', '.gemini/' + 'antigravity', '/home/admin/' + 'qnx-build']
 for folder in ['src', 'tools', 'docs', 'tests']:

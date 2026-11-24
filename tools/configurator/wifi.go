@@ -348,7 +348,7 @@ func buildWifiGuide(keyDir, pin string) string {
 一、上车第一步：打开手机个人热点（让车机自动连上你）
 ==================================================
 1. 用 U 盘在车上刷完模块后，每次发动车辆，打开手机「个人热点」，等车机开机约 1 分钟会自动连入（手机顶栏热点连接数 +1）。
-2. iPhone 注意：打开「设置 → 个人热点 → 最大兼容性」，首次连接时请停留在个人热点页面亮屏等 3～5 秒，连上后即可锁屏。
+2. iPhone 注意：打开「设置 → 个人热点 → 最大兼容性」，首次连接时请停留在个人热点页面亮屏等 3～5 秒，连上后即可锁屏。同一部 iPhone 开个人热点连 8080/SSH 时无法同时跑无线 CarPlay（单 Wi-Fi 限制），日常用车关掉个人热点无线 CarPlay 即恢复；需同时使用可插 USB 跑有线 CarPlay + 开热点（或用备用机开热点）。
 3. 安卓注意：热点加密选 WPA2；若手机开了 VPN/代理软件（全局模式），请先关闭或开启「绕过局域网」，否则访问不到热点里的车机。
 
 ==================================================
@@ -372,7 +372,7 @@ func buildWifiGuide(keyDir, pin string) string {
 - 先尝试连接 touareg.local:2012；如果当前系统（如安卓端）不解析 .local，请你自动读取本机热点路由/ARP 邻居表或扫描当前热点子网开放 2012 端口的设备找到车机 IP 并连上，无需让我手动查 IP 或填配置。
 
 车机环境与安全护栏（请严格遵守）：
-1. 系统是 QNX 6.6.0 (ARMv7 Tegra K1)，shell 是 ksh（无 bash / sed -i / wc）。
+1. 系统是 QNX 6.6.0 (ARMv7 Tegra K1)，shell 是 ksh（无 bash / sed -i / wc / tr）。
 2. 严禁改动原厂只读分区（/ifs、/mnt/system），不要频繁重载 pfctl 避免冲击 io-pkt。
 3. 改装目录在 /mnt/app/eso/bin/apps/cluster/（仪表渲染 cl_render、配置 dash.conf / cl.conf）和 /mnt/app/eso/bin/apps/wifi_dev/；10Hz 实时车速、功率、扭矩、油温等数据在 /tmp/dash.state 与 /tmp/cluster_cp.state。
 4. /mnt/app 默认只读：改文件前先 mount -uw /mnt/app 并备份原文件，用 .new 写完原子 mv 替换后立刻 sync && mount -ur /mnt/app 恢复只读；改完仪表配置执行 slay -f cl_render 即可秒级刷新仪表画面（无需重启车机）。

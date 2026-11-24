@@ -77,3 +77,54 @@ func TestValidateWifiPinPolicy(t *testing.T) {
 		t.Fatalf("unexpected randomPin6: %q", rp)
 	}
 }
+
+func TestWifiUpdateScriptWithoutQnxTr(t *testing.T) {
+	scriptPath := filepath.Join("..", "..", "USB", "未选模块", "VW_WiFi_Dev", "Update", "install.sh")
+	raw, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read Update/install.sh: %v", err)
+	}
+	if strings.Contains(string(raw), "tr -d") {
+		t.Fatalf("Update/install.sh still invokes missing QNX tr command")
+	}
+
+	// 在禁止 tr 的模拟环境下验证 CRLF 密钥安装与既有非托管公钥保留
+	tmp := t.TempDir()
+	fakeBin := filepath.Join(tmp, "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fakeBin, "tr"), []byte("#!/bin/sh\nexit 127\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	modAcc := filepath.Join(tmp, "usb_ak")
+	akDst := filepath.Join(tmp, "authorized_keys")
+	_ = os.WriteFile(akDst, []byte("ssh-rsa AAAAB3NzaOldWiredKey wired@laptop\nssh-ed25519 AAAAC3OldManaged VW_WiFi_Dev_Managed\n"), 0o600)
+	_ = os.WriteFile(modAcc, []byte("# comment\r\n\r\nssh-ed25519 AAAAC3NewKey1 owner@mac\r\n"), 0o644)
+
+	snippet := `
+set -e
+export PATH="` + fakeBin + `:$PATH"
+AK="` + akDst + `"
+MOD_AK="` + modAcc + `"
+grep -v "VW_WiFi_Dev_Managed" "$AK" > "$AK.new" 2>/dev/null || : > "$AK.new"
+awk '{
+    sub(/\r$/, "")
+    if ($0 ~ /^[ \t]*$/ || $0 ~ /^[ \t]*#/) next
+    if ($0 ~ /VW_WiFi_Dev_Managed/) print $0
+    else print $0 " VW_WiFi_Dev_Managed"
+}' "$MOD_AK" >> "$AK.new"
+mv -f "$AK.new" "$AK"
+`
+	if out, err := exec.Command("sh", "-c", snippet).CombinedOutput(); err != nil {
+		t.Fatalf("awk authorized_keys install failed: %v\n%s", err, string(out))
+	}
+	got, err := os.ReadFile(akDst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(got)
+	if strings.Contains(s, "\r") || !strings.Contains(s, "AAAAB3NzaOldWiredKey") || !strings.Contains(s, "AAAAC3NewKey1 owner@mac VW_WiFi_Dev_Managed") || strings.Contains(s, "AAAAC3OldManaged") {
+		t.Fatalf("unexpected merged authorized_keys:\n%s", s)
+	}
+}

@@ -197,13 +197,17 @@ if [ "$SSH_MODE" -eq 1 ]; then
     else
         : > "$AK.new"
     fi
-    tr -d '\r' < "$MOD_PATH/authorized_keys" | while IFS= read -r line || [ -n "$line" ]; do
-        [ -z "$line" ] && continue
-        case "$line" in \#*) continue ;; esac
-        echo "$line VW_WiFi_Dev_Managed" >> "$AK.new"
-    done
+    # QNX 6.6 固件无 tr 命令，统一使用原生 awk 去 \r、跳空行与注释并写入公钥
+    awk '{
+        sub(/\r$/, "")
+        if ($0 ~ /^[ \t]*$/ || $0 ~ /^[ \t]*#/) next
+        if ($0 ~ /VW_WiFi_Dev_Managed/) print $0
+        else print $0 " VW_WiFi_Dev_Managed"
+    }' "$MOD_PATH/authorized_keys" >> "$AK.new"
     chmod 600 "$AK.new"
     mv -f "$AK.new" "$AK"
+    ak_n=$(awk 'END{print NR+0}' "$AK")
+    echo "ssh authorized_keys installed (lines=$ak_n)"
 else
     : > "$D/no_ssh"
     if [ -f "$AK" ]; then
@@ -215,7 +219,7 @@ else
 fi
 
 ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/iopkt_base_cores"
-echo "v23.2" > "$D/ota_version"
+echo "v23.3" > "$D/ota_version"
 rm -f "$D/disable"
 sync
 # 注意：绝不能在此执行 mount -ur /mnt/app，上游 modkit_install.sh 后续仍需写入 /mnt/app/eso/bin/servicemgrmibhigh
