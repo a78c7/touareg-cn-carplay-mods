@@ -37,7 +37,8 @@
 
 1. **延后启动**：先等原厂开机完成标志 `/tmp/startupFinishedFlag` 出现，再额外等待 **25 秒**，让无线固件、CarPlay AP 和 4G 拨号彻底稳定后再启动 `bcm2`；
 2. **单实例与限次检查**：严格保证 `wpa_supplicant` 只启动一个实例，网络规则只在尚未生效时加载且单次开机最多尝试 3 次，运行期绝不反复刷新；
-3. **零闪存写入熔断**：安装时记录当时 `/mnt/crashlogs/core/io-pkt-v6-hc*.core.gz` 的文件数量；以后每次开机先比对数量，一旦发现安装后新增过网络栈崩溃记录，脚本自动停止自启并写日志退出，绝不让车机陷入无限重启循环。
+3. **零闪存写入熔断**：安装时记录当时 `/mnt/crashlogs/core/io-pkt-v6-hc*.core.gz` 的文件数量；以后每次开机先比对数量，一旦发现安装后新增过网络栈崩溃记录，脚本自动停止自启并写日志退出，绝不让车机陷入无限重启循环；
+4. **多车型 `pf` 防火墙底表自适应（`v23.2` 修复）**：早期脚本仅用 `pfctl -sr | grep -q "on bcm2"` 判断是否已放行，且固定优先读取 `/etc/pf.ecm0.conf`。实测部分无 4G 模块（无 `ecm0`）或启用 `/etc/pf.mlan0.conf` 的同平台车型默认规则已含 `block ... on bcm2`，导致误判“规则已加载”而漏开 `8080` / `2012` 端口。现改为精确核对 `pass in quick on bcm2 ... port = 8080`（开启 SSH 时同步核对 `2012`），并按实车 `ifconfig ecm0` 状态动态轮询 `/etc/pf.ecm0.conf`、`/etc/pf.mlan0.conf` 与 `/etc/pf.conf` 底表经 `pfctl -nf` 语法预检后加载。
 
 ## 5. iPhone 个人热点的两个细节
 
@@ -105,7 +106,43 @@
    - 若要实现 **全屏 60fps 仪表指针、弧形转速表、发光渐变、同屏 CarPlay 地图或自定义动效主题**，优先使用 `v23.0` 正式的单画布 OpenGL ES 2.0 + QuickJS 零拷贝引擎 **`src/cl_render/v23_gles.c`**（启用 `v23_mode`，实车 55–59 fps，详见 `docs/reference/CLUSTER_LAYOUT_SPEC.md`）；若需纯 C 独立渲染通道，也可参考 `v22.0` 新增的 **`src/cl_render/gles60.c`**（运行参数 `capture=gles60`，同一窗口 `58`，以 `eglSwapInterval(dpy, 1)` 锁死硬件 VSync 60fps，并用 `eglGetProcAddress` 动态解析 `gl*` 符号、绝不直接链接 `-lGLESv2`）。
 5. **先本地回放预览，再上车验证**：修改信息框布局或动画参数前，先在电脑双击打开 [`tools/preview/index.html`](../tools/preview/index.html)，拖入真实 `drive_logs/*.csv` 或切换内置场景实时预览，确认观感与帧率后再上车部署，并欢迎把满意的 `dash.conf` 与截图发到仓库 **GitHub Discussions** 共享给车友。
 
-## 12. 自动化测试、静态分析与 CI 门禁（v22.1）
+## 12. 已改装车与二手车冲突排查（改装店锁死入口与残留公钥）
+
+本开源项目所有功能均遵循原厂电源管理与 ModKit 标准启动链：**不碰 `challenge`、不在后台定时覆写系统分区、锁车随 CAN 总线彻底断电**。但若车辆此前在改装店或第三方付费刷过全屏 / 无线 CarPlay / FEC 破解，实车已确认存在三类历史遗留隐患（真实取证案例见 [Issue #10](https://github.com/a78c7/touareg-cn-carplay-mods/issues/10)）：
+
+### 12.1 典型现象与锁死机制
+- **故障表现**：插 U 盘刷入本开源包时日志全部正常，但重启后仪表始终停在原车地图、手机无线控制台起不来，车机内从不生成 `_ModKit_Persist.log`，插 `cluster_logs` 日志盘也永远为空。
+- **底层根因**：部分早期商业改装方案为防止同行插网卡扒包、锁死后续改装入口，会在车机内埋入**定时还原机制**——每次正常开机约 2 分钟后，自动将 `/mnt/app/eso/bin/servicemgrmibhigh` 强行覆写回约 109 字节的店家脚本（同目录通常伴生时间戳一致的 `del` 与 `shadow` 文件），内容仅拉起原厂 `servicemgrmibhigh0` 并反复强杀 `challenge` 与 `sshd`：
+  ```sh
+  #!/bin/sh
+  /eso/bin/servicemgrmibhigh0 &
+  slay -9 challenge ; slay -9 challenge
+  slay -9 sshd ; slay -9 sshd
+  ```
+  结果就是 ModKit 写入的标准启动入口在下一次开机前即被抹回，所有依赖 `modkit_persist.sh` 的开源模块从未执行。
+
+### 12.2 休眠异常与电瓶亏电隐患（#10 实车案例）
+- 在 [#10](https://github.com/a78c7/touareg-cn-carplay-mods/issues/10) 中，一台 4 年前曾在改装店刷过全屏与无线 CarPlay 的国行途锐长期存在两个顽疾：**停在无蜂窝信号的地下车库会反复亏电**（常规静置电流 30–40 mA 正常，属间歇性异常唤醒，修理厂反复排查无果），以及**行驶中偶发误判熄火黑屏待机**（日志为正常待机流程、非崩溃）。
+- **实车验证结果**：车主断掉改装店遗留的定时还原脚本、停止每轮开机 `slay -9 challenge` 后，困扰 4 年的地下车库暗电流亏电随即消失。如你的已改装车/二手车也有类似无故亏电现象，建议优先排查车机内是否存在此类商业锁死脚本。
+
+### 12.3 快速确认与正确处理方式
+1. **零门槛自查**：刷入新版 `VW_HUD_1_RouteGuidance` 或 `VW_WiFi_Dev` 后，查看 U 盘 `Logs/` 下对应日志开头的只读体检输出；若出现 `WARN: suspected shop` 告警，或直接刷入 [#10 评论区](https://github.com/a78c7/touareg-cn-carplay-mods/issues/10#issuecomment-7089018417) 的独立只读工具 `VW_ShopAudit_readonly.zip`，即可在不改动车机任何文件的前提下抓出完整现场。
+2. **推荐洗白路径（二选一）**：
+   - **最稳妥**：前往 4S 店通过大众官方正规售后渠道（ODIS）重刷原厂固件（如升级至原厂 `P2878`）彻底洗白，清空全部历史暗桩后再干净安装本开源包（**切勿从闲鱼或网盘购买来路不明的第三方 `2878` 整合包自行刷机**，既有断电黑砖风险，还可能二次刷入带锁死脚本的商业改包）；
+   - **进阶定点清理**：先通过只读扫描定位开机 2 分钟触发还原的幕后源头并备份到 U 盘，再精准移除还原机制与 `del`/`shadow`（切勿在未查明依赖前盲删陌生脚本，以免误伤绑定其中的原商业全屏或 FEC）。
+3. **避坑提醒（不推荐改写 `servicemgrmibhigh0`）**：虽然把原厂 ELF `servicemgrmibhigh0` 改名套一层 shell wrapper 可以绕过入口覆写，但上游带签名的 `modkit_install.sh` 强制要求 `servicemgrmibhigh` 或 `servicemgrmibhigh0` 至少有一个为原生 ELF——套壳后会导致**后续所有 U 盘官方升级直接报错 `error: unknown patch state` 失败**，且无法停掉后台还原进程与 `slay -9 challenge`，根除不了暗电流风险。
+
+### 12.4 开启无线 SSH（`:2012`）前核查改装店残留公钥
+- 店家脚本里出现 `slay -9 sshd`，往往意味着当年曾向 `/mnt/app/root/.ssh/authorized_keys` 写入过改装店自己的 SSH 公钥，完工后只杀了进程、未删公钥。
+- 当前 `VW_WiFi_Dev` 为兼容传统 USB 调试环境会保留原 `authorized_keys` 中的非托管行；因此**已改装车或二手车在开启 `2012` 端口前**，务必先核查刷机体检日志里的外部公钥告警，或在首次连上 SSH 后执行以下只读命令核对（确认陌生公钥后再备份移除）：
+  ```sh
+  ls -l /mnt/app/root/.ssh/
+  cat /mnt/app/root/.ssh/authorized_keys
+  grep -l -i sshd /mnt/ota/modkit/Mods/*/Persist/install.sh 2>/dev/null
+  ```
+  *(注：后续在实车验证 QNX OpenSSH 7.4 的 `-o AuthorizedKeysFile=...` 独立公钥隔离参数后，将在代码层彻底物理隔离旧公钥。)*
+
+## 13. 自动化测试、静态分析与 CI 门禁（v22.1）
 
 所有提交与发布前均由 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) 及本地一键脚本 [`tests/pre_release_check.sh`](../tests/pre_release_check.sh) 执行五类自动校验：
 

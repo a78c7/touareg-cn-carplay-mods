@@ -57,38 +57,52 @@ ensure_sshd() {
     fi
 }
 
-# 2) 安全加载 bcm2 pf 规则（限次加载，避免频繁刷新 altq 冲击 io-pkt-v6-hc）
+# 2) 安全加载 bcm2 pf 规则（限次加载，避免频繁刷新 altq 冲击 io-pkt-v6-hc；
+#    按实车网卡状态选底表，兼容有 ecm0、无 ecm0 及走 pf.mlan0.conf 的同平台 MH2p 车型）
 pf_tries=0
 ensure_pf_bcm2() {
-    if "$PFCTL" -sr 2>/dev/null | grep -q "on bcm2"; then
-        return 0
+    cur_pf=$("$PFCTL" -sr 2>/dev/null)
+    if echo "$cur_pf" | grep -q "pass in quick on bcm2.*port = 8080"; then
+        if [ -e "$D/no_ssh" ] || echo "$cur_pf" | grep -q "pass in quick on bcm2.*port = 2012"; then
+            return 0
+        fi
     fi
     if [ "$pf_tries" -ge 3 ]; then
         return 1
     fi
-    base_pf=/etc/pf.ecm0.conf
-    [ ! -f "$base_pf" ] && base_pf=/etc/pf.conf
-    [ ! -f "$base_pf" ] && return 1
+    if ifconfig ecm0 >/dev/null 2>&1; then
+        pf_candidates="/etc/pf.ecm0.conf /etc/pf.conf /etc/pf.mlan0.conf"
+    elif echo "$cur_pf" | grep -q "on bcm2"; then
+        pf_candidates="/etc/pf.mlan0.conf /etc/pf.conf /etc/pf.ecm0.conf"
+    else
+        pf_candidates="/etc/pf.conf /etc/pf.mlan0.conf /etc/pf.ecm0.conf"
+    fi
     tcp_ports="{2012, 8080}"
     [ -e "$D/no_ssh" ] && tcp_ports="8080"
-    awk -v tp="$tcp_ports" '
-    !done && /block/ && index($0, "$wlan_if") > 0 {
-        print "pass out quick on bcm2 all keep state"
-        print "pass in quick on bcm2 inet proto udp from any port bootp to any port bootpc keep state"
-        print "pass in quick on bcm2 inet proto icmp from any to (bcm2) keep state"
-        print "pass in quick on bcm2 inet proto tcp from any to (bcm2) port " tp " keep state"
-        print "pass in quick on bcm2 inet proto udp from any to 224.0.0.251 port 5353"
-        print "pass in quick on bcm2 inet proto udp from any to (bcm2) port 5353"
-        done = 1
-    }
-    { print }
-    ' "$base_pf" > /tmp/pf_bcm2.conf
-    if grep -q "on bcm2" /tmp/pf_bcm2.conf && "$PFCTL" -nf /tmp/pf_bcm2.conf >> "$LOG" 2>&1; then
-        pf_tries=$((pf_tries + 1))
-        "$PFCTL" -f /tmp/pf_bcm2.conf >> "$LOG" 2>&1 && echo "pf bcm2 loaded (#$pf_tries base=$base_pf)" >> "$LOG"
-    else
-        echo "pf bcm2 dry-run failed" >> "$LOG"
-    fi
+    pf_tries=$((pf_tries + 1))
+    for base_pf in $pf_candidates; do
+        [ ! -f "$base_pf" ] && continue
+        awk -v tp="$tcp_ports" '
+        !done && /block/ && index($0, "$wlan_if") > 0 {
+            print "pass out quick on bcm2 all keep state"
+            print "pass in quick on bcm2 inet proto udp from any port bootp to any port bootpc keep state"
+            print "pass in quick on bcm2 inet proto icmp from any to (bcm2) keep state"
+            print "pass in quick on bcm2 inet proto tcp from any to (bcm2) port " tp " keep state"
+            print "pass in quick on bcm2 inet proto udp from any to 224.0.0.251 port 5353"
+            print "pass in quick on bcm2 inet proto udp from any to (bcm2) port 5353"
+            done = 1
+        }
+        { print }
+        ' "$base_pf" > /tmp/pf_bcm2.conf
+        if grep -q "pass in quick on bcm2" /tmp/pf_bcm2.conf && "$PFCTL" -nf /tmp/pf_bcm2.conf >> "$LOG" 2>&1; then
+            if "$PFCTL" -f /tmp/pf_bcm2.conf >> "$LOG" 2>&1; then
+                echo "pf bcm2 loaded (#$pf_tries base=$base_pf)" >> "$LOG"
+                return 0
+            fi
+        fi
+    done
+    echo "pf bcm2 dry-run failed (#$pf_tries)" >> "$LOG"
+    return 1
 }
 
 stop_bcm2_dhcp() {

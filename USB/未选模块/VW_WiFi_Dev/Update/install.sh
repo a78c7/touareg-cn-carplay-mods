@@ -10,8 +10,118 @@ AK=$SSH_DIR/authorized_keys
 echo "=== VW_WiFi_Dev install ($RELEASE_VERSION) ==="
 echo "=== Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods (DO NOT SELL) ==="
 
-# 1) 先确保 /mnt/app 已挂载，再校验车机基础组件（不锁死单一小版本）
+# 1) 先确保 /mnt/app 已挂载，再执行只读体检与基础组件校验（不锁死单一小版本）
 [[ ! -e "/mnt/app/eso" ]] && mount -t qnx6 /dev/mnanda0t177.1 /mnt/app
+
+# 只读体检：在 ModKit 覆写 servicemgrmibhigh 与写入密钥前检查改装店遗留锁死脚本及陌生 SSH 公钥（不写闪存、不阻断安装）
+preflight_readonly_check() {
+    _app="${PREFLIGHT_APP_ROOT:-/mnt/app}"
+    _ota="${PREFLIGHT_OTA_ROOT:-/mnt/ota}"
+    _bin="$_app/eso/bin"
+    _entry="$_bin/servicemgrmibhigh"
+    _entry0="$_bin/servicemgrmibhigh0"
+    _ak="$_app/root/.ssh/authorized_keys"
+    _warn=0
+    echo "--- preflight (read-only) ---"
+
+    if [ -f "$_entry" ]; then
+        _m=$(dd if="$_entry" bs=1 skip=1 count=3 2>/dev/null)
+        if [ "$_m" = "ELF" ]; then
+            echo "entry: stock ELF"
+        elif grep -q "modkit_persist" "$_entry" 2>/dev/null; then
+            echo "entry: standard ModKit script"
+        else
+            _warn=1
+            _sz=$(ls -l "$_entry" 2>/dev/null | awk 'NR==1 { print $5 + 0 }')
+            echo "WARN: suspected shop / third-party servicemgrmibhigh (${_sz:-?} bytes, missing modkit_persist)"
+            awk '
+            NF > 0 && shown < 15 {
+                sub(/\r$/, "")
+                low = tolower($0)
+                if (low ~ /(private key|password|passwd|psk|secret|token)/) print "  | [REDACTED]"
+                else print "  | " $0
+                shown++
+            }' "$_entry" 2>/dev/null || true
+        fi
+    else
+        echo "entry: missing ($_entry)"
+    fi
+
+    if [ -f "$_entry0" ]; then
+        _m0=$(dd if="$_entry0" bs=1 skip=1 count=3 2>/dev/null)
+        if [ "$_m0" != "ELF" ]; then
+            _warn=1
+            echo "WARN: servicemgrmibhigh0 is NOT ELF (may trigger ModKit error: unknown patch state)"
+        fi
+    fi
+
+    if [ -e "$_bin/del" ] || [ -e "$_bin/shadow" ]; then
+        _warn=1
+        echo "WARN: suspected shop anti-tamper files (del/shadow) detected -- boot entry may be restored ~2min after boot (see Issue #10)"
+        [ -e "$_bin/del" ] && ls -l "$_bin/del" 2>/dev/null || true
+        [ -e "$_bin/shadow" ] && ls -l "$_bin/shadow" 2>/dev/null || true
+    fi
+
+    if [ -f "$_ota/modkit/Logs/_ModKit_Persist.log" ]; then
+        echo "persist log: present"
+    else
+        echo "persist log: absent (normal on first install)"
+    fi
+    if [ -d "$_ota/modkit/Mods" ]; then
+        _mods=""
+        for _d in "$_ota/modkit/Mods"/*; do
+            [ -d "$_d" ] || continue
+            _bn="${_d##*/}"
+            _mods="$_mods $_bn"
+            case "$_bn" in
+                VW_*|AppleCarPlay|AndroidAuto) ;;
+                *)
+                    if [ -f "$_d/Persist/install.sh" ]; then
+                        if grep -qi "sshd" "$_d/Persist/install.sh" 2>/dev/null || grep -qi "challenge" "$_d/Persist/install.sh" 2>/dev/null; then
+                            _warn=1
+                            echo "WARN: third-party Persist mod '$_bn' references sshd/challenge"
+                        fi
+                    fi
+                    ;;
+            esac
+        done
+        [ -n "$_mods" ] && echo "existing mods:$_mods"
+    fi
+
+    if [ -f "$_ak" ]; then
+        _ext=$(awk '
+        {
+            sub(/\r$/, "")
+            if ($0 ~ /^[ \t]*$/ || $0 ~ /^[ \t]*#/) next
+            if ($0 ~ /VW_WiFi_Dev_Managed/) next
+            cnt++
+            ki = 1
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^(ssh-|ecdsa-|sk-)/) { ki = i; break }
+            }
+            ktype = $ki
+            kbody = (ki + 1 <= NF) ? $(ki + 1) : ""
+            tail = (length(kbody) > 8) ? substr(kbody, length(kbody) - 7) : kbody
+            cmt = ""
+            for (i = ki + 2; i <= NF; i++) cmt = (cmt == "" ? $i : cmt " " $i)
+            printf "  key#%d: %s ...%s %s\n", cnt, ktype, tail, cmt
+        }
+        ' "$_ak" 2>/dev/null)
+        if [ -n "$_ext" ]; then
+            _warn=1
+            echo "WARN: non-managed SSH public key(s) found in authorized_keys (verify before enabling :2012 SSH):"
+            echo "$_ext"
+        fi
+    fi
+
+    if [ "$_warn" -eq 0 ]; then
+        echo "preflight: clean"
+    else
+        echo "preflight: warnings found (read-only check, continuing install; see docs/07 sec.12 & Issue #10)"
+    fi
+    echo "--- end preflight ---"
+}
+preflight_readonly_check || true
 if [ ! -x /mnt/app/armle/usr/sbin/wpa_supplicant-2.5-wapi ]; then
     echo "abort: wpa_supplicant-2.5-wapi not found"
     exit 0
@@ -105,7 +215,7 @@ else
 fi
 
 ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/iopkt_base_cores"
-echo "v23.1" > "$D/ota_version"
+echo "v23.2" > "$D/ota_version"
 rm -f "$D/disable"
 sync
 # 注意：绝不能在此执行 mount -ur /mnt/app，上游 modkit_install.sh 后续仍需写入 /mnt/app/eso/bin/servicemgrmibhigh
