@@ -1,5 +1,25 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v23.2
+> **胎压单位换算修复 + 已改装车暗桩只读体检 + 无线防火墙跨车型兼容 + 首页白话精简与社区分享支持**：修复车机胎压单位设为 `psi` / `kPa` 时仪表信息框胎压偏低的 Bug（#14），新增改装店遗留定时还原脚本与陌生 SSH 公钥只读体检告警（#10），改进无线控制台 `pf` 防火墙规则对无 `ecm0` 车型的兼容，同时将三语首页彻底精简为通俗大白话并开放 GitHub Discussions 社区自制包分享模板。已装 `v22.1+` 与 `8080` 无线控制台的车主直接上传 `touareg-ota-v23.2.tar` 并点「软重启车机」即可完成胎压修复升级；如需对已改装车执行刷机只读体检或更新无线持久化脚本，请使用 U 盘覆盖刷入一次。
+
+- **修复胎压单位设为 `psi` / `kPa` 时数值偏低（`src/hud-java/vwcn/ExtraDSI.java` + `VWClusterNav_v6.jar`，[#14](https://github.com/a78c7/touareg-cn-carplay-mods/issues/14)）**：
+  - 反汇编原厂 `HsmTargetCarService.dsiCarComfortUpdateRDKTireDisplay` 确认大众 DSI `CarConstants` 的 `pressureUnit` 枚举顺序（`0 = BAR` `0.1 bar/LSB`、`1 = PSI` `0.5 psi/LSB`、`2 = KPA` `10 kPa/LSB`）与 ASL 层不同；修正此前 `1`/`2` 分支对调及 `PSI` 漏乘 `0.5` 的问题，三种单位下仪表胎压均与原车完全一致。
+- **新增已改装车 / 二手车刷机前只读体检（`VW_HUD_1_RouteGuidance` & `VW_WiFi_Dev` `Update/install.sh`，[#10](https://github.com/a78c7/touareg-cn-carplay-mods/issues/10)）**：
+  - 在写入前只读检查 `/mnt/app/eso/bin/servicemgrmibhigh`（识别非 ELF 且不含 `modkit_persist` 的商业锁死脚本并自动脱敏打印前 15 行）、`servicemgrmibhigh0` ELF 完整性、`del`/`shadow` 定时还原伴生文件、第三方 Persist 模块 `sshd`/`challenge` 引用及 `/mnt/app/root/.ssh/authorized_keys` 非托管残留公钥，输出至 U 盘 `Logs/` 供零门槛排障（不写闪存、不阻断正常安装）。
+- **增强 `VW_WiFi_Dev` 防火墙规则跨车型兼容性（`VW_WiFi_Dev/Persist/install.sh`）**：
+  - 将 `ensure_pf_bcm2()` 从宽泛匹配 `on bcm2` 升级为精确校验 `pass in quick on bcm2 ... port = 8080`（及开启 SSH 时的 `2012`），并按实车 `ifconfig ecm0` 状态自适应轮询 `/etc/pf.ecm0.conf`、`/etc/pf.mlan0.conf` 与 `/etc/pf.conf`，兼容无 4G 模块的同平台 MH2p 车型。
+- **首页大白话瘦身、免升系统防野包提示与社区自制包分享**：
+  - 将底层逆向数据、固件演进差异（`P9832`～`P2878`）与排障技术细节统一归档至 `docs/05`、`docs/07` 与 `docs/reference/R3`；三语 `README` 改用通俗直白表述，明确原车 `P` 版免升系统直刷范围并警示切勿自行刷入网传非官方 `2878` 系统包；
+  - 新增 `.github/DISCUSSION_TEMPLATE/show-and-tell.yml` 社区皮肤与模块包 `.zip` 分享表单模板及顶部导航直达入口。
+- **车机 QNX 6.6 ARMv7 二进制 & Java 1.4 校验和（全部通过 `DT_HASH+GNU_HASH`、ABI 与 Java `48.0` 校验）**：
+  - `VWClusterNav_v6.jar`（`72,460 B`）：`48da5b662a29c55617c06b8579420bcc0ae9edcf49c991f8438ab78b5921cf10`
+  - `cl_render`（`1,341,972 B`，与 `v23.1` 一致）：`48e5e0f595c23d4b5f98e1c109cf69576b3625d02d17f3b7d1ea5536b16f3468`
+  - `touareg_netd`（`120,688 B`，与 `v23.1` 一致）：`47d6c6db23645751d7ad36232f8a7557923cdfe10d1b652d6861f7ff71b57d19`
+  - `clusterd`（`24,344 B`，与 `v23.1` 一致）：`f46edfd3aa8259ac0e4f4a2b0793d7f15487565ce380550b7d211503a652982a8`
+  - `cl_probe.so`（`56,608 B`，与 `v23.1` 一致）：`848da1b7e94d7fe39f60fa93fecea944b453b9ab9e1304c8d6d32917c4c7dc2f`
+  - `VWPopupFilter.jar`（`4,536 B`，与 `v23.1` 一致）：`fe192806e4465c1d83318ca314a19d8ab3526673b3987417e295f5254c5c5b81`
+
 ## v23.1
 > **大众官方资料全仓库核实修复 + `v23` 皮肤引擎核心缺陷修复 + 首页清爽白底统一改版**：对照 2018.07 中规途锐原厂使用说明书（件号 `760012774AC`）与 2019–2026 大众官方公开资料完成全仓库交叉核实，集中修复了 `v23` 引擎挡位/转向/遥测 3 个真实功能缺陷、U 盘刷机 `ota_version` 滞后、配置器 Wi-Fi 热点截断与模拟器手势不一致，并统一许可证边界与全新清爽白底首页视觉。已装 `v22.1+` 与 `8080` 无线控制台的车主直接上传 `touareg-ota-v23.1.tar` 并点「软重启车机」即可完成升级。
 

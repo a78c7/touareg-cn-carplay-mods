@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tools/deploy_eth.sh — 免 U 盘直连车机一键部署 v23.1（Ed25519 签名 OTA + 首次随机 PIN + 安全熔断 + 10Hz 阻尼平滑/GLES2 60fps）
+# tools/deploy_eth.sh — 免 U 盘直连车机一键部署 v23.2（Ed25519 签名 OTA + 首次随机 PIN + 安全熔断 + 10Hz 阻尼平滑/GLES2 60fps）
 #
 # 支持两种连接方式：
 #   1) 默认有线网卡（D-Link DUB-E100）：自动拉起 sudo axbridge (172.16.250.248:2012)
@@ -215,7 +215,7 @@ for bf in cl_probe.so clusterd cl_render dash.conf; do
 done
 EOF
 
-echo ">>> [2/4] 上传 v23.1 全量组件（VWClusterNav_v6.jar / cl_probe.so / clusterd / cl_render / dash.conf / Persist）..."
+echo ">>> [2/4] 上传 v23.2 全量组件（VWClusterNav_v6.jar / cl_probe.so / clusterd / cl_render / dash.conf / Persist）..."
 if [ "$NO_REBOOT" = "0" ]; then
     push_hu "$JAR_SRC" "/mnt/app/eso/hmi/lsd/jars/VWClusterNav_v6.jar.new"
     push_hu "$PER_SRC" "${PER_DST}.new"
@@ -227,7 +227,7 @@ push_hu "$TMP_CONF" "/mnt/app/eso/bin/apps/cluster/dash.conf.new"
 
 HAS_NETD="$(run_hu '[ -f /mnt/app/eso/bin/apps/wifi_dev/touareg_netd ] && echo 1 || echo 0')"
 if [ "$HAS_NETD" = "1" ]; then
-    echo "    检测到车机已装 VW_WiFi_Dev，同步升级 touareg_netd v23.1..."
+    echo "    检测到车机已装 VW_WiFi_Dev，同步升级 touareg_netd v23.2..."
     push_hu "$NETD_SRC" "/mnt/app/eso/bin/apps/wifi_dev/touareg_netd.new"
 fi
 HAS_POP="$(run_hu '[ -f /mnt/app/eso/hmi/lsd/jars/VWPopupFilter.jar ] && echo 1 || echo 0')"
@@ -304,7 +304,7 @@ if [ "$HAS_NETD" = "1" ]; then
     W=/mnt/app/eso/bin/apps/wifi_dev/touareg_netd
     chk_sz "$W.new" "$NETD_SZ"
     chmod 755 "$W.new" && mv -f "$W.new" "$W"
-    echo "v23.1" > /mnt/app/eso/bin/apps/wifi_dev/ota_version
+    echo "v23.2" > /mnt/app/eso/bin/apps/wifi_dev/ota_version
 fi
 if [ "$HAS_POP" = "1" ] && [ "$NO_REBOOT" = "0" ]; then
     PJ=/mnt/app/eso/hmi/lsd/jars/VWPopupFilter.jar

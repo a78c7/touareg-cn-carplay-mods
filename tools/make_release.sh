@@ -3,9 +3,9 @@
 # and SHA256SUMS.txt.
 #
 # usage:
-#   OTA_SIGNING_KEY_FILE=~/.config/touareg-ota-signing/ota_signing_key.pem sh tools/make_release.sh v23.1
-#   OTA_SIGNING_KEY_PEM="..." sh tools/make_release.sh v23.1
-#   sh tools/make_release.sh v23.1 --unsigned-dev   (local dev testing only; rejected on head unit unless allow_unsigned_ota exists)
+#   OTA_SIGNING_KEY_FILE=~/.config/touareg-ota-signing/ota_signing_key.pem sh tools/make_release.sh v23.2
+#   OTA_SIGNING_KEY_PEM="..." sh tools/make_release.sh v23.2
+#   sh tools/make_release.sh v23.2 --unsigned-dev   (local dev testing only; rejected on head unit unless allow_unsigned_ota exists)
 #
 # outputs:
 #   -> touareg-cn-carplay-mods-<version>.zip
@@ -126,6 +126,7 @@ quick_guide = f"""途锐 MH2p CarPlay 改装包 {v} — 必看说明与免费开
 
 【适用车型与排除清单（刷机前必看）】
 - 仅适用：第三代大众途锐（CR7）改款前 15 英寸 Discover Premium（MH2p，配备 12 英寸全液晶数字驾驶舱；中规约 2019–2023 款、欧版 2018–2023.05；其中中规固件 MH2p_CN_VWG36_P2878 经端到端全功能实测）。
+- 免升系统直刷与防野包提醒：国行 15 寸原车不管是什么 P 版本，都不用先升系统，直接插 U 盘就能刷仪表地图、HUD 和无线 CarPlay（仅「去黑边全屏」目前限 P2878，老版本自动跳过不影响其他功能）。千万别去网上或闲鱼找来路不明的 2878 系统包自己刷车机，有黑砖及商业暗桩漏电风险（确需升系统只建议去 4S 店正规升级）。
 - 不适用：9.2 英寸 Discover Pro + 模拟机械仪表（中规领航版）、欧版 MY2024+ 改款 MIB3（Discover Pro Max）、中规 2025–2026 改款 15.05 英寸 Asterix 车机、第二代途锐（7P）。
 - 部分功能受实车硬件制约：HUD 导航投射需原车配备 HUD；俯仰/侧倾角仅在配备空气悬架且总线上报时有数据（中规 eHybrid 无此上报）；油箱容积因版本而异（中规燃油 90 L / 中规 eHybrid 76 L / 欧规标配 75 L），请在配置器中按实车设置。
 
@@ -145,7 +146,7 @@ quick_guide = f"""途锐 MH2p CarPlay 改装包 {v} — 必看说明与免费开
 - 车机内置三层自动保险丝（坏皮肤当帧 0 黑屏退回内置默认经典 / 渲染异常秒退回 v22.1 / 3 次崩溃退回原车地图 [33]），无需依赖 8080 救砖。
 
 【离线无线升级 (OTA)（进阶可选）】
-- 若车机为 v22.01 及更早版本：首次升级到 v23.1 请使用本 U 盘包覆盖刷入一次（v22.01 及更早版本尚未内置 Ed25519 公钥，会安全拒绝新版签名 .tar 包）；刷入时原有 web.pin 与 cl.conf 自动保留。
+- 若车机为 v22.01 及更早版本：首次升级到 v23.2 请使用本 U 盘包覆盖刷入一次（v22.01 及更早版本尚未内置 Ed25519 公钥，会安全拒绝新版签名 .tar 包）；刷入时原有 web.pin 与 cl.conf 自动保留。
 - 已装 v22.1 及以后版本的车机：后续升级无需再插拔 U 盘，手机下载 Release 中的 touareg-ota-<版本>.tar，连接车机打开 http://touareg.local:8080 -> 开关运维 -> 离线无线升级（先校验官方 Ed25519 签名再解包、逐文件 SHA-256 校验，支持自动备份与一键回滚）。
 
 【非官方关联、商标与许可证声明】

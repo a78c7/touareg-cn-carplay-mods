@@ -1,0 +1,63 @@
+title: "[分享] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎把你自己调好的 **`v23` 仪表皮肤**、**信息框布局（`dash.conf`）**、**U 盘功能模块** 或 **同平台车型适配包** 发在这里分享给车友！
+        - **上传格式限制**：GitHub 讨论区支持直接把 **`.zip` / `.gz` / `.tgz`** 压缩包（单个 ≤ 25 MB）、截图（≤ 10 MB）或演示视频（≤ 100 MB）拖进下方编辑框上传；暂不支持 `.7z` / `.rar`。
+        - **刷入方式说明**：车机 `8080` 无线控制台的离线升级带作者私钥签名校验，第三方自制包无法走 `8080` OTA 上传，请在帖子里写明是导入皮肤还是放进 U 盘刷入。
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 分享类型 / Package Type
+      options:
+        - "v23 自定义 60fps 仪表皮肤 (my_theme.js / .zip)"
+        - "仪表信息框布局配置 (dash.conf)"
+        - "免拆 U 盘功能模块包 (Mods .zip)"
+        - "欧版或同平台车型适配包 (EU / MH2p Adaptation)"
+        - "实用辅助工具或脚本"
+    validations:
+      required: true
+
+  - type: input
+    id: compatibility
+    attributes:
+      label: 适用车型与实测系统版本 / Tested Car & Firmware
+      description: 请如实填写你在哪款车、哪个固件号上实测通过，方便其他车主核对。
+      placeholder: "例如：2022 款国行途锐 3.0T (P2878) / 欧版 Touareg CR P2869"
+    validations:
+      required: true
+
+  - type: textarea
+    id: preview_and_usage
+    attributes:
+      label: 效果展示、功能说明与使用方法 / Preview & How to Use
+      description: 欢迎直接拖入实车照片、模拟器截图或视频，并用大白话写清楚怎么装、怎么卸载。
+      placeholder: |
+        1. 这个包实现了什么效果：
+        2. 怎么安装 / 怎么还原：
+        3. 效果图或视频（直接拖拽到此处上传）：
+    validations:
+      required: true
+
+  - type: textarea
+    id: attachment
+    attributes:
+      label: 安装包附件或开源地址 / .zip Attachment or Repo Link
+      description: 把打包好的 .zip 文件（≤ 25 MB）直接拖进下面输入框即可上传；如果超过 25 MB，请贴上你自己的 GitHub 仓库或网盘链接。
+      placeholder: "将 .zip 压缩包拖拽到这里自动上传，或粘贴下载与源码链接……"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety_rules
+    attributes:
+      label: 安全、免费开源与免责确认（必勾） / Safety & Non-Commercial Check
+      options:
+        - label: "不含大众/苹果等受版权保护的原厂系统文件，也未把本车 `backup` 备份、车架号（VIN）或个人密钥打包在内。"
+          required: true
+        - label: "完全免费分享、可读可查（非加密黑盒包，无任何付费代刷、咸鱼卖包或收费群引流）。"
+          required: true
+        - label: "已知悉社区第三方包未经仓库作者逐一实车审计，其他车友下载刷入前请自行核对车型版本，风险自负。"
+          required: true
