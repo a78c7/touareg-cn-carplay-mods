@@ -276,8 +276,8 @@ int main(int argc, char **argv) {
      * displaymanager resolves the ids when the list is set, and re-setting the same list does not pick up a
      * window created later. So the list is now set only after the renderer reports its window
      * (/tmp/cl_render_ready = its pid); a renderer that never reports within 12 s is restarted. */
-    int new_stream = 1, stage = 0, zoomed = 0;
-    int fast_crash_cnt = 0, safe_logged = 0, gles_child = 0, v23_child = 0;
+    int new_stream = 1, stage = 0, zoomed = 0, idr_retried = 0;
+    int fast_crash_cnt = 0, v23_fail_cnt = 0, safe_logged = 0, gles_child = 0, v23_child = 0;
     uint32_t wd_bytes = 0; int wd_init = 0, wd_frozen = 0; time_t wd_last_wake = 0; unsigned wd_seq = 0;
     time_t shown_t = 0;
     const char *did = getenv("CL_DISPID");
@@ -299,7 +299,7 @@ int main(int argc, char **argv) {
             usleep(1000000);
             continue;
         }
-        if (safe_logged) { safe_logged = 0; fast_crash_cnt = 0; logs("safe_mode cleared -> clusterd resuming"); }
+        if (safe_logged) { safe_logged = 0; fast_crash_cnt = 0; v23_fail_cnt = 0; logs("safe_mode cleared -> clusterd resuming"); }
 
         if (!s) {
             int fd = shm_open("/cluster_h264_shm", O_RDONLY, 0);
@@ -337,12 +337,16 @@ int main(int argc, char **argv) {
                 int was_v23 = v23_child;
                 gles_child = 0;
                 v23_child = 0;
-                /* v23 Layer-2 fuse: if opt-in v23 renderer crashes rapidly once, immediately
-                 * trip /tmp/v23_fallback_v22 and fall back to battle-tested v22.1 screen_blit! */
+                /* v23 第 2 层熔断：信号硬崩溃（SIGSEGV/SIGABRT 等）立即退回经典 v22 通道；
+                 * 冷启动阶段的非零退出（如 EGL/Screen 尚未就绪）允许自动重试 1 次，连续 2 次失败再写入 /tmp/v23_fallback_v22。 */
                 if (was_v23 && alive < 30 && (!WIFEXITED(wst) || WEXITSTATUS(wst) != 0)) {
-                    int ffd = open("/tmp/v23_fallback_v22", O_WRONLY | O_CREAT | O_TRUNC, 0666);
-                    if (ffd >= 0) { const char *msg = "v23 rapid exit\n"; (void)write(ffd, msg, strlen(msg)); close(ffd); }
-                    logs("LAYER-2 FUSE: v23 renderer exited abnormally -> auto fallback to v22.1 classic renderer");
+                    if (WIFSIGNALED(wst) || ++v23_fail_cnt >= 2) {
+                        int ffd = open("/tmp/v23_fallback_v22", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                        if (ffd >= 0) { const char *msg = "v23 rapid exit\n"; (void)write(ffd, msg, strlen(msg)); close(ffd); }
+                        logs("LAYER-2 FUSE: v23 renderer exited abnormally -> auto fallback to v22.1 classic renderer");
+                    } else {
+                        logs("v23 renderer exited during cold start (1/2), retrying once before v22 fallback");
+                    }
                     continue;
                 }
                 /* v22.0 Layer-3 fuse: 3 rapid crashes within 30s -> fuse off renderer and restore stock map [33] */
@@ -358,10 +362,12 @@ int main(int argc, char **argv) {
                     }
                 } else if (alive >= 60) {
                     fast_crash_cnt = 0;
+                    v23_fail_cnt = 0;
                 }
                 (void)was_gles;
-            } else if (time(NULL) - started >= 60 && fast_crash_cnt > 0) {
+            } else if (time(NULL) - started >= 60 && (fast_crash_cnt > 0 || v23_fail_cnt > 0)) {
                 fast_crash_cnt = 0;
+                v23_fail_cnt = 0;
             }
         }
         if (active) {
@@ -387,8 +393,8 @@ int main(int argc, char **argv) {
                     }
                     _exit(127);
                 }
-                started = time(NULL); stage = 0; gles_child = 0; v23_child = want_v23;
-                if (new_stream) { unlink("/tmp/cl_pan_mode"); new_stream = 0; zoomed = 0; wd_init = 0; wd_frozen = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
+                started = time(NULL); stage = 0; idr_retried = 0; gles_child = 0; v23_child = want_v23;
+                if (new_stream) { unlink("/tmp/cl_pan_mode"); new_stream = 0; zoomed = 0; v23_fail_cnt = 0; wd_init = 0; wd_frozen = 0; g_sess_t = started; g_fresh = -1; g_prev_nav = 0; g_last_road[0] = 0; }
                 logm(want_v23 ? "v23 60fps renderer started" : "renderer started", child);
             } else if (stage == 0 && time(NULL) - started >= 2) {
                 /* get a fresh key frame: the renderer creates its window on it. v19.4.1: the renderer also asks by itself
@@ -398,18 +404,30 @@ int main(int argc, char **argv) {
                 logm("idr requested", 0);
             } else if (stage == 1) {
                 char rb[32]; int ready = read_file("/tmp/cl_render_ready", rb, sizeof rb) > 0 && atoi(rb) == child;
+                time_t ready_timeout = v23_child ? 15 : 8;
                 if (ready) {
                     if (strcmp(did, "33") != 0) rebind(show_seq);   /* show our own displayable on the cluster */
                     stage = 2; shown_t = time(NULL);
+                    if (v23_child) v23_fail_cnt = 0;
                     logm("renderer window ready, cluster list set (s after start)", (int)(shown_t - started));
-                } else if (time(NULL) - started >= 8) {
-                    /* v22+: 8 s window-ready timeout (originally 12 s, later 6 s, tuned to 8 s for v23 EGL init). */
+                } else if (v23_child && !idr_retried && time(NULL) - started >= 6) {
+                    /* 冷启动 CPU 100% 时第 2 秒的首次 idr 可能早于解码器就绪，第 6 秒补发一次催帧 */
+                    send_cmd("idr");
+                    idr_retried = 1;
+                    logm("v23 idr retry requested", 0);
+                } else if (time(NULL) - started >= ready_timeout) {
+                    /* 冷启动 CPU 满载时 v23（首帧 IDR + EGL + 字库 + 自定义皮肤编译）可能略超 8s，
+                     * 放宽至 15s 且允许自动重试 1 次，连续 2 次超时再触发第 2 层回退经典 v22 通道（#14）。 */
                     kill(child, SIGTERM); usleep(500000); kill(child, SIGKILL);
                     waitpid(child, NULL, 0);
                     if (v23_child) {
-                        int ffd = open("/tmp/v23_fallback_v22", O_WRONLY | O_CREAT | O_TRUNC, 0666);
-                        if (ffd >= 0) { const char *msg = "v23 init timeout\n"; (void)write(ffd, msg, strlen(msg)); close(ffd); }
-                        logs("LAYER-2 FUSE: v23 window ready timeout (8s) -> auto fallback to v22.1 classic renderer");
+                        if (++v23_fail_cnt >= 2) {
+                            int ffd = open("/tmp/v23_fallback_v22", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                            if (ffd >= 0) { const char *msg = "v23 init timeout\n"; (void)write(ffd, msg, strlen(msg)); close(ffd); }
+                            logs("LAYER-2 FUSE: v23 window ready timeout (15s x2) -> auto fallback to v22.1 classic renderer");
+                        } else {
+                            logs("v23 window ready timeout (15s, 1/2), retrying once before v22 fallback");
+                        }
                     } else {
                         logm("renderer window not ready after 8 s, restarting", child);
                     }
@@ -477,8 +495,9 @@ int main(int argc, char **argv) {
                 if (read_file("/tmp/cl_render_ready", rb, sizeof rb) > 0 && atoi(rb) == child) {
                     if (strcmp(did, "33") != 0) rebind(show_seq);
                     stage = 2; shown_t = time(NULL);
+                    if (v23_child) v23_fail_cnt = 0;
                     logm("gles60 window ready", child);
-                } else if (time(NULL) - started >= 8) {
+                } else if (time(NULL) - started >= (time_t)(v23_child ? 15 : 8)) {
                     kill(child, SIGTERM); usleep(300000); kill(child, SIGKILL);
                     waitpid(child, NULL, 0); child = 0; gles_child = 0; v23_child = 0;
                 }
