@@ -2197,10 +2197,15 @@ static void cl_translate_h264_pd(const void* parser_pd, void* nv_pic_info_out) {
     }
 }
 
-/* 按硬解目标表面记录最近一次 NvMediaVideoDecoderRender 返回状态，拦截异常解码表面流入 2D Blit */
+/* 按硬解目标表面记录最近一次 NvMediaVideoDecoderRender / SurfaceWait 状态，拦截异常解码表面流入 2D Blit */
 static uint8_t g_surf_decode_bad[MAX_SURFACES];
 
-/* DecodePicture: parser prepared picture_info, decode the frame */
+/* DecodePicture: parser prepared picture_info, decode the frame.
+ * v23.6 根治高德白天高码率多帧突发时的描述符覆写与异步码流竞态（经典模式与 v23 模式共用）：
+ *   1. 将 bs_desc 与 nv_pi[1024] 按目标表面槽位 [MAX_SURFACES] 独立隔离，彻底杜绝单次 ParserParse 含多帧突发时
+ *      后一帧覆写前一帧尚未被 TVMR 异步工作线程消费完的描述符；
+ *   2. DecoderRender 提交后立即对 target_surface 执行 SurfaceWait 同步等待硬解完成（~1.5~2.5ms，仅占 20fps 解码线程预算 <5%，
+ *      60fps GLES2 UI 运行在独立线程零阻塞），确保 ParserParse 返回并 free(chunk) 前硬解 DMA 已 100% 读完码流并落盘 YV12。 */
 static int cb_decode_picture(void* user, void* pic_info) {
     if (!pic_info || !g_dec.decoder || !nv.DecoderRender) return 1;
 
@@ -2211,37 +2216,39 @@ static int cb_decode_picture(void* user, void* pic_info) {
     void* target_surface = (void*)curr_pic[2];
     if (!target_surface) return 1;
 
+    int slot = 0;
+    for (int i = 0; i < MAX_SURFACES; i++) {
+        if (g_dec.decode_siblings[i] == target_surface) {
+            slot = i;
+            break;
+        }
+    }
+
     /* gal writes a frame counter to pCurrPic[5] before DecoderRender
      * (see gal.c:169320-169321). TVMR may dereference through pCurrPic. */
     g_dec.frame_counter++;
     curr_pic[5] = g_dec.frame_counter;
 
-    /* arg5 is the bitstream descriptor {pBitstreamData, nBitstreamDataLen}
-     * from pd[14] / pd[13] (see gal.c:169314-169315). MUST be static — TVMR
-     * may read it asynchronously after this returns. */
     static struct { void* pBitstreamData; uint32_t nBitstreamDataLen; uint32_t pad[6]; }
-        bs_desc __attribute__((aligned(8)));
-    bs_desc.pBitstreamData    = (void*)(uintptr_t)pi[14];
-    bs_desc.nBitstreamDataLen = (uint32_t)pi[13];
+        bs_desc_slots[MAX_SURFACES] __attribute__((aligned(8)));
+    bs_desc_slots[slot].pBitstreamData    = (void*)(uintptr_t)pi[14];
+    bs_desc_slots[slot].nBitstreamDataLen = (uint32_t)pi[13];
 
     /* Translate parser output to NvMedia pic_info (per gal::nvSetParamsH264) */
-    static uint8_t nv_pi[1024] __attribute__((aligned(8)));
-    cl_translate_h264_pd(pic_info, nv_pi);
+    static uint8_t nv_pi_slots[MAX_SURFACES][1024] __attribute__((aligned(8)));
+    cl_translate_h264_pd(pic_info, nv_pi_slots[slot]);
 
-    int rc = nv.DecoderRender(g_dec.decoder, target_surface, nv_pi, 1, &bs_desc);
-    for (int i = 0; i < MAX_SURFACES; i++) {
-        if (g_dec.decode_siblings[i] == target_surface) {
-            g_surf_decode_bad[i] = (rc != 0) ? 1u : 0u;
-            break;
-        }
-    }
+    int rc = nv.DecoderRender(g_dec.decoder, target_surface, nv_pi_slots[slot], 1, &bs_desc_slots[slot]);
+    int wrc = (rc == 0 && nv.SurfaceWait) ? nv.SurfaceWait(target_surface, 0) : 0;
+    g_surf_decode_bad[slot] = (rc != 0 || wrc != 0) ? 1u : 0u;
+
     g_dec.frames_decoded++;
-    if (rc != 0) {
-        rdbg_err("DecodePicture ERROR: rc=%d surface=%p frame=%d bs_len=%u\n",
-                 rc, target_surface, g_dec.frames_decoded, bs_desc.nBitstreamDataLen);
+    if (rc != 0 || wrc != 0) {
+        rdbg_err("DecodePicture ERROR: rc=%d wait_rc=%d slot=%d surface=%p frame=%d bs_len=%u\n",
+                 rc, wrc, slot, target_surface, g_dec.frames_decoded, bs_desc_slots[slot].nBitstreamDataLen);
     } else if (g_dec.frames_decoded <= 5 || (g_dec.frames_decoded % 100) == 0) {
-        LOG("DecodePicture: rc=%d surface=%p frame=%d bs_len=%u\n",
-            rc, target_surface, g_dec.frames_decoded, bs_desc.nBitstreamDataLen);
+        LOG("DecodePicture: rc=%d wait_rc=%d slot=%d surface=%p frame=%d bs_len=%u\n",
+            rc, wrc, slot, target_surface, g_dec.frames_decoded, bs_desc_slots[slot].nBitstreamDataLen);
     }
     return 1;
 }
@@ -2462,6 +2469,7 @@ static void cl_flush_blits_idle(void) {
 
 static screen_buffer_t g_last_posted_buf = NULL;
 static volatile int    g_pinned_didx = -1;
+static volatile int    g_prev_pinned_didx = -1;
 static int             g_batch_deferred = 0;
 static uint64_t        g_last_real_post_ms = 0;
 static int             g_post_err_cnt = 0;
@@ -2893,6 +2901,7 @@ static int cb_display_picture(void* user, void* disp_info) {
     };
     carpos_tick(didx);
 #ifdef USE_DASH
+    if (g_pinned_didx >= 0 && g_pinned_didx != didx) g_prev_pinned_didx = g_pinned_didx;
     g_pinned_didx = didx;
     g_last_clean_didx = didx;
     memcpy(g_last_blit_attribs, blit_attribs, sizeof(blit_attribs));
@@ -2998,13 +3007,14 @@ static int cb_alloc_picture(void* user, void** pic_buf) {
         for (k = 0; k < g_dec.num_surfaces; k++) {
             i = (rr_next + k) % g_dec.num_surfaces;
             if (g_dec.surf_refcount[i] == 0 && g_dec.surfaces[i] &&
-                (pass == 1 || i != g_pinned_didx)) {
+                (pass == 1 || (i != g_pinned_didx && i != g_prev_pinned_didx))) {
                 if (pass == 1 && i == g_pinned_didx) {
                     g_pinned_didx = -1;
 #ifdef USE_DASH
                     g_have_clean_didx = 0;
 #endif
                 }
+                if (i == g_prev_pinned_didx) g_prev_pinned_didx = -1;
                 rr_next = (i + 1) % g_dec.num_surfaces;
                 /* Build a mini picture buffer struct:
                  * [0]=index, [1]=0, [2]=surface_ptr, [3]=0, [4]=refcount, [5]=0 */

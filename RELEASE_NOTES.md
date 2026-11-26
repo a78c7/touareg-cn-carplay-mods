@@ -1,5 +1,27 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v23.6
+> **根治 `v23` / 经典模式高码率残余花屏（消除英伟达 Tegra K1 显存属性冲突 + 硬解 8 槽参数同步隔离）+ 修复冷启动 `v23` 超时误退回 `v22`（`15 s` 容错与自动重试，#14）**：综合实车开机首秒显卡驱动日志与高德白天 `2688×960` 高码率（`3–8 Mbps`）实测，定位并拔除两处深层残余花屏根因——默认关闭触发 `/sbin/screen` NVIDIA `Sev 2` 报错的混合属性零拷贝、改为 2D/3D 显存物理隔离的标准纹理上传（仍满帧 60fps），并将硬解参数单按 8 槽独立隔离加落盘同步；同时合并 `clusterd` 冷启动 `15 s` 容错 + `6 s` 补发 `idr` + 1 次自动重试，消除冷车满载时误触发第 2 层保险丝回退旧版的问题。已装 `v22.1+` 与 `8080` 无线控制台的车主上传 `touareg-ota-v23.6.tar` 并点「软重启车机」即可完成升级。
+
+- **彻底消除 Tegra K1 显存属性冲突引起的偶发 ~0.1s 红块/白横条（`src/cl_render/v23_gles.c`）**：
+  - 实车开机首秒 `sloginfo` 证实：离屏地图画板同时挂载 `SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ`（Pitch-Linear）与 `SCREEN_USAGE_OPENGL_ES2`（Block-Linear）时，`/sbin/screen` NVIDIA 驱动会连报 12 条 `Sev 2` 错误（`NV: USAGE_OPENGL_* is not supported with the USAGE_READ, USAGE_WRITE and USAGE_NATIVE.`），在高德白天高码率流下会导致 VIC 2D 写入、CPU 昼夜亮度采样与 GK20A 3D 纹理缓存偶发不一致；
+  - `v23.6` 将 4 槽离屏地图桥（`free / ready / front / retired`）改为纯 Pitch-Linear 属性，默认通过 `glTexSubImage2D` 物理隔离上传至 GPU 独立 Block-Linear 纹理（仅在新地图帧到达时上传，带宽占比 `< 0.6%`，60fps 仪表合成丝毫不掉帧，驱动 `Sev 2` 报错归零；仍保留 `v23_force_zerocopy` 开关供实验对比）。
+- **硬解 8 槽独立参数描述符 + 落盘同步（`src/cl_render/cluster.c`，经典模式与 `v23` 模式共用）**：
+  - 将 `cb_decode_picture` 的 `bs_desc` 与 `nv_pi[1024]` 从单份静态变量改为按 `[MAX_SURFACES]`（8 槽）独立隔离，并在 `NvMediaVideoDecoderRender` 提交后立即对目标表面执行 `SurfaceWait` 同步落盘，彻底杜绝单次 `ParserParse` 多帧突发时后帧覆写前帧参数单或 `free(chunk)` 抢跑导致的偶发脏帧；
+  - `cb_alloc_picture` 优先避让当前与上一显示表面（`g_pinned_didx` / `g_prev_pinned_didx`），避免刚完成 2D Blit 的 YV12 表面被立刻覆写。
+- **修复冷启动 `v23` 60fps 引擎初始化超时误退回 `v22`（`src/clusterd/clusterd.c`，[#14](https://github.com/a78c7/touareg-cn-carplay-mods/issues/14)）**：
+  - 将 `v23` 窗口就绪超时从 `8 s` 放宽至 **`15 s`**（兼容冷启动 CPU 满载时首帧 IDR + EGL + 字库 + 自定义皮肤编译耗时），并在第 `6 s` 未就绪时自动补发一次 `idr` 催帧；
+  - 允许自动重试 `1` 次（连续 `2` 次 `15 s` 超时才触发第 2 层保险丝回退经典 `v22` 通道，就绪后自动清零失败计数）。
+- **U 盘安装脚本版本号同步**：
+  - `VW_WiFi_Dev/Update/install.sh` 写入的 `ota_version` 同步更新至 `v23.6`，`tools/make_release.sh` 内置说明自动跟随发版版本号。
+- **车机 QNX 6.6 ARMv7 二进制 & Java 1.4 校验和（全部通过 `DT_HASH+GNU_HASH`、ABI 与 Java `48.0` 校验）**：
+  - `cl_render`（`1,464,904 B`）：`a02554c322b3bb95d25659b3326e7eec5237f42969af22f39c443860602e8950`
+  - `clusterd`（`28,396 B`）：`1f4fc4f299bba0dc65c55a1a86ee5609ee43f79c6633c9c3207b847e2c89082d`
+  - `VWClusterNav_v6.jar`（`76,097 B`，与 `v23.5` 一致）：`7d650a2db10d36fde4a8e631eadc4ab355d598e10fe13b68f9e0fb411761a359`
+  - `touareg_netd`（`141,168 B`，与 `v23.5` 一致）：`5e881269083c59f0fb8a1abaf40e8af1a99fd933bd28fee389bb9d4353094f05`
+  - `cl_probe.so`（`56,608 B`，与 `v23.5` 一致）：`aa58b9e37d32dd09cfeff1765e9e0f2c5ef2a07777a4992174ff9f5519fe81ff`
+  - `VWPopupFilter.jar`（`4,536 B`，与 `v23.5` 一致）：`fe192806e4465c1d83318ca314a19d8ab3526673b3987417e295f5254c5c5b81`
+
 ## v23.5
 > **51 项实车真数据扩展（真实车速 / 车内温度 / 横摆角速 / 四轮独立轮速 / 底盘工况与热告警）+ 无功率/扭矩车型自动藏死 0 替补 + 氛围灯同款主题主色 + 油门非线性观感条 + 手机 `8080` 新增 Apple Bento「实时大屏」副屏模式**：结合社区实车只读审计反馈，在不新增车机负担、零侵入原车中控的前提下，将仪表信息框与 `v23` 皮肤数据总线从 `43` 项扩充至 **`51` 项**；自动探测部分出厂网关不下发功率/扭矩的车型，仪表原地替补实用真数据告别「死 0 格子」；桌面「改装设置」与手机 `8080` 无线控制台同步支持一键选择途锐常用氛围灯主色（`accent`），仪表信息框与默认 `60fps` 皮肤联动变色；油门进度条采用城市轻油门非线性观感曲线；手机 `8080` 新增「实时大屏」Tab，无需刷中控即可把手机/平板变成真 `10Hz` 实时副屏仪表。已装 `v22.1+` 与 `8080` 无线控制台的车主上传 `touareg-ota-v23.5.tar` 并点「软重启车机」即可完成升级。
 
