@@ -37,9 +37,11 @@ preflight_readonly_check() {
     _warn=0
     echo "--- preflight (read-only) ---"
 
+    _entry_is_elf=0
     if [ -f "$_entry" ]; then
         _m=$(dd if="$_entry" bs=1 skip=1 count=3 2>/dev/null)
         if [ "$_m" = "ELF" ]; then
+            _entry_is_elf=1
             echo "entry: stock ELF"
         elif grep -q "modkit_persist" "$_entry" 2>/dev/null; then
             echo "entry: standard ModKit script"
@@ -64,8 +66,15 @@ preflight_readonly_check() {
         _m0=$(dd if="$_entry0" bs=1 skip=1 count=3 2>/dev/null)
         if [ "$_m0" != "ELF" ]; then
             _warn=1
-            echo "WARN: servicemgrmibhigh0 is NOT ELF (may trigger ModKit error: unknown patch state)"
+            echo "WARN: servicemgrmibhigh0 is NOT ELF (ModKit WILL abort with 'error: unknown patch state' and Persist will NOT run)"
         fi
+    elif [ "$_entry_is_elf" -eq 0 ]; then
+        _warn=1
+        echo "WARN: servicemgrmibhigh0 is MISSING while servicemgrmibhigh is not ELF (ModKit WILL abort with 'error: unknown patch state' and Persist will NOT run; see Issue #16)"
+        for _sf in "$_bin"/servicemgrmibhigh*; do
+            [ -e "$_sf" ] || continue
+            ls -l "$_sf" 2>/dev/null || true
+        done
     fi
 
     if [ -e "$_bin/del" ] || [ -e "$_bin/shadow" ]; then
@@ -73,6 +82,14 @@ preflight_readonly_check() {
         echo "WARN: suspected shop anti-tamper files (del/shadow) detected -- boot entry may be restored ~2min after boot (see Issue #10)"
         [ -e "$_bin/del" ] && ls -l "$_bin/del" 2>/dev/null || true
         [ -e "$_bin/shadow" ] && ls -l "$_bin/shadow" 2>/dev/null || true
+    fi
+
+    if [ -e "$_app/eso/hmi/lsd/.j" ] || [ -e "$_ota/challenge.pub" ] || [ -e "$_bin/autorunner" ]; then
+        _warn=1
+        echo "WARN: suspected shop payload/hook files (.j / challenge.pub / autorunner) detected (see Issue #16)"
+        [ -e "$_app/eso/hmi/lsd/.j" ] && ls -l "$_app/eso/hmi/lsd/.j" 2>/dev/null || true
+        [ -e "$_ota/challenge.pub" ] && ls -l "$_ota/challenge.pub" 2>/dev/null || true
+        [ -e "$_bin/autorunner" ] && ls -l "$_bin/autorunner" 2>/dev/null || true
     fi
 
     if [ -f "$_ota/modkit/Logs/_ModKit_Persist.log" ]; then
@@ -130,7 +147,7 @@ preflight_readonly_check() {
     if [ "$_warn" -eq 0 ]; then
         echo "preflight: clean"
     else
-        echo "preflight: warnings found (read-only check, continuing install; see docs/07 sec.12 & Issue #10)"
+        echo "preflight: warnings found (read-only check, continuing install; see docs/07 sec.12 & Issues #10/#16)"
     fi
     echo "--- end preflight ---"
 }

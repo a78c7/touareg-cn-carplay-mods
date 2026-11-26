@@ -128,3 +128,117 @@ mv -f "$AK.new" "$AK"
 		t.Fatalf("unexpected merged authorized_keys:\n%s", s)
 	}
 }
+
+func extractPreflightFunc(t *testing.T, scriptPath string) string {
+	t.Helper()
+	raw, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", scriptPath, err)
+	}
+	s := string(raw)
+	start := strings.Index(s, "preflight_readonly_check() {")
+	if start < 0 {
+		t.Fatalf("%s: preflight_readonly_check not found", scriptPath)
+	}
+	end := strings.Index(s[start:], "\n}\n")
+	if end < 0 {
+		t.Fatalf("%s: preflight_readonly_check closing brace not found", scriptPath)
+	}
+	return s[start : start+end+2]
+}
+
+func TestShopPreflightReadonlyCheck(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	hudFn := extractPreflightFunc(t, filepath.Join("..", "..", "USB", "未选模块", "VW_HUD_1_RouteGuidance", "Update", "install.sh"))
+	wifiFn := extractPreflightFunc(t, filepath.Join("..", "..", "USB", "未选模块", "VW_WiFi_Dev", "Update", "install.sh"))
+	if hudFn != wifiFn {
+		t.Fatalf("preflight_readonly_check diverged between VW_HUD_1_RouteGuidance and VW_WiFi_Dev")
+	}
+
+	runCase := func(t *testing.T, setup func(appRoot, otaRoot string)) string {
+		t.Helper()
+		tmp := t.TempDir()
+		appRoot := filepath.Join(tmp, "app")
+		otaRoot := filepath.Join(tmp, "ota")
+		for _, d := range []string{
+			filepath.Join(appRoot, "eso", "bin"),
+			filepath.Join(appRoot, "eso", "hmi", "lsd"),
+			filepath.Join(appRoot, "root", ".ssh"),
+			filepath.Join(otaRoot, "modkit", "Mods"),
+		} {
+			if err := os.MkdirAll(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		setup(appRoot, otaRoot)
+		cmd := exec.Command("sh", "-c", hudFn+"\npreflight_readonly_check\n")
+		cmd.Env = append(os.Environ(),
+			"PREFLIGHT_APP_ROOT="+appRoot,
+			"PREFLIGHT_OTA_ROOT="+otaRoot,
+		)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("preflight_readonly_check failed: %v\n%s", err, string(out))
+		}
+		return string(out)
+	}
+
+	elfStub := []byte("\x7fELF\x01\x01\x01\x00")
+
+	t.Run("stock_clean", func(t *testing.T) {
+		out := runCase(t, func(appRoot, _ string) {
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh"), elfStub, 0o755)
+		})
+		if !strings.Contains(out, "entry: stock ELF") || !strings.Contains(out, "preflight: clean") || strings.Contains(out, "WARN:") {
+			t.Fatalf("unexpected stock output:\n%s", out)
+		}
+	})
+
+	t.Run("modkit_clean", func(t *testing.T) {
+		out := runCase(t, func(appRoot, _ string) {
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh"), []byte("#!/bin/ksh\n/mnt/ota/modkit/modkit_persist.sh &\n"), 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh0"), elfStub, 0o755)
+		})
+		if !strings.Contains(out, "entry: standard ModKit script") || !strings.Contains(out, "preflight: clean") || strings.Contains(out, "WARN:") {
+			t.Fatalf("unexpected modkit output:\n%s", out)
+		}
+	})
+
+	t.Run("shop_variant_a_issue10", func(t *testing.T) {
+		out := runCase(t, func(appRoot, _ string) {
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh"), []byte("#!/bin/sh\n/eso/bin/servicemgrmibhigh0 &\nslay -9 sshd\n"), 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh0"), elfStub, 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "del"), []byte("x"), 0o644)
+		})
+		if !strings.Contains(out, "WARN: suspected shop / third-party servicemgrmibhigh") ||
+			!strings.Contains(out, "WARN: suspected shop anti-tamper files (del/shadow)") ||
+			strings.Contains(out, "servicemgrmibhigh0 is MISSING") {
+			t.Fatalf("unexpected variant A output:\n%s", out)
+		}
+	})
+
+	t.Run("shop_variant_b_issue16", func(t *testing.T) {
+		out := runCase(t, func(appRoot, otaRoot string) {
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh"), []byte("#!/bin/sh\non -p 63 /eso/hmi/lsd/.j &\n/eso/bin/servicemgrmibhigh_orgapp &\n"), 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh_orgapp"), elfStub, 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "hmi", "lsd", ".j"), elfStub, 0o755)
+			_ = os.WriteFile(filepath.Join(otaRoot, "challenge.pub"), []byte("pub"), 0o644)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "autorunner"), []byte("#!/bin/sh\n"), 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "root", ".ssh", "authorized_keys"), []byte("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDemImkw== rsa-key-20210318\n"), 0o600)
+		})
+		for _, want := range []string{
+			"WARN: suspected shop / third-party servicemgrmibhigh",
+			"WARN: servicemgrmibhigh0 is MISSING while servicemgrmibhigh is not ELF",
+			"error: unknown patch state",
+			"servicemgrmibhigh_orgapp",
+			"WARN: suspected shop payload/hook files (.j / challenge.pub / autorunner)",
+			"rsa-key-20210318",
+		} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("variant B output missing %q:\n%s", want, out)
+			}
+		}
+	})
+}
