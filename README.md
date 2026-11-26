@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 | **抬头与仪表** | **导航上 HUD** | 苹果 / 高德 / 百度地图的转向箭头、距离、路名和车道直投前风挡抬头显示（需原车带 HUD，有线/无线都支持） | 国行途锐 P 版 |
 | | **仪表大地图 + 行车数据框** | CarPlay 地图直接显示在 12 寸液晶仪表中间（高德自动居中、方向盘可缩放）；左右对称大字显示 51 项真实车况（含氛围灯主题色、无功率/扭矩自动替补防死 0）与路口导航卡，并支持 60fps 自定义仪表皮肤 | 国行途锐 P 版 |
 | | **方向盘 `OK` 键切原车地图** | 地图页双击右侧 `OK` 键秒切 CarPlay 与原车地图；同时启用自定义皮肤时三连击 `OK` 切皮肤（不装本项则默认双击 `OK` 零延迟切皮肤） | 国行途锐 P 版 |
-| | **语音键短按唤 Siri（试验）** | 连着 CarPlay 时短按方向盘语音键直接叫 Siri，不用长按（原厂长按不变；部分固件可能同时触发原车语音） | 国行途锐 P 版 |
+| | **语音键短按唤 Siri（试验）** | 连着 CarPlay 时短按方向盘语音键直接叫 Siri，不用长按（原厂长按不变；部分固件可能同时触发原车语音或偶发音量调节锁在语音通道，遇此情况单独卸载即可） | 国行途锐 P 版 |
 | **无线与管理** | **手机无线控制台** | 车机连手机热点后，手机浏览器打开 `http://touareg.local:8080` 就能调仪表数据、切皮肤、无线升级与导出排障包（进阶可顺手开无线 SSH） | MH2p 通用 |
 | **修复与降噪** | **升 P2878 无线 5GHz 修复** | 仅老固件（如 `P9832`）升级 `P2878` 后出现“有线正常、无线连不上”时勾选 | 国行途锐 P 版 |
 | | **去除蓝牙「输入用户名」弹窗** | 屏蔽反复弹出的蓝牙登录输入框，不影响通话、听歌与 CarPlay | 大众 MH2p |
@@ -92,7 +92,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 | 项目 | 说明 |
 | :--- | :--- |
-| **支持车型** | **2019–2023 款中规改款前途锐**（配 **15 寸中控大屏 + 12 寸全液晶仪表**；原车 `P` 版系统免升级直刷，`P2878` 全功能已实测，其余 `P` 版自动探测并支持跨版本全屏指纹适配，不匹配安全跳过；无线控制台与技术文档通用同平台车型）。 |
+| **支持车型** | **2019–2023 款中规改款前途锐**（配 **15 寸中控大屏 + 12 寸全液晶仪表**；原车 `P` 版系统免升级直刷，`P2878` / `P2869` / `P2838` 均已实车跑通，其余 `P` 版自动探测并支持跨版本全屏指纹适配，不匹配安全跳过；无线控制台与技术文档通用同平台车型）。 |
 | **不支持车型** | **2019 / 2021–2022 领航（特别）版**（9.2 寸小屏 + 机械指针表盘、无抬头显示，插上也会自动安全退出）；**2025–2026 中规改款新途锐**与 **欧版 2024+ 中期改款**；**老款二代途锐（7P）**。 |
 | **欧版 / 同平台车** | 欧版途锐（如 `P2869`）及其他 MH2p 车型运行途锐界面补丁会自动安全跳过、不改文件；无线控制台、源码与文档可直接作开发底座（参考德国 [Touareg-Freunde 讨论帖](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)）。 |
 | **手机与仪表投屏** | **高德上仪表（第二屏）**：高德官方要求 **iPhone 12 及以上机型 + iOS 17.4 及以上系统**（并更新高德 App），旧机型或低版本 iOS 只有中控第一屏有画面、仪表第二屏不出图（苹果自带地图 `iOS 15.4+` 即可上仪表）。<br>**无线投屏方式**：请直接勾选本包 **「无线 CarPlay」** 走车机原生无线（或插数据线）；市面上绝大多数**外插无线 CarPlay 转换盒不支持转发第二屏**，插盒子只能投中控第一屏、投不到仪表第二屏。 |
@@ -123,6 +123,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 > [!NOTE]
 > - **首次打开提示未签名**：桌面配置器未购商业签名，Windows 点「更多信息 → 仍要运行」，Mac 在「系统设置 → 隐私与安全性」点「仍要打开」；程序由 GitHub Actions 从 [`tools/configurator`](tools/configurator) 源码自动构建并附 `SHA256SUMS.txt`，仅本机 `127.0.0.1` 运行、绝不联网。
+> - **装完看不到左右信息框或被圆盘盖住**：按方向盘右侧左右翻页键切到仪表「导航」页，再按一下 **`VIEW` 键**收起两侧原厂圆表盘即可完整显示（若习惯保留双圆表盘，可在车机仪表组合设置里将两侧圆盘内显选为空白避免遮挡）。
 > - **老版本升级提醒**：`v22.01` 及更早版本升级到 `v22.1` / `v23.6` 需先用 U 盘覆盖刷入一次（自动保留原有配置与管理口令；早期未设口令的首次开机将在仪表屏自动显示 6 位随机口令，手机登录后永久隐藏），之后即可继续手机无线升级。
 > - **首次刷完仍有黑边**：在 iPhone 蓝牙/CarPlay 设置中「忘记此车辆」重连一次即可。
 
@@ -231,6 +232,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 ### 社区引用与致谢
 - **[luanqibazao0123-bot](https://github.com/luanqibazao0123-bot)**（[#7](https://github.com/a78c7/touareg-cn-carplay-mods/issues/7)）：启发了 `v21` 大字运动刻度信息框视觉重构与 `60fps` 仪表引擎，并提供老固件升 `P2878` 实测线索。
+- **[massif-01](https://github.com/massif-01)**（[#10](https://github.com/a78c7/touareg-cn-carplay-mods/issues/10)）、**[sy6904](https://github.com/sy6904)**（[#14](https://github.com/a78c7/touareg-cn-carplay-mods/issues/14)）、**[Lovingwatchcat](https://github.com/Lovingwatchcat)**（[#16](https://github.com/a78c7/touareg-cn-carplay-mods/issues/16)）：分别协助完成 `P2853` 商业包暗桩取证、`P2869` 连续多版 `v23.6` 闪屏/冷启动排障验证，以及 `P2838` 商业双件套（`dio_manager.org` + `.j`）零损定点接管实测。
 - **海外社区引用**：已被德国途锐论坛 **Touareg-Freunde** 的 [欧版 MH2p P2869 仪表投屏项目帖](https://www.touareg-freunde.de/forum/thread/30309-geschafft-apple-carplay-im-digitalen-kombiinstrument-des-touareg-cr-mh2p-p2869/)引用参考。
 - **[LawPaul / MH2p SD ModKit](https://github.com/LawPaul/MH2p_SD_ModKit)**（[官网](https://lawpaul.github.io/MH2p_SD_ModKit_Site/)）：免拆 U 盘刷机框架及可选 `AppleCarPlay` / `AndroidAuto` 模块（[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)，其中安卓修复引用了 [fifthBro/pcm5-androidauto-connect-fix](https://github.com/fifthBro/pcm5-androidauto-connect-fix)）。
 - **[fifthBro / mh2p-cluster](https://github.com/fifthBro/mh2p-cluster)** & **[mh2p-ssh-access](https://github.com/fifthBro/mh2p-ssh-access)**：`dio_cluster.so`（v0034）与 `cl_render` 上游基础（[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)）。

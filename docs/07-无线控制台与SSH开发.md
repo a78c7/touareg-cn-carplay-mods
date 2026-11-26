@@ -138,10 +138,10 @@
 - **实车验证结果**：车主断掉改装店遗留的定时还原脚本、停止每轮开机 `slay -9 challenge` 后，困扰 4 年的地下车库暗电流亏电随即消失。如你的已改装车/二手车也有类似无故亏电现象，建议优先排查车机内是否存在上述两类强杀 `challenge` 的商业锁死脚本。
 
 ### 12.3 快速确认与正确处理方式
-1. **零门槛自查**：刷入新版 `VW_HUD_1_RouteGuidance` 或 `VW_WiFi_Dev` 后，查看 U 盘 `Logs/` 下对应日志开头的只读体检输出；若出现 `WARN: suspected shop`、`servicemgrmibhigh0 is MISSING` 或 `.j / challenge.pub / autorunner` 告警，或直接刷入 [#10 评论区](https://github.com/a78c7/touareg-cn-carplay-mods/issues/10#issuecomment-7089018417) 的独立只读工具 `VW_ShopAudit_readonly.zip`，即可在不改动车机任何文件的前提下抓出完整现场。
-2. **推荐洗白路径（二选一）**：
-   - **最稳妥（强烈推荐）**：前往 4S 店通过大众官方正规售后渠道（ODIS）重刷原厂固件（如升级至原厂 `P2878`）彻底洗白，清空全部历史暗桩（含 `.j` 黑盒、死循环杀进程脚本、残留公钥与非标 `1680×760` 皮肤）后再干净安装本开源包（**切勿从闲鱼或网盘购买来路不明的第三方 `2878` 整合包自行刷机**，既有断电黑砖风险，还可能二次刷入带锁死脚本的商业改包）；
-   - **进阶定点清理**：先通过只读扫描确认整机无后台定时还原暗桩、并核验 `servicemgrmibhigh_orgapp` 与 `dio_manager.org` 均为原生原厂 ELF，再将旧脚本、商业版 `dio_manager` 与 `authorized_keys` 完整备份到 U 盘留作回滚后悔药，**必须同步恢复原厂 `dio_manager` 与 `servicemgrmibhigh0` 交回 ModKit**（**切勿在未查明依赖前盲删 `.j` / `challenge.pub` / `autorunner`，也严禁只停掉 `.j` 恢复启动入口却漏还原 `dio_manager.org`**，否则 110 KB 商业壳 `dio_manager` 失去 `.j` 后会导致 CarPlay 异常或崩溃）。
+1. **零门槛自查**：刷入新版 `VW_HUD_1_RouteGuidance` 或 `VW_WiFi_Dev` 后，查看 U 盘 `Logs/` 下对应日志开头的只读体检输出；若出现 `WARN: suspected shop`、`servicemgrmibhigh0 is MISSING`、`dio_manager.org` 或 `.j / challenge.pub / autorunner` 告警，可直接刷入仓库独立工具 [`tools/shop-recovery/VW_ShopAudit`](../tools/shop-recovery/README.md)（严格只读，不改动车机任何文件）抓出完整现场。
+2. **推荐洗白 / 接管路径（二选一）**：
+   - **官方售后洗白（通用最省心）**：前往 4S 店通过大众官方正规售后渠道（ODIS）重刷原厂固件（如升级至原厂 `P2878`）彻底洗白，清空全部历史暗桩（含 `.j` 黑盒、死循环杀进程脚本、残留公钥与非标 `1680×760` 皮肤）后再干净安装本开源包（**切勿从闲鱼或网盘购买来路不明的第三方 `2878` 整合包自行刷机**，既有断电黑砖风险，还可能二次刷入带锁死脚本的商业改包；如车上有后改辅助驾驶/自动泊车编码，升级前务必用 5054/ODIS 备份 `5F`/`A5`/`17`/`19` 编码并交代只单独升 `5F` 禁做全车 SVM）。
+   - **变体 B 零损定点接管（#16 `P2838` 实车验证通过，不动任何 5F / 辅助驾驶编码）**：先用 `VW_ShopAudit` 确认整机无定时还原暗桩、且 `servicemgrmibhigh_orgapp` 与 `dio_manager.org` 均为原生原厂 ELF 后，可使用配套纯明文工具 [`tools/shop-recovery/VW_ShopTakeover`](../tools/shop-recovery/README.md)（自带 U 盘全量备份 `ShopBackup/orig/`、双件套原子切换回原厂 `dio_manager` + `servicemgrmibhigh0`、精准清除 `rsa-key-20210318` 陌生公钥且不删除任何 `.org` / `.j` 原文件）与一键回滚后悔药 [`tools/shop-recovery/VW_ShopRollback`](../tools/shop-recovery/README.md)（**严禁只停 `.j` 恢复入口却漏还原 `dio_manager.org`**，否则 110 KB 商业壳 `dio_manager` 失去 `.j` 后会导致 CarPlay 异常或崩溃）。
 3. **短期暂不洗白时的半安装态撤回（变体 B 特别提醒）**：若因 `error: unknown patch state` 导致 `Persist` 未挂载，但 `VW_HUD_1~5` 的插件文件已在 `Update` 阶段落盘，为避免本包 `VWClusterNav_v6.jar` 与旧商业包 `.j` 共存抢占仪表/HUD 控制权，可用「改装设置」将 `VW_HUD_1~5` 选为「卸载」刷一次即可在报错前干净撤回（`VW_NoBtAuthPopup` 与 `VW_NoSimPopup` 不依赖 `Persist`，可按需保留）。
 4. **避坑提醒（不推荐改写 `servicemgrmibhigh0`）**：虽然把原厂 ELF `servicemgrmibhigh0` 改名套一层 shell wrapper 可以绕过变体 A 的入口覆写，但上游带签名的 `modkit_install.sh` 强制要求 `servicemgrmibhigh` 或 `servicemgrmibhigh0` 至少有一个为原生 ELF——套壳后会导致**后续所有 U 盘官方升级直接报错 `error: unknown patch state` 失败**，且无法停掉后台还原进程与 `slay -9 challenge`，根除不了暗电流风险。
 

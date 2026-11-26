@@ -114,8 +114,11 @@ sh -n src/hud-java/build.sh
 sh -n src/popup-filter-java/build.sh
 sh -n tools/configurator/build.sh
 sh -n tools/make_release.sh
+sh -n tools/shop-recovery/test_shop_recovery.sh
 sh -n tests/run_c_tests.sh
 sh -n tests/pre_release_check.sh
 bash -n tools/deploy_eth.sh
+sh tools/shop-recovery/test_shop_recovery.sh >/dev/null
+echo "shop-recovery 8-scenario sandbox test: PASSED"
 
 echo "ALL PRE-RELEASE CHECKS PASSED!"
