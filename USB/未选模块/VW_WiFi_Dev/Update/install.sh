@@ -79,6 +79,22 @@ preflight_readonly_check() {
         [ -e "$_bin/autorunner" ] && ls -l "$_bin/autorunner" 2>/dev/null || true
     fi
 
+    _dio="$_bin/apps/dio_manager"
+    _dio_org="$_bin/apps/dio_manager.org"
+    if [ -e "$_dio_org" ]; then
+        _warn=1
+        echo "WARN: suspected shop dio_manager replacement detected (dio_manager.org present; do NOT restore servicemgrmibhigh without also restoring stock dio_manager; see Issue #16)"
+        [ -e "$_dio" ] && ls -l "$_dio" 2>/dev/null || true
+        ls -l "$_dio_org" 2>/dev/null || true
+    elif [ -f "$_dio" ]; then
+        _dsz=$(ls -l "$_dio" 2>/dev/null | awk 'NR==1 { print $5 + 0 }')
+        if [ -n "$_dsz" ] && [ "$_dsz" -gt 0 ] && [ "$_dsz" -lt 500000 ]; then
+            _warn=1
+            echo "WARN: dio_manager size is unusually small (${_dsz} bytes < 500000; stock is ~958KB, may be a shop wrapper; see Issue #16)"
+            ls -l "$_dio" 2>/dev/null || true
+        fi
+    fi
+
     if [ -f "$_ota/modkit/Logs/_ModKit_Persist.log" ]; then
         echo "persist log: present"
     else

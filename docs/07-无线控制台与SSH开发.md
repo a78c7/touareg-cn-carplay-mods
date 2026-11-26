@@ -121,7 +121,7 @@
   slay -9 sshd ; slay -9 sshd
   ```
   结果就是 ModKit 写入的标准启动入口在下一次开机前即被抹回，所有依赖 `modkit_persist.sh` 的开源模块从未执行。
-- **变体 B（#16 实测：原厂程序改名 `servicemgrmibhigh_orgapp` + 隐藏黑盒 `.j` + 每 3 秒死循环杀进程）**：另有一类已刷过商业仪表/HUD 投屏与 `1680×760` 全屏的车辆，原厂 `servicemgrmibhigh` 被改名为 `/eso/bin/servicemgrmibhigh_orgapp`（不存在 `servicemgrmibhigh0`），入口脚本被替换为约 350 字节第三方脚本，开机以最高实时优先级拉起闭源隐藏程序 `/eso/hmi/lsd/.j`、挂载 `/mnt/ota/challenge.pub` 与 `/eso/bin/autorunner` 软链，并在后台死循环每 3 秒强杀 `sshd` 与 `challenge`：
+- **变体 B（#16 实测：双件套替换 `servicemgrmibhigh_orgapp` + `dio_manager.org` + 隐藏黑盒 `.j` + 每 3 秒死循环杀进程）**：另有一类已刷过商业仪表/HUD 投屏与 `1680×760` 全屏的车辆，原厂 `servicemgrmibhigh` 被改名为 `/eso/bin/servicemgrmibhigh_orgapp`（不存在 `servicemgrmibhigh0`），同时 `/mnt/app/eso/bin/apps/dio_manager`（原厂约 `958 KB`）会被同步替换为一个约 `110 KB` 的商业壳程序（原厂程序被改名备份为 `dio_manager.org`）；入口脚本被替换为约 350 字节第三方脚本，开机以最高实时优先级拉起闭源隐藏程序 `/eso/hmi/lsd/.j`、挂载 `/mnt/ota/challenge.pub` 与 `/eso/bin/autorunner` 软链，并在后台死循环每 3 秒强杀 `sshd` 与 `challenge`：
   ```sh
   #!/bin/sh
   ln -sP /mnt/ota/challenge.pub /ifs/challenge.pub >/dev/null 2>&1
@@ -131,7 +131,7 @@
   /eso/bin/servicemgrmibhigh_orgapp &
   ( while true; do slay -f sshd; slay -f challenge; sleep 3; done ) &
   ```
-  因为 `servicemgrmibhigh` 已是脚本且缺少原生 ELF `servicemgrmibhigh0`，刷机末尾 `_ModKit_Update.log` 会直接报 **`error: unknown patch state`** 退出，导致本包 `Persist` 持久化自启链根本未挂上（注意该报错是 ModKit 入口校验失败，与全屏模块跳过无关）。
+  因为 `servicemgrmibhigh` 已是脚本且缺少原生 ELF `servicemgrmibhigh0`，刷机末尾 `_ModKit_Update.log` 会直接报 **`error: unknown patch state`** 退出，导致本包 `Persist` 持久化自启链根本未挂上（注意该报错是 ModKit 入口校验失败，与全屏模块跳过无关）；同时若 `VW_HUD_1`/`VW_HUD_3` 的 `LD_PRELOAD` 被注入到 110 KB 商业壳 `dio_manager` 上，还可能触发 `dio_manager` 崩溃。
 
 ### 12.2 休眠异常与电瓶亏电隐患（#10 实车案例）
 - 在 [#10](https://github.com/a78c7/touareg-cn-carplay-mods/issues/10) 中，一台 4 年前曾在改装店刷过全屏与无线 CarPlay 的国行途锐长期存在两个顽疾：**停在无蜂窝信号的地下车库会反复亏电**（常规静置电流 30–40 mA 正常，属间歇性异常唤醒，修理厂反复排查无果），以及**行驶中偶发误判熄火黑屏待机**（日志为正常待机流程、非崩溃）。
@@ -141,7 +141,7 @@
 1. **零门槛自查**：刷入新版 `VW_HUD_1_RouteGuidance` 或 `VW_WiFi_Dev` 后，查看 U 盘 `Logs/` 下对应日志开头的只读体检输出；若出现 `WARN: suspected shop`、`servicemgrmibhigh0 is MISSING` 或 `.j / challenge.pub / autorunner` 告警，或直接刷入 [#10 评论区](https://github.com/a78c7/touareg-cn-carplay-mods/issues/10#issuecomment-7089018417) 的独立只读工具 `VW_ShopAudit_readonly.zip`，即可在不改动车机任何文件的前提下抓出完整现场。
 2. **推荐洗白路径（二选一）**：
    - **最稳妥（强烈推荐）**：前往 4S 店通过大众官方正规售后渠道（ODIS）重刷原厂固件（如升级至原厂 `P2878`）彻底洗白，清空全部历史暗桩（含 `.j` 黑盒、死循环杀进程脚本、残留公钥与非标 `1680×760` 皮肤）后再干净安装本开源包（**切勿从闲鱼或网盘购买来路不明的第三方 `2878` 整合包自行刷机**，既有断电黑砖风险，还可能二次刷入带锁死脚本的商业改包）；
-   - **进阶定点清理**：先通过只读扫描定位还原源头或 `.j` 依赖并完整备份到 U 盘，再评估定点清理（**切勿在未查明依赖前盲删 `.j` / `challenge.pub` / `autorunner`，也不要擅自把 `servicemgrmibhigh_orgapp` 强行改名成 `servicemgrmibhigh0`**，以免误伤绑定其中的原商业授权或触发黑盒防篡改逻辑）。
+   - **进阶定点清理**：先通过只读扫描确认整机无后台定时还原暗桩、并核验 `servicemgrmibhigh_orgapp` 与 `dio_manager.org` 均为原生原厂 ELF，再将旧脚本、商业版 `dio_manager` 与 `authorized_keys` 完整备份到 U 盘留作回滚后悔药，**必须同步恢复原厂 `dio_manager` 与 `servicemgrmibhigh0` 交回 ModKit**（**切勿在未查明依赖前盲删 `.j` / `challenge.pub` / `autorunner`，也严禁只停掉 `.j` 恢复启动入口却漏还原 `dio_manager.org`**，否则 110 KB 商业壳 `dio_manager` 失去 `.j` 后会导致 CarPlay 异常或崩溃）。
 3. **短期暂不洗白时的半安装态撤回（变体 B 特别提醒）**：若因 `error: unknown patch state` 导致 `Persist` 未挂载，但 `VW_HUD_1~5` 的插件文件已在 `Update` 阶段落盘，为避免本包 `VWClusterNav_v6.jar` 与旧商业包 `.j` 共存抢占仪表/HUD 控制权，可用「改装设置」将 `VW_HUD_1~5` 选为「卸载」刷一次即可在报错前干净撤回（`VW_NoBtAuthPopup` 与 `VW_NoSimPopup` 不依赖 `Persist`，可按需保留）。
 4. **避坑提醒（不推荐改写 `servicemgrmibhigh0`）**：虽然把原厂 ELF `servicemgrmibhigh0` 改名套一层 shell wrapper 可以绕过变体 A 的入口覆写，但上游带签名的 `modkit_install.sh` 强制要求 `servicemgrmibhigh` 或 `servicemgrmibhigh0` 至少有一个为原生 ELF——套壳后会导致**后续所有 U 盘官方升级直接报错 `error: unknown patch state` 失败**，且无法停掉后台还原进程与 `slay -9 challenge`，根除不了暗电流风险。
 

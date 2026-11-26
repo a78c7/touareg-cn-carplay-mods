@@ -163,7 +163,7 @@ func TestShopPreflightReadonlyCheck(t *testing.T) {
 		appRoot := filepath.Join(tmp, "app")
 		otaRoot := filepath.Join(tmp, "ota")
 		for _, d := range []string{
-			filepath.Join(appRoot, "eso", "bin"),
+			filepath.Join(appRoot, "eso", "bin", "apps"),
 			filepath.Join(appRoot, "eso", "hmi", "lsd"),
 			filepath.Join(appRoot, "root", ".ssh"),
 			filepath.Join(otaRoot, "modkit", "Mods"),
@@ -223,6 +223,8 @@ func TestShopPreflightReadonlyCheck(t *testing.T) {
 		out := runCase(t, func(appRoot, otaRoot string) {
 			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh"), []byte("#!/bin/sh\non -p 63 /eso/hmi/lsd/.j &\n/eso/bin/servicemgrmibhigh_orgapp &\n"), 0o755)
 			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh_orgapp"), elfStub, 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "apps", "dio_manager"), elfStub, 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "apps", "dio_manager.org"), elfStub, 0o755)
 			_ = os.WriteFile(filepath.Join(appRoot, "eso", "hmi", "lsd", ".j"), elfStub, 0o755)
 			_ = os.WriteFile(filepath.Join(otaRoot, "challenge.pub"), []byte("pub"), 0o644)
 			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "autorunner"), []byte("#!/bin/sh\n"), 0o755)
@@ -234,11 +236,23 @@ func TestShopPreflightReadonlyCheck(t *testing.T) {
 			"error: unknown patch state",
 			"servicemgrmibhigh_orgapp",
 			"WARN: suspected shop payload/hook files (.j / challenge.pub / autorunner)",
+			"WARN: suspected shop dio_manager replacement detected",
+			"dio_manager.org",
 			"rsa-key-20210318",
 		} {
 			if !strings.Contains(out, want) {
 				t.Fatalf("variant B output missing %q:\n%s", want, out)
 			}
+		}
+	})
+
+	t.Run("shop_small_dio_manager_without_org", func(t *testing.T) {
+		out := runCase(t, func(appRoot, _ string) {
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "servicemgrmibhigh"), elfStub, 0o755)
+			_ = os.WriteFile(filepath.Join(appRoot, "eso", "bin", "apps", "dio_manager"), elfStub, 0o755)
+		})
+		if !strings.Contains(out, "WARN: dio_manager size is unusually small") {
+			t.Fatalf("expected small dio_manager warning, got:\n%s", out)
 		}
 	})
 }
