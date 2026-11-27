@@ -162,5 +162,5 @@
 1. **Go 配置器检查**：`go vet ./...` 与 `go test -race -v ./...`（覆盖模块依赖联动、PIN 6～16 位策略、Ed25519 SSH 密钥生成及 U 盘默认全关验证）。
 2. **C 主机单测（ASan + UBSan）**：[`tests/run_c_tests.sh`](../tests/run_c_tests.sh) 以 `-Wall -Wextra -Werror -fsanitize=address,undefined` 编译运行 `test_wired_rg`、`tests/test_ota.c`（SHA-256、RFC 8032 Ed25519 向量、OTA 验签/篡改拦截/回滚、诊断脱敏）与 `tests/test_netd.c`（fail-closed PIN、首次随机生成与自动清除、按 IP 阶梯限速、禁止 URL `?pin=`、CSRF 与路径穿越拦截）。
 3. **静态分析（`cppcheck`）**：对 `touareg_netd.c`、`clusterd.c`、`cl_wired_rg.c`、`vhpatch.c` 执行 `--enable=warning,performance,portability --error-exitcode=1` 零告警门禁。
-4. **43 项遥测三端对齐与仓库卫生门禁**：自动比对 `src/cl_render/dash.c`、`tools/configurator/package.go` 与 `src/touareg_netd/web_ui.html` 的 43 项遥测键名一致；检查前端 HTML 裸 DOM ID、禁止 ModKit `Update/*.sh` 提前锁回 `/mnt/app` 只读、检查 `web_ui_data.h` 与 `web_ui.html` 字节长度同步，并禁止大体积桌面配置器二进制或本机私有绝对路径误入 git。
+4. **51 项遥测三端对齐与仓库卫生门禁**：自动比对 `src/cl_render/dash.c`、`tools/configurator/package.go` 与 `src/touareg_netd/web_ui.html` 的 51 项遥测键名一致；检查前端 HTML 裸 DOM ID、禁止 ModKit `Update/*.sh` 提前锁回 `/mnt/app` 只读、检查 `web_ui_data.h` 与 `web_ui.html` 字节长度同步，并禁止大体积桌面配置器二进制或本机私有绝对路径误入 git。
 5. **Release 签名与产物校验**：[`.github/workflows/release.yml`](../.github/workflows/release.yml) 现场从源码编译双端配置器，使用仓库 Secret `OTA_SIGNING_KEY`（核对与 `src/touareg_netd/ota_pubkey.h` 严格匹配）为 `touareg-ota-*.tar` 生成 Ed25519 签名，并同步发布 `SHA256SUMS.txt`。

@@ -122,18 +122,20 @@ static int v23_load_extra_gl(void) {
     return (gl_CreateShader && gl_DrawArrays && v23gl.Uniform1f && v23gl.Uniform2f && v23gl.Uniform4f) ? 0 : -1;
 }
 
-/* ---- 与 cluster.c 共享的 v23 开关（g_v23_mode 已在 cluster.c 顶部定义）与四缓冲离屏 CarPlay 地图桥接器 ----
- * v23.4 根治零拷贝 EGL_KHR_image_pixmap 异步读写追尾与 Tegra K1 纹理缓存残留：
- *   - 槽位从 3 扩至 4（V23_MAP_SLOTS = 4）：
- *       free_idx    : 解码线程独占写入槽（VIC 2D screen_blit 目标，GL 线程绝不访问）；
- *       ready_idx   : 最新已完成转换槽（突发多帧时解码线程仅在 free_idx <-> ready_idx 间交换，绝不触碰在显槽）；
- *       front_idx   : GL 线程当前正在采样的活跃纹理槽；
- *       retired_idx : 上一轮刚从 front_idx 退下的冷却槽，必须至少经历 1 次完整 eglSwapBuffers 且满 15.5ms 后，
- *                     确认 Tegra 3D GPU 异步光栅化已彻底排空对旧纹理的读取，才允许归还至 ready_idx 池。
- *   - GL 显示窗口升级为独立 screen_context_t + 4 个窗口渲染缓冲（V23_WIN_BUFFERS = 4），
- *     消除双缓冲下 displaymanager 异步合成 Display 4 (LVDS2) 时的扫描线追尾白横条纹。 */
-#define V23_MAP_SLOTS   4
+/* ---- 与 cluster.c 共享的 v23 开关（g_v23_mode 已在 cluster.c 顶部定义）与五缓冲零拷贝离屏桥 + 160x64 像素黑匣子 ----
+ * v23.7 根治零驱动报错 + 5% CPU 满血 60fps 硬件零拷贝 + 两级退役隔离：
+ *   - 反汇编 libqnx-nvutil.so.1 (0x0c1c: tst r2, #0x0E) 与 libWFDnvidia.so (0xb590) 证实：
+ *     主地图 pixmap 仅设纯 SCREEN_USAGE_OPENGL_ES2 (0x20，不挂 READ/WRITE/NATIVE) 时，
+ *     VIC screen_blit 与 EGL_KHR_image_pixmap 均 100% 原生硬件直通，sloginfo 驱动报错 0 条，CPU 仅 ~5%；
+ *   - 槽位扩至 5（V23_MAP_SLOTS = 5）：free / ready / front / retired1 / retired2 两级退役冷却，
+ *     每次晋升要求 >= 2 次完整 eglSwapBuffers 且满 30ms，旧纹理至少经历 4~6 次 VSync 排空才回到写入池；
+ *   - 同上下文伴生 160x64 (40 KB) 纯 Pitch-Linear (READ|WRITE|NATIVE) 微型画板 g_v23_probe，
+ *     共用同一次 cl_flush_blits_idle() 完成零开销昼夜测光与每帧三帧脉冲像素黑匣子 (/tmp/glitch_0..2.ppm)。 */
+#define V23_MAP_SLOTS   5
 #define V23_WIN_BUFFERS 4
+#define V23_PROBE_W     160
+#define V23_PROBE_H     64
+#define V23_PROBE_RING  16
 
 static volatile sig_atomic_t g_v23_stop = 0;
 static void v23_on_sig(int sig) { (void)sig; g_v23_stop = 1; }
@@ -141,33 +143,199 @@ static void v23_on_sig(int sig) { (void)sig; g_v23_stop = 1; }
 typedef struct {
     pthread_mutex_t mx;
     int initialized;
+    int zc_alloc;
     int width, height;
     screen_pixmap_t pix[V23_MAP_SLOTS];
     screen_buffer_t buf[V23_MAP_SLOTS];
     uint8_t        *ptr[V23_MAP_SLOTS];
     int             stride[V23_MAP_SLOTS];
-    int             free_idx;    /* 解码线程独占写入槽 */
-    int             ready_idx;   /* 最新已完成待取槽 */
-    int             front_idx;   /* GL 线程当前显示槽 */
-    int             retired_idx; /* 刚退下等待至少 1 次完整 VSync 排空 GPU 读取的冷却槽 */
-    int             has_fresh;   /* ready_idx 是否存有尚未晋升的新帧 */
-    uint32_t        seq;         /* 每次新帧 +1 */
+    int             free_idx;     /* 解码线程独占写入槽 */
+    int             ready_idx;    /* 最新已完成待取槽 */
+    int             front_idx;    /* GL 线程当前显示槽 */
+    int             retired1_idx; /* 一级退役冷却槽 */
+    int             retired2_idx; /* 二级退役冷却槽（排空 >= 2 轮晋升后才归还 ready 池） */
+    int             has_fresh;    /* ready_idx 是否存有尚未晋升的新帧 */
+    uint32_t        seq;          /* 每次新帧 +1 */
     uint32_t        frames_in;
-    int             auto_night;  /* 亮度滞回自动昼夜 (0=昼, 1=夜) */
+    int             auto_night;   /* 亮度滞回自动昼夜 (0=昼, 1=夜) */
     pthread_t       gl_tid;
     int             gl_started;
 } v23_map_bridge_t;
 
 static v23_map_bridge_t g_v23_map = {
     .mx = PTHREAD_MUTEX_INITIALIZER,
-    .initialized = 0,
-    .free_idx = 0, .ready_idx = 1, .front_idx = 2, .retired_idx = 3, .has_fresh = 0,
+    .initialized = 0, .zc_alloc = 0,
+    .free_idx = 0, .ready_idx = 1, .front_idx = 2, .retired1_idx = 3, .retired2_idx = 4, .has_fresh = 0,
     .auto_night = 1
 };
 
+typedef struct {
+    screen_pixmap_t pix;
+    screen_buffer_t buf;
+    uint8_t        *ptr;
+    int             stride;
+    int             ready;
+    uint8_t         ring[V23_PROBE_RING][V23_PROBE_W * V23_PROBE_H * 4];
+    uint64_t        ts_ms[V23_PROBE_RING];
+    int             didx_hist[V23_PROBE_RING];
+    uint32_t        count;
+    volatile uint32_t traps;
+    uint64_t        last_trap_ms;
+    time_t          last_dump_mt;
+} v23_probe_t;
+
+static v23_probe_t g_v23_probe;
+
 static void *v23_render_thread_entry(void *arg);
 
-/* 由 setup_screen() 在 g_v23_mode==1 末尾调用：创建 4 个离屏 RGBX8888 pixmap 并以 1MB 栈启动 60fps GL 线程 */
+/* 将缓存环中指定槽位序列纵向拼接写出为紧凑 RGB P6 PPM（严禁在 /tmp 调用 rename 或 mkdir） */
+static void v23_probe_write_ppm(const char *path, const int *slots, int nslots) {
+    if (!path || !slots || nslots <= 0 || nslots > 8) return;
+    int total_h = V23_PROBE_H * nslots;
+    size_t body_sz = (size_t)V23_PROBE_W * (size_t)total_h * 3u;
+    uint8_t *out = (uint8_t *)malloc(64u + body_sz);
+    if (!out) return;
+    int hlen = snprintf((char *)out, 64, "P6\n%d %d\n255\n", V23_PROBE_W, total_h);
+    if (hlen <= 0 || hlen >= 64) { free(out); return; }
+    uint8_t *dst = out + hlen;
+    for (int s = 0; s < nslots; s++) {
+        const uint8_t *src = g_v23_probe.ring[slots[s] & (V23_PROBE_RING - 1)];
+        for (int i = 0; i < V23_PROBE_W * V23_PROBE_H; i++) {
+            /* QNX Tegra RGBX8888 内存小端字节序为 [B, G, R, X]，转换为标准 PPM [R, G, B] */
+            dst[0] = src[2];
+            dst[1] = src[1];
+            dst[2] = src[0];
+            dst += 3;
+            src += 4;
+        }
+    }
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd >= 0) {
+        (void)write(fd, out, (size_t)hlen + body_sz);
+        close(fd);
+    }
+    free(out);
+}
+
+static inline int v23_is_hot_chroma(uint8_t r, uint8_t g, uint8_t b) {
+    return ((r > 210u && g < 48u && b < 48u) ||
+            (g > 210u && r < 45u && b < 45u) ||
+            (r > 200u && b > 200u && g < 48u));
+}
+
+/* 拷贝 40KB 小画板至缓存环，执行自动昼夜滞回测光 + 三帧脉冲 [prev, mid, next] 花屏/白横条黑匣子检测 */
+static int v23_probe_scan_and_luma(int didx, int prev_night) {
+    if (!g_v23_probe.ready || !g_v23_probe.ptr || g_v23_probe.stride < V23_PROBE_W * 4) return prev_night;
+    uint32_t idx = g_v23_probe.count;
+    int cur_slot = (int)(idx & (V23_PROBE_RING - 1u));
+    uint8_t *cur = g_v23_probe.ring[cur_slot];
+    const int row_bytes = V23_PROBE_W * 4;
+    if (g_v23_probe.stride == row_bytes) {
+        memcpy(cur, g_v23_probe.ptr, (size_t)row_bytes * V23_PROBE_H);
+    } else {
+        for (int y = 0; y < V23_PROBE_H; y++) {
+            memcpy(cur + (size_t)y * row_bytes,
+                   g_v23_probe.ptr + (size_t)y * (size_t)g_v23_probe.stride,
+                   (size_t)row_bytes);
+        }
+    }
+    uint64_t now_ms = v23_now_us() / 1000ULL;
+    g_v23_probe.ts_ms[cur_slot] = now_ms;
+    g_v23_probe.didx_hist[cur_slot] = didx;
+    g_v23_probe.count = idx + 1u;
+
+    int night = prev_night;
+    if ((idx % 10u) == 0u) {
+        uint32_t lsum = 0, lcnt = 0;
+        for (int y = V23_PROBE_H / 4; y < (V23_PROBE_H * 3) / 4; y += 2) {
+            const uint8_t *row = cur + (size_t)y * row_bytes;
+            for (int x = V23_PROBE_W / 5; x < (V23_PROBE_W * 4) / 5; x += 4) {
+                const uint8_t *p = row + (size_t)x * 4u;
+                lsum += ((uint32_t)p[0] * 54u + (uint32_t)p[1] * 183u + (uint32_t)p[2] * 19u) >> 8;
+                lcnt++;
+            }
+        }
+        if (lcnt > 0) {
+            int avg = (int)(lsum / lcnt);
+            night = prev_night ? ((avg > 135) ? 0 : 1) : ((avg < 95) ? 1 : 0);
+        }
+    }
+
+    /* 手动抽检触发：touch /tmp/dump_probe_ring 立即导出最近 4 帧拼接图 /tmp/probe_ring.ppm */
+    struct stat st_dump;
+    if (g_v23_probe.count >= 4u && stat("/tmp/dump_probe_ring", &st_dump) == 0 &&
+        st_dump.st_mtime != g_v23_probe.last_dump_mt) {
+        g_v23_probe.last_dump_mt = st_dump.st_mtime;
+        int s4[4] = {
+            (int)((g_v23_probe.count - 4u) & (V23_PROBE_RING - 1u)),
+            (int)((g_v23_probe.count - 3u) & (V23_PROBE_RING - 1u)),
+            (int)((g_v23_probe.count - 2u) & (V23_PROBE_RING - 1u)),
+            cur_slot
+        };
+        v23_probe_write_ppm("/tmp/probe_ring.ppm", s4, 4);
+        v23_diag("probe: manual 4-frame ring dumped to /tmp/probe_ring.ppm (count=%u)", g_v23_probe.count);
+    }
+
+    /* 自动三帧脉冲异常捕获：检查中间帧 mid 是否相对于 prev 与 next 出现单帧孤立剧变/红绿块/白横条 */
+    if (g_v23_probe.count >= 3u && g_v23_probe.traps < 3u &&
+        (g_v23_probe.last_trap_ms == 0ULL || now_ms - g_v23_probe.last_trap_ms >= 5000ULL)) {
+        int s_prev = (int)((g_v23_probe.count - 3u) & (V23_PROBE_RING - 1u));
+        int s_mid  = (int)((g_v23_probe.count - 2u) & (V23_PROBE_RING - 1u));
+        int s_next = cur_slot;
+        if (now_ms - g_v23_probe.ts_ms[s_prev] <= 2000ULL) {
+            const uint8_t *bp = g_v23_probe.ring[s_prev];
+            const uint8_t *bm = g_v23_probe.ring[s_mid];
+            const uint8_t *bn = g_v23_probe.ring[s_next];
+            uint32_t sum_pm = 0, sum_mn = 0, sum_pn = 0, scnt = 0;
+            uint32_t chroma_spike = 0, white_rows = 0;
+            for (int y = 0; y < V23_PROBE_H; y += 2) {
+                uint32_t w_m = 0, w_p = 0, w_n = 0;
+                for (int x = 0; x < V23_PROBE_W; x += 2) {
+                    size_t off = ((size_t)y * V23_PROBE_W + (size_t)x) * 4u;
+                    uint8_t pb = bp[off], pg = bp[off + 1], pr = bp[off + 2];
+                    uint8_t mb = bm[off], mg = bm[off + 1], mr = bm[off + 2];
+                    uint8_t nb = bn[off], ng = bn[off + 1], nr = bn[off + 2];
+                    uint32_t dpm = (uint32_t)( abs((int)mr - (int)pr) + abs((int)mg - (int)pg) + abs((int)mb - (int)pb) );
+                    uint32_t dmn = (uint32_t)( abs((int)mr - (int)nr) + abs((int)mg - (int)ng) + abs((int)mb - (int)nb) );
+                    uint32_t dpn = (uint32_t)( abs((int)pr - (int)nr) + abs((int)pg - (int)ng) + abs((int)pb - (int)nb) );
+                    sum_pm += dpm; sum_mn += dmn; sum_pn += dpn; scnt++;
+                    if (v23_is_hot_chroma(mr, mg, mb) &&
+                        !v23_is_hot_chroma(pr, pg, pb) &&
+                        !v23_is_hot_chroma(nr, ng, nb)) {
+                        chroma_spike++;
+                    }
+                    if (mr > 235u && mg > 235u && mb > 235u) w_m++;
+                    if (pr > 235u && pg > 235u && pb > 235u) w_p++;
+                    if (nr > 235u && ng > 235u && nb > 235u) w_n++;
+                }
+                if (w_m >= 60u && w_p < 20u && w_n < 20u) white_rows++;
+            }
+            if (scnt > 0) {
+                uint32_t avg_pm = sum_pm / (scnt * 3u);
+                uint32_t avg_mn = sum_mn / (scnt * 3u);
+                uint32_t avg_pn = sum_pn / (scnt * 3u);
+                int hit_impulse = (avg_pm >= 18u && avg_mn >= 18u && avg_pn <= 7u && avg_pm > avg_pn * 3u);
+                int hit_chroma  = (chroma_spike >= 24u && avg_pn <= 10u);
+                int hit_streak  = (white_rows >= 1u && avg_pn <= 10u);
+                if (hit_impulse || hit_chroma || hit_streak) {
+                    uint32_t tid = g_v23_probe.traps++;
+                    g_v23_probe.last_trap_ms = now_ms;
+                    char gpath[48];
+                    snprintf(gpath, sizeof(gpath), "/tmp/glitch_%u.ppm", (unsigned)tid);
+                    int s3[3] = { s_prev, s_mid, s_next };
+                    v23_probe_write_ppm(gpath, s3, 3);
+                    v23_diag("GLITCH_TRAP #%u saved %s: mid_didx=%d pm=%u mn=%u pn=%u chroma=%u wrows=%u",
+                             (unsigned)tid, gpath, g_v23_probe.didx_hist[s_mid],
+                             (unsigned)avg_pm, (unsigned)avg_mn, (unsigned)avg_pn,
+                             (unsigned)chroma_spike, (unsigned)white_rows);
+                }
+            }
+        }
+    }
+    return night;
+}
+
+/* 由 setup_screen() 在 g_v23_mode==1 末尾调用：创建 5 个纯 OPENGL_ES2 零拷贝离屏 pixmap + 160x64 伴生探针画板，启动 60fps GL 线程 */
 static int v23_map_setup(int w, int h) {
     if (g_v23_map.initialized) return 0;
     v23_diag_reset();
@@ -178,39 +346,35 @@ static int v23_map_setup(int w, int h) {
     g_v23_map.free_idx = 0;
     g_v23_map.ready_idx = 1;
     g_v23_map.front_idx = 2;
-    g_v23_map.retired_idx = 3;
+    g_v23_map.retired1_idx = 3;
+    g_v23_map.retired2_idx = 4;
     g_v23_map.has_fresh = 0;
     g_v23_map.seq = 0;
     g_v23_map.frames_in = 0;
     g_v23_map.auto_night = 1;
     g_v23_stop = 0;
 
-    /* v23.6 根治 Tegra K1 显存属性冲突导致的偶发 0.1s 红块/白横条花屏：
-     * MH2p QNX /sbin/screen NVIDIA 驱动明确报错（Sev 2）：
-     *   "NV: USAGE_OPENGL_* is not supported with the USAGE_READ, USAGE_WRITE and USAGE_NATIVE."
-     * 当离屏 pixmap 同时挂载 Pitch-Linear (READ|WRITE|NATIVE) 与 Block-Linear 3D (OPENGL_ES2) 标志时，
-     * VIC 2D 引擎、CPU 亮度采样与 GK20A 3D 纹理缓存间无硬件一致性保证，在高德白天 2688x960 高码率流下偶发扫到脏缓存。
-     * 因此默认采用零驱动冲突的纯 Pitch-Linear 离屏缓冲 + glTexSubImage2D 独立 GPU 纹理上传（仅在 15~20fps 新地图帧到达时上传，
-     * 带宽占比 <0.6%、耗时 ~1.2ms，UI 仍满血 60fps 且与 2D 缓冲 100% 物理隔离）；仅建 v23_force_zerocopy 且无 v23_no_zerocopy 时才启用实验零拷贝。 */
-    int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_force_zerocopy", F_OK) == 0 &&
-                   access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0);
+    int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0);
     int fmt = SCREEN_FORMAT_RGBX8888;
-    int usage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ |
-                (want_zc ? SCREEN_USAGE_OPENGL_ES2 : 0);
     int sz[2] = { w, h };
-    v23_diag("v23.6 map_setup start %dx%d slots=%d want_zc=%d", w, h, V23_MAP_SLOTS, want_zc);
+    g_v23_map.zc_alloc = want_zc ? 1 : 0;
+    v23_diag("v23.7 map_setup start %dx%d slots=%d want_zc=%d", w, h, V23_MAP_SLOTS, want_zc);
 
     for (int i = 0; i < V23_MAP_SLOTS; i++) {
         if (screen_create_pixmap(&g_v23_map.pix[i], g_dec.scr_ctx) != 0) {
             v23_diag("v23: screen_create_pixmap[%d] failed errno=%d", i, errno);
             return -1;
         }
+        /* 纯 SCREEN_USAGE_OPENGL_ES2 (0x20)：绝不混入 READ/WRITE/NATIVE (0x0E)，驱动零报错且 GPU 零拷贝满帧 60fps */
+        int usage = g_v23_map.zc_alloc ? SCREEN_USAGE_OPENGL_ES2
+                                       : (SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ);
         screen_set_pixmap_property_iv(g_v23_map.pix[i], SCREEN_PROPERTY_FORMAT, &fmt);
         screen_set_pixmap_property_iv(g_v23_map.pix[i], SCREEN_PROPERTY_USAGE, &usage);
         screen_set_pixmap_property_iv(g_v23_map.pix[i], SCREEN_PROPERTY_BUFFER_SIZE, sz);
         int rc;
         do { rc = screen_create_pixmap_buffer(g_v23_map.pix[i]); } while (rc < 0 && errno == EINTR);
-        if (rc != 0 && want_zc) {
+        if (rc != 0 && g_v23_map.zc_alloc && i == 0) {
+            g_v23_map.zc_alloc = 0;
             int fb_usage = SCREEN_USAGE_NATIVE | SCREEN_USAGE_WRITE | SCREEN_USAGE_READ;
             screen_set_pixmap_property_iv(g_v23_map.pix[i], SCREEN_PROPERTY_USAGE, &fb_usage);
             do { rc = screen_create_pixmap_buffer(g_v23_map.pix[i]); } while (rc < 0 && errno == EINTR);
@@ -221,16 +385,51 @@ static int v23_map_setup(int w, int h) {
         }
         g_v23_map.buf[i] = NULL;
         screen_get_pixmap_property_pv(g_v23_map.pix[i], SCREEN_PROPERTY_RENDER_BUFFERS, (void **)&g_v23_map.buf[i]);
-        void *p = NULL; int st = 0;
-        screen_get_buffer_property_pv(g_v23_map.buf[i], SCREEN_PROPERTY_POINTER, &p);
-        screen_get_buffer_property_iv(g_v23_map.buf[i], SCREEN_PROPERTY_STRIDE, &st);
-        g_v23_map.ptr[i] = (uint8_t *)p;
-        g_v23_map.stride[i] = st;
-        if (p && st > 0) memset(p, 0, (size_t)st * (size_t)h);
+        if (!g_v23_map.zc_alloc) {
+            void *p = NULL; int st = 0;
+            screen_get_buffer_property_pv(g_v23_map.buf[i], SCREEN_PROPERTY_POINTER, &p);
+            screen_get_buffer_property_iv(g_v23_map.buf[i], SCREEN_PROPERTY_STRIDE, &st);
+            g_v23_map.ptr[i] = (uint8_t *)p;
+            g_v23_map.stride[i] = st;
+            if (p && st > 0) memset(p, 0, (size_t)st * (size_t)h);
+        } else {
+            g_v23_map.ptr[i] = NULL;
+            g_v23_map.stride[i] = 0;
+        }
     }
-    /* 在启动独立 GL 线程跨上下文执行 eglCreateImageKHR 前，强制将 g_dec.scr_ctx 上的 4 个 pixmap 提交到服务端就绪 */
+
+    /* 初始化 160x64 (40 KB) 纯 Pitch-Linear 伴生探针画板（零 OPENGL_ES2 标志，零驱动冲突） */
+    memset(&g_v23_probe, 0, sizeof(g_v23_probe));
+    if (screen_create_pixmap(&g_v23_probe.pix, g_dec.scr_ctx) == 0) {
+        int p_usage = SCREEN_USAGE_READ | SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE;
+        int p_sz[2] = { V23_PROBE_W, V23_PROBE_H };
+        screen_set_pixmap_property_iv(g_v23_probe.pix, SCREEN_PROPERTY_FORMAT, &fmt);
+        screen_set_pixmap_property_iv(g_v23_probe.pix, SCREEN_PROPERTY_USAGE, &p_usage);
+        screen_set_pixmap_property_iv(g_v23_probe.pix, SCREEN_PROPERTY_BUFFER_SIZE, p_sz);
+        int prc;
+        do { prc = screen_create_pixmap_buffer(g_v23_probe.pix); } while (prc < 0 && errno == EINTR);
+        if (prc == 0) {
+            screen_get_pixmap_property_pv(g_v23_probe.pix, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)&g_v23_probe.buf);
+            void *pp = NULL; int pst = 0;
+            screen_get_buffer_property_pv(g_v23_probe.buf, SCREEN_PROPERTY_POINTER, &pp);
+            screen_get_buffer_property_iv(g_v23_probe.buf, SCREEN_PROPERTY_STRIDE, &pst);
+            if (pp && pst >= V23_PROBE_W * 4) {
+                g_v23_probe.ptr = (uint8_t *)pp;
+                g_v23_probe.stride = pst;
+                g_v23_probe.ready = 1;
+            }
+        }
+        if (!g_v23_probe.ready) {
+            screen_destroy_pixmap(g_v23_probe.pix);
+            g_v23_probe.pix = NULL;
+        }
+    }
+
+    /* 在启动独立 GL 线程跨上下文执行 eglCreateImageKHR 前，强制将 g_dec.scr_ctx 上的 5 个 pixmap 提交到服务端就绪 */
     screen_flush_context(g_dec.scr_ctx, SCREEN_WAIT_IDLE);
-    v23_diag("v23: %d pixmaps ready ptr0=%p stride0=%d", V23_MAP_SLOTS, (void *)g_v23_map.ptr[0], g_v23_map.stride[0]);
+    v23_diag("v23: %d pixmaps ready (zc_alloc=%d ptr0=%p) probe=%d (%dx%d stride=%d)",
+             V23_MAP_SLOTS, g_v23_map.zc_alloc, (void *)g_v23_map.ptr[0],
+             g_v23_probe.ready, V23_PROBE_W, V23_PROBE_H, g_v23_probe.stride);
 
     g_v23_map.initialized = 1;
     pthread_attr_t pattr;
@@ -253,6 +452,13 @@ static void v23_map_shutdown(void) {
         pthread_join(g_v23_map.gl_tid, NULL);
         g_v23_map.gl_started = 0;
     }
+    if (g_v23_probe.pix) {
+        screen_destroy_pixmap(g_v23_probe.pix);
+        g_v23_probe.pix = NULL;
+        g_v23_probe.buf = NULL;
+        g_v23_probe.ptr = NULL;
+        g_v23_probe.ready = 0;
+    }
     if (g_v23_map.initialized) {
         for (int i = 0; i < V23_MAP_SLOTS; i++) {
             if (g_v23_map.pix[i]) {
@@ -267,20 +473,35 @@ static void v23_map_shutdown(void) {
 }
 
 /* 由 cb_display_picture() 在 g_v23_mode==1 时调用（仅运行在解码主线程，独占 g_dec.scr_ctx）：
- * 把已通过 SurfaceWait 校验的解码帧 screen_blit 到专属 free_idx 槽，同步等待 2D 引擎空闲后只与 ready_idx 交换。 */
+ * 同批投递主 1920x639 零拷贝槽与 160x64 探针画板的 VIC screen_blit，单次 cl_flush_blits_idle() 等待空闲。 */
 static void v23_map_on_decoded_frame(int didx, const int *blit_attribs) {
     if (!g_v23_map.initialized || didx < 0 || didx >= MAX_SURFACES) return;
     int slot = g_v23_map.free_idx;
     int rc = screen_blit(g_dec.scr_ctx, g_v23_map.buf[slot], g_dec.decode_bufs[didx], blit_attribs);
+    if (rc == 0 && g_v23_probe.ready && g_v23_probe.buf && blit_attribs) {
+        int probe_attribs[] = {
+            SCREEN_BLIT_SOURCE_X,           blit_attribs[1],
+            SCREEN_BLIT_SOURCE_Y,           blit_attribs[3],
+            SCREEN_BLIT_SOURCE_WIDTH,       blit_attribs[5],
+            SCREEN_BLIT_SOURCE_HEIGHT,      blit_attribs[7],
+            SCREEN_BLIT_DESTINATION_X,      0,
+            SCREEN_BLIT_DESTINATION_Y,      0,
+            SCREEN_BLIT_DESTINATION_WIDTH,  V23_PROBE_W,
+            SCREEN_BLIT_DESTINATION_HEIGHT, V23_PROBE_H,
+            SCREEN_BLIT_END
+        };
+        (void)screen_blit(g_dec.scr_ctx, g_v23_probe.buf, g_dec.decode_bufs[didx], probe_attribs);
+    }
     cl_flush_blits_idle();
     if (rc != 0) {
         rdbg_err("v23_map_on_decoded_frame: screen_blit failed rc=%d errno=%d slot=%d didx=%d\n", rc, errno, slot, didx);
         return;
     }
 
-    /* 每 10 帧（约 0.5~2 秒）采样一次地图亮度，零 DSI 自动昼夜切换 */
     int night = g_v23_map.auto_night;
-    if ((g_v23_map.frames_in % 10u) == 0u && g_v23_map.ptr[slot] && g_v23_map.stride[slot] >= g_v23_map.width * 4) {
+    if (g_v23_probe.ready) {
+        night = v23_probe_scan_and_luma(didx, night);
+    } else if ((g_v23_map.frames_in % 10u) == 0u && g_v23_map.ptr[slot] && g_v23_map.stride[slot] >= g_v23_map.width * 4) {
         night = v23_detect_night_rgbx(g_v23_map.ptr[slot], g_v23_map.width, g_v23_map.height,
                                       g_v23_map.stride[slot], night);
     }
@@ -803,7 +1024,8 @@ static void v23_op_clear(void *u, float r, float g, float b, float a) {
 
 static void v23_op_draw_map(void *u, float x, float y, float w, float h, const v23_map_opts_t *o) {
     v23_gl_ctx_t *gc = (v23_gl_ctx_t *)u;
-    if (!gc->map_has_stream || !gc->prog_map || w <= 1.0f || h <= 1.0f) return;
+    /* 首帧未晋升前绝不采样未初始化的纯 OPENGL_ES2 纹理，保持暗色干净底衬 */
+    if (!gc->map_has_stream || !gc->map_ever_flipped || !gc->prog_map || w <= 1.0f || h <= 1.0f) return;
 
     GLuint tex = gc->map_zero_copy ? gc->map_tex[gc->map_active_slot] : gc->map_tex_fb;
     if (!tex) return;
@@ -1392,12 +1614,13 @@ static void v23_write_status_json(const v23_sandbox_t *cur_sb, const v23_gl_ctx_
 
     char buf[4096];
     int o = snprintf(buf, sizeof(buf),
-        "{\"ok\":%s,\"mode\":\"v23_gles60\",\"engine_ver\":\"v23.6\",\"map_slots\":%d,\"win_bufs\":%d,"
+        "{\"ok\":%s,\"mode\":\"v23_gles60\",\"engine_ver\":\"v23.7\",\"map_slots\":%d,\"win_bufs\":%d,"
+        "\"glitch_traps\":%u,"
         "\"source\":\"%s\",\"theme_id\":\"%s\",\"theme_name\":\"%s\","
         "\"active_idx\":%d,\"theme_count\":%d,\"compile_ms\":%.2f,\"fps\":%d,\"map_fps\":%d,"
         "\"map_zero_copy\":%s,\"night\":%s,\"fallback\":%s,\"error\":%s%s%s,\"shader_error\":%s%s%s,\"themes\":[",
         (!fallback && (!err_msg || !err_msg[0])) ? "true" : "false",
-        V23_MAP_SLOTS, gc->win_bufs,
+        V23_MAP_SLOTS, gc->win_bufs, (unsigned)g_v23_probe.traps,
         src_e, id_e, name_e, idx, cur_sb ? cur_sb->entry_count : 1,
         cur_sb ? cur_sb->last_compile_ms : 0.0, fps, map_fps,
         gc->map_zero_copy ? "true" : "false",
@@ -1753,11 +1976,11 @@ static int v23_run_gl_loop(int with_carplay_map) {
     v23_atlas_init(&gc->atlas);
     v23_diag("[7] atlas ok tex=%u", gc->atlas.tex);
 
-    /* 初始化 CarPlay 地图四槽纹理：默认走零驱动冲突 glTexSubImage2D 独立 GPU 纹理路径（满血 60fps），建 v23_force_zerocopy 可实验启用 EGLImage */
+    /* 初始化 CarPlay 地图五槽纹理：默认启用纯 SCREEN_USAGE_OPENGL_ES2 零报错 EGLImage 硬件零拷贝（5% CPU 满血 60fps），
+     * 建 v23_no_zerocopy 时自动切换至 Pitch-Linear + glTexSubImage2D 路径 */
     if (with_carplay_map && g_v23_map.initialized) {
         int zc_ok = 0;
-        int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_force_zerocopy", F_OK) == 0 &&
-                       access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0);
+        int want_zc = g_v23_map.zc_alloc;
         if (want_zc && v23gl.EglCreateImageKHR && v23gl.GlEGLImageTargetTex2D) {
             zc_ok = 1;
             gl_GenTextures(V23_MAP_SLOTS, gc->map_tex);
@@ -1776,7 +1999,11 @@ static int v23_run_gl_loop(int with_carplay_map) {
         }
         if (zc_ok) {
             gc->map_zero_copy = 1;
-            v23_diag("[8] map_tex EGL_KHR_image_pixmap ZERO-COPY active (slots=%d)", V23_MAP_SLOTS);
+            v23_diag("[8] map_tex EGL_KHR_image_pixmap ZERO-COPY active (pure OPENGL_ES2, slots=%d)", V23_MAP_SLOTS);
+        } else if (g_v23_map.zc_alloc && !g_v23_map.ptr[0]) {
+            v23_diag("[8] eglCreateImageKHR failed on pure OPENGL_ES2 pixmap -> aborting for fallback");
+            free(user_sb); free(fb_sb); free(gc);
+            return 21;
         } else {
             gc->map_zero_copy = 0;
             for (int i = 0; i < V23_MAP_SLOTS; i++) {
@@ -2016,27 +2243,29 @@ static int v23_run_gl_loop(int with_carplay_map) {
             }
         }
 
-        /* 2. 四槽单向退役轮转 CarPlay 地图纹理（retired <- front <- ready <- old_retired）：
-         *    仅当 ready_idx 有新帧且距离上一次纹理切换已至少完成 1 次完整 eglSwapBuffers 且满 15.5ms 时才轮转，
-         *    确保刚退进 retired_idx 的旧纹理绝不会在 Tegra 3D GPU 异步光栅化尚未排空时被解码线程提前覆写。 */
+        /* 2. 五槽两级退役轮转 CarPlay 地图纹理（retired2 <- retired1 <- front <- ready <- old_ret2）：
+         *    仅当 ready_idx 有新帧，且距上次切换已完成至少 2 次完整 eglSwapBuffers 且满 30ms 时才晋升，
+         *    确保刚从 front 退下的旧纹理在 Tegra 3D GPU 管线内经历两级共 4~6 次 VSync 完全排空后才重回解码写入池。 */
         int cur_night = 1;
         if (with_carplay_map && g_v23_map.initialized) {
             pthread_mutex_lock(&g_v23_map.mx);
             cur_night = g_v23_map.auto_night;
             if (g_v23_map.has_fresh &&
                 (!gc->map_ever_flipped ||
-                 (swaps_since_flip >= 1u && (!gc->map_zero_copy || (t_now - last_flip_us) >= 15500ULL)))) {
+                 !gc->map_zero_copy ||
+                 (swaps_since_flip >= 2u && (t_now - last_flip_us) >= 30000ULL))) {
                 uint32_t seq = g_v23_map.seq;
-                int old_retired = g_v23_map.retired_idx;
-                g_v23_map.retired_idx = g_v23_map.front_idx;
-                g_v23_map.front_idx   = g_v23_map.ready_idx;
-                g_v23_map.ready_idx   = old_retired;
-                g_v23_map.has_fresh   = 0;
-                gc->map_active_slot   = g_v23_map.front_idx;
-                gc->map_last_seq      = seq;
-                gc->map_ever_flipped  = 1;
-                swaps_since_flip      = 0;
-                last_flip_us          = t_now;
+                int old_ret2          = g_v23_map.retired2_idx;
+                g_v23_map.retired2_idx = g_v23_map.retired1_idx;
+                g_v23_map.retired1_idx = g_v23_map.front_idx;
+                g_v23_map.front_idx    = g_v23_map.ready_idx;
+                g_v23_map.ready_idx    = old_ret2;
+                g_v23_map.has_fresh    = 0;
+                gc->map_active_slot    = g_v23_map.front_idx;
+                gc->map_last_seq       = seq;
+                gc->map_ever_flipped   = 1;
+                swaps_since_flip       = 0;
+                last_flip_us           = t_now;
                 fps_map_frames++;
                 pthread_mutex_unlock(&g_v23_map.mx);
 

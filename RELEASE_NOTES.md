@@ -1,5 +1,32 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v23.7
+> **指令级终极根治 0.1 秒大面积花屏与驻车快闪 + 恢复纯硬件零拷贝满血 60fps（~5% CPU、0 驱动报错）+ 合并 `#16` 商业双件套体检与零损接管工具箱**：通过对原厂固件（`gal`、`libairplay.so`、`displaymanager`、`/sbin/screen`、`screen-nvidia.so`、`libqnx-nvutil.so.1`、`libWFDnvidia.so`、`libnvwsi.so`）的完整指令级反汇编与实车毫秒级日志取证，一次性拔除造成“精确 0.1 秒”大面积红绿宏块花屏与原地驻车快闪的两类独立底层根因，同时修复 `v23.6` 因未缓存内存导致的 `glTexSubImage2D` 掉帧问题、恢复 5 槽纯 `SCREEN_USAGE_OPENGL_ES2` 零报错硬件零拷贝满血 60fps，并随本版正式打包 `v23.6` 之后合并入主干的 `#16` 商业改装暗桩只读检测与 `tools/shop-recovery` 零损接管/回滚工具箱。已装 `v22.1+` 与 `8080` 无线控制台的车主上传 `touareg-ota-v23.7.tar` 并点「软重启车机」即可完成升级。
+
+- **根治行车 0.1 秒大面积红绿/宏块花屏（`src/cl_render/cluster.c`，经典模式与 `v23` 模式共用）**：
+  - **修正 `_NVDSequenceInfo` 偏移误读**：原厂 `gal`（`0x107db0`）与 `libairplay.so`（`0xbac1e`–`0xbacee`）中 `si[4]` 为 `nDecodeBuffers`（iPhone 高德流为 `5`）、`si[5]` 为 `bProgSeq (= 1)`；此前误读 `si[5]` 导致 `NvMediaVideoDecoderCreateEx` 长期以 `maxReferences = 1` 运行，当 iPhone High Profile（稳态持有 4 参考帧）使用 `ref_idx_l0 >= 1` 时触发硬件参考槽越界单帧花屏。现按 `si[4]` 分配 `max_refs >= 8`、补传 `DecoderSetAttr(dec, 1, &prog_seq)` 并支持运行期动态重建；
+  - **12 槽硬解池 + YV12 显存对齐 + 硬件栅栏补齐**：将 YV12 `BUFFER_SIZE` 修正为 `{W, align16(H)}`（消除驱动二次 `×1.5` 显存浪费），硬解池扩至 `12` 槽并禁止 `cb_alloc_picture` 强抢在显槽；针对 `screen-nvidia.so` `nv_blit` 仅识别 VIC 栅栏魔数而对 NVDEC 栅栏失明的问题，在 `cb_display_picture` 显式执行 `SurfaceWait` + `SurfaceLock/Unlock` 排空硬解 DMA；
+  - **零扣帧显示与经典模式 8 槽 FIFO**：启用 `ParserSetAttr(parser, 4, 1, &zero_disp_delay)` + `parse_data[3] = 1` 消除驻车 1 帧扣留延迟；SHM 读游标改为单原子字 `total_bytes & (RING_SIZE - 1)` 派生；经典模式 `cl_pick_render_buf` 升级为 8 槽严格 FIFO 轮转，避免 `/sbin/screen` Mailbox 退化为 2 槽乒乓覆写。
+- **根治驻车也出现的“精确 0.1 秒”快闪/露底（`src/clusterd/clusterd.c` + `src/cl_render/cluster.c`）**：
+  - **解除 Display 4 的 10 Hz（100 ms = 0.1 s）合成限频**：反汇编 `displaymanager`（`0x5f2e4`–`0x5f740`）证实，此前 `clusterd` 下发 `hold58,33;rate10;st` 将仪表合成器锁在 10 Hz，导致 83% 渲染帧被丢弃且任何跨进程瞬态竞争都在屏上滞留整整 0.1 秒；现投屏激活期升为 **`hold58,33;rate60;st`** 释放真 60fps 上屏（断开 CarPlay 仍自动恢复原厂 `rate10`）；
+  - **开启 `NVWSI_ENABLE_BUFFER_SYNC_OPTS=1`**：在 `clusterd` 拉起子进程与 `cl_render` 入口最早阶段注入该环境变量，开启 `libnvwsi.so` 原生 FIFO 保序缓冲区同步（建 `v23_no_nvwsi_fifo` 可回退），消除中控主屏唤醒并发锁竞争时的乱序回收与跳过顶层 `58` 露底。
+- **恢复 ~5% CPU 满血 60fps 纯硬件零拷贝 + 内置 40 KB 像素黑匣子（`src/cl_render/v23_gles.c`）**：
+  - **零驱动报错纯 `SCREEN_USAGE_OPENGL_ES2` 5 槽两级退役**：反汇编 `libqnx-nvutil.so.1`（`0x0c1c`）与 `libWFDnvidia.so`（`0xb590`）证实，主地图离屏 pixmap 仅设纯 `SCREEN_USAGE_OPENGL_ES2 (0x20)`（不混入 `READ/WRITE/NATIVE` `0x0E`）即可实现 `sloginfo` **0 条报错**、`~5%` CPU、满帧 **60 fps** 硬件零拷贝（彻底解决 `v23.6` 读取 Uncached 显存导致掉至 13–48 fps 的副作用），并扩为 5 槽两级退役（`free / ready / front / retired1 / retired2`，`swaps >= 2 && >= 30 ms`）加首帧未就绪零采样保护；
+  - **伴生 `160×64`（`40 KB`）像素黑匣子**：同 `scr_ctx` 伴生纯 Pitch-Linear 微型画板，共用单次 `cl_flush_blits_idle()` 完成自动昼夜测光及三帧脉冲 `[prev, mid, next]` 异常检测（自动保存 `/tmp/glitch_0..2.ppm`，`/tmp/theme_status.json` 新增 `glitch_traps` 计数）。
+- **`cl_probe.so` 原厂 NEON AEAD 包头验签 + 12B 双哨兵零扣帧 + 停止 30s 强刷 IDR（`src/cluster-probe/cl_probe.c`）**：
+  - 动态调用 `libairplay.so` 导出的 `chacha20_poly1305_decrypt_all_64x64` 执行完整 128B 包头 AAD + 16B Poly1305 Tag 验签（含异构固件首 3 帧自动回退保护）并补齐 `p == n` 尾字节检查；
+  - 每帧末尾追加原厂 12B 双哨兵 `00 00 00 01 09 e0 00 00 00 01 12 ff`，SHM 写入改为单字 `total_bytes & (SHM_RING - 1)` 派生偏移；稳态行车解耦 `6 MB` GOP 水位（改为 300s 温和兜底），停止高码率下每 30 秒强插大 IDR 冲击。
+- **随本版正式打包 `#16` 商业改装暗桩检测增强与独立零损接管工具箱（`VW_HUD_1` / `VW_WiFi_Dev` + `tools/shop-recovery/`）**：
+  - U 盘安装脚本只读体检新增探测缺失 `servicemgrmibhigh0`、商业 `.j` 隐藏载荷及 `dio_manager.org` / 小体积壳脚本（适配 `P2838` 等商业双件套实车场景，[#16](https://github.com/a78c7/touareg-cn-carplay-mods/issues/16)）；
+  - 新增独立仓库工具箱 [`tools/shop-recovery/`](tools/shop-recovery/README.md)（`VW_ShopAudit` 深度只读审计 / `VW_ShopTakeover` 零损定点接管 / `VW_ShopRollback` 一键无损还原，附 8 场景自动化沙盒测试）。
+- **车机 QNX 6.6 ARMv7 二进制 & Java 1.4 校验和（全部通过 `DT_HASH+GNU_HASH`、ABI 与 Java `48.0` 校验）**：
+  - `cl_render`（`1,473,128 B`）：`bea8be3c763f0151c8b25cff34e96244f511f4b1cb9c2e6892fd58db93becfce`
+  - `clusterd`（`28,396 B`）：`33711d6b1bdfde791b13c06fd56e2aa84897185082ab343c97d89c16554b1467`
+  - `cl_probe.so`（`56,752 B`）：`6644a2e62e8534ba2648ea3116453a99431d88003e18ff97903f5b72ce4fdb99`
+  - `VWClusterNav_v6.jar`（`76,097 B`，与 `v23.6` 一致）：`7d650a2db10d36fde4a8e631eadc4ab355d598e10fe13b68f9e0fb411761a359`
+  - `touareg_netd`（`141,168 B`，与 `v23.6` 一致）：`5e881269083c59f0fb8a1abaf40e8af1a99fd933bd28fee389bb9d4353094f05`
+  - `VWPopupFilter.jar`（`4,536 B`，与 `v23.6` 一致）：`fe192806e4465c1d83318ca314a19d8ab3526673b3987417e295f5254c5c5b81`
+
 ## v23.6
 > **根治 `v23` / 经典模式高码率残余花屏（消除英伟达 Tegra K1 显存属性冲突 + 硬解 8 槽参数同步隔离）+ 修复冷启动 `v23` 超时误退回 `v22`（`15 s` 容错与自动重试，#14）**：综合实车开机首秒显卡驱动日志与高德白天 `2688×960` 高码率（`3–8 Mbps`）实测，定位并拔除两处深层残余花屏根因——默认关闭触发 `/sbin/screen` NVIDIA `Sev 2` 报错的混合属性零拷贝、改为 2D/3D 显存物理隔离的标准纹理上传（仍满帧 60fps），并将硬解参数单按 8 槽独立隔离加落盘同步；同时合并 `clusterd` 冷启动 `15 s` 容错 + `6 s` 补发 `idr` + 1 次自动重试，消除冷车满载时误触发第 2 层保险丝回退旧版的问题。已装 `v22.1+` 与 `8080` 无线控制台的车主上传 `touareg-ota-v23.6.tar` 并点「软重启车机」即可完成升级。
 

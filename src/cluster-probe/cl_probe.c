@@ -170,6 +170,12 @@ static void plog_cf(const char *tag, const void *obj, size_t maxlen) {
 }
 
 #define R(v, n) v = (void *)dlsym(RTLD_DEFAULT, n)
+/* 原厂 libairplay.so 导出的 NEON 加速 ChaCha20-Poly1305 AEAD 完整验签解密函数 (0x6a1ec)：
+ * r0=key(32B), r1=nonce_le(8B), r2=aad, r3=aad_len, [sp+0]=ct, [sp+4]=ct_len, [sp+8]=pt, [sp+12]=tag(16B) */
+typedef int (*fn_cc_decrypt_all_64x64_t)(
+    const uint8_t *, const uint8_t *, const void *, size_t,
+    const void *, size_t, void *, const uint8_t *);
+static fn_cc_decrypt_all_64x64_t p_cc_decrypt_all;
 static int g_safe_mode;
 static void init_once(void) {
     struct stat st;
@@ -182,8 +188,10 @@ static void init_once(void) {
         if (g_fd >= 0) fchmod(g_fd, 0666);
     }
     p_asprintf = (asprintf_t)dlsym(RTLD_DEFAULT, "ASPrintF");
+    p_cc_decrypt_all = (fn_cc_decrypt_all_64x64_t)dlsym(RTLD_DEFAULT, "chacha20_poly1305_decrypt_all_64x64");
     if (g_alt) shm_init_early = 1;
-    plog("cl_alt v23.0 loaded pid=%d uid=%d log=%d alt=%d safe=%d", getpid(), getuid(), g_log, g_alt, g_safe_mode);
+    plog("cl_alt v23.7 loaded pid=%d uid=%d log=%d alt=%d safe=%d hw_aead=%d",
+         getpid(), getuid(), g_log, g_alt, g_safe_mode, p_cc_decrypt_all != NULL);
 }
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 #define INIT() pthread_once(&g_once, init_once)
@@ -466,13 +474,16 @@ static void gop_add(const uint8_t *d, uint32_t n) {
 }
 static void shm_write(const uint8_t *d, uint32_t n) {
     if (!g_shm || !n || n >= SHM_RING) return;
-    uint32_t wp = g_shm->write_pos, first = SHM_RING - wp;
+    /* v23.7: SHM_RING (2^21) 统一由单原子字 total_bytes & (SHM_RING - 1) 派生偏移，根除双游标读写撕裂 */
+    uint32_t total = g_shm->total_bytes;
+    uint32_t wp = total & (SHM_RING - 1u);
+    uint32_t first = SHM_RING - wp;
     if (n <= first) memcpy(g_shm->ring + wp, d, n);
     else { memcpy(g_shm->ring + wp, d, first); memcpy(g_shm->ring, d + first, n - first); }
     __sync_synchronize();
-    g_shm->write_pos = (wp + n) % SHM_RING;
+    g_shm->write_pos = (wp + n) & (SHM_RING - 1u);
     __sync_synchronize();
-    g_shm->total_bytes += n;
+    g_shm->total_bytes = total + n;
 }
 
 /* ---------- stream 111 receiver ---------- */
@@ -509,7 +520,11 @@ static void *rx_thread(void *arg) {
     uint8_t hdr[128]; uint8_t *body = NULL, *ab = NULL; size_t cap = 0, abcap = 0;
     uint8_t ps[512]; size_t psn = 0; int lensz = 4;
     unsigned long frames = 0, bytes = 0, idr = 0, badnal = 0, cfg = 0, opc[256] = {0}, small0 = 0; uint64_t nonce = 0;
+    int aead_boot_fails = 0, use_hw_aead = (p_cc_decrypt_all != NULL);
     static const uint8_t sc[4] = {0, 0, 0, 1};
+    /* 原厂 libairplay.so (CNvMediaVideoDecoderBase::decodeDirect 0xba3ec / 0xef2a0) 帧尾 12B 双哨兵：
+     * Access Unit Delimiter (00 00 00 01 09 e0) + Flush Sentinel (00 00 00 01 12 ff)，令 libnvparser 当包立即吐帧 */
+    static const uint8_t au_tail[12] = { 0,0,0,1,0x09,0xe0, 0,0,0,1,0x12,0xff };
     struct timespec t0, t; clock_gettime(CLOCK_MONOTONIC, &t0); time_t lastrep = t0.tv_sec;
     int kf1 = 0, kf2 = 0, ui_sent = 0, cmd_seen = 0, kf_retry = 0; time_t last_cmd_mtime = 0, last_status = 0;
     int seen_sui = g_suggest_ui_seq; long long sui_due_ms = 0;
@@ -550,30 +565,49 @@ static void *rx_thread(void *arg) {
             nonce++;
         } else if (op == 0 && bs > 16 && g_have_ckey) {
             uint32_t n = bs - 16;
-            cc_aead_decrypt(g_ckey, nonce++, body, n);
+            uint64_t cur_nonce = nonce++;
+            int aead_rc = 0;
+            if (use_hw_aead && p_cc_decrypt_all) {
+                uint8_t nbuf[8];
+                for (int ni = 0; ni < 8; ni++) nbuf[ni] = (uint8_t)(cur_nonce >> (ni * 8));
+                aead_rc = p_cc_decrypt_all(g_ckey, nbuf, hdr, 128, body, n, body, body + n);
+                if (aead_rc != 0 && frames < 3 && ++aead_boot_fails >= 3) {
+                    /* 若未来异构固件包头 AAD 约定不同，首 3 帧自动回退纯流解密保底，绝不断流 */
+                    plog("rx: hw_aead startup mismatch (%d), falling back to stream chacha", aead_rc);
+                    use_hw_aead = 0;
+                    cc_aead_decrypt(g_ckey, cur_nonce, body, n);
+                    aead_rc = 0;
+                }
+            } else {
+                cc_aead_decrypt(g_ckey, cur_nonce, body, n);
+            }
             frames++;
             if (abcap < n + psn + 64) { abcap = n + psn + 64; ab = realloc(ab, abcap); }
-            size_t p = 0, w = 0; int isidr = 0, good = 1;
-            while (p + lensz <= n) {
+            size_t p = 0, w = 0; int isidr = 0, good = (aead_rc == 0);
+            while (good && p + (size_t)lensz <= n) {
                 uint32_t L = 0; for (int i = 0; i < lensz; i++) L = (L << 8) | body[p + i];
-                p += lensz;
+                p += (size_t)lensz;
                 if (!L || p + L > n) { good = 0; break; }
                 if ((body[p] & 0x1f) == 5) isidr = 1;
                 memcpy(ab + w, sc, 4); memcpy(ab + w + 4, body + p, L); w += 4 + L; p += L;
+            }
+            if (good && (p != n || w == 0)) good = 0;
+            if (good) {
+                memcpy(ab + w, au_tail, sizeof(au_tail));
+                w += sizeof(au_tail);
             }
             {
                 struct timespec tn; clock_gettime(CLOCK_MONOTONIC, &tn);
                 long long nm = (long long)tn.tv_sec * 1000 + tn.tv_nsec / 1000000;
                 if (!last_idr_ms) last_idr_ms = nm;
                 if (!good) {
-                    badnal++; if (badnal <= 3 || badnal % 100 == 0) plog("rx: bad NAL structure frame %lu (nonce desync?)", frames);
+                    badnal++; if (badnal <= 3 || badnal % 100 == 0) plog("rx: bad AEAD/NAL frame %lu (aead_rc=%d p=%u n=%u)", frames, aead_rc, (unsigned)p, (unsigned)n);
                     if (!wait_idr) { wait_idr = 1; wait_since_ms = nm; plog("rx: frame dropped -> holding the picture until a key frame"); }
                 }
                 if (wait_idr && !isidr && nm - kf_req_ms >= 2000) { kf_req_ms = nm; send_cmd("forceKeyFrame", NULL); }
-                /* v23.4: 兼顾 cl_render 热重启 GOP 秒开缓存（上限 8MB）与行车稳态零打扰：
-                 * 无丢包时不再死板每 30s 强发 forceKeyFrame（消除高码率叠加周期 IDR 引起的单帧微掉帧），
-                 * 改为当 g_gop 缓存达 6MB 水位（或失效）时按 >=30s 间隔刷新，静止/低码率放宽至 180s 兜底。 */
-                else if (!wait_idr && (!g_gop_valid || g_gopn >= (6u << 20) || nm - last_idr_ms >= 180000) && nm - kf_req_ms >= 30000) {
+                /* v23.7: 稳态行车彻底解耦 g_gop_valid / 6MB 水位（cl_render 启动时已主动请求 idr），
+                 * 停止白天高德 4~7.4Mbps 下每 30.0s 周期强插大 IDR 帧，仅保留 300s 超长周期温和兜底。 */
+                else if (!wait_idr && nm - last_idr_ms >= 300000 && nm - kf_req_ms >= 30000) {
                     kf_req_ms = nm;
                     send_cmd("forceKeyFrame", NULL);
                 }

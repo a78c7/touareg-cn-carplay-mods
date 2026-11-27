@@ -768,6 +768,12 @@ static uint64_t now_us(void);
 int main(int argc, char **argv) {
     int rc, i;
 
+    /* v23.7: 在任何 EGL / libnvwsi / libscreen 初始化前开启 NVIDIA WSI 原生缓冲区同步与 FIFO 保序回收，
+     * 消除 libnvwsi 默认乱序回绕与 flags=0 无栅栏提交引发的 Display 4 跨进程采样竞态（建 v23_no_nvwsi_fifo 可关闭）。 */
+    if (access("/mnt/app/eso/bin/apps/cluster/v23_no_nvwsi_fifo", F_OK) != 0) {
+        setenv("NVWSI_ENABLE_BUFFER_SYNC_OPTS", "1", 1);
+    }
+
     /* Parse verbose= early so log_open() can take effect before any LOG calls. */
     g_verbose = (int)get_arg_f(argc, argv, "verbose", 0.0f);
     if (g_verbose >= 2) log_open();
@@ -1490,7 +1496,8 @@ static uint64_t g_last_post_ms     = 0;
  * Auto-detected from displayable 33 at startup, overridable via xres=/yres=.
  * Earlier this section had its own `#define DISP_W 1280` / `DISP_H 860`
  * which shadowed the statics for all code from here to EOF — removed. */
-#define MAX_SURFACES 8
+#define MAX_SURFACES     12
+#define MAX_POST_BUFFERS 8
 
 /* ------------------------------------------------------------------ */
 /*  NvMedia function types (all loaded via dlsym)                     */
@@ -1597,18 +1604,18 @@ typedef struct {
     void* surfaces[MAX_SURFACES];
     int   surf_refcount[MAX_SURFACES];
     int   num_surfaces;
+    int   alloc_surfaces;
+    int   max_refs;
     int   width;
     int   height;
     int   frames_decoded;
     int   frames_displayed;
     int   frame_counter;      /* monotonic counter written to pCurrPic[5] per gal */
-    /* NvMedia post buffers — used as decode targets via siblings (gal0 pattern).
-     * 8 surfaces gives the H.264 DPB enough headroom; with 2 the parser
-     * clobbers references every frame for P-slice decode. */
+    /* NvMedia post buffers — classic mode displayable window buffers (8-slot FIFO). */
     screen_context_t scr_ctx;
     screen_window_t  post_win;
-    screen_buffer_t  post_bufs[MAX_SURFACES];
-    void*  scr_siblings[MAX_SURFACES];   /* RGBA siblings (mixer dest) */
+    screen_buffer_t  post_bufs[MAX_POST_BUFFERS];
+    void*  scr_siblings[MAX_POST_BUFFERS];   /* RGBA siblings (mixer dest) */
     int    post_buf_idx;
     /* OPTION B-PRIME v1: separate YV12 window for decode targets so the
      * decoder writes via the sibling path (sets TVMR +8 flag correctly). */
@@ -1703,38 +1710,45 @@ static int setup_screen(int width, int height) {
             return -1;
         }
     }
-    int bh_yv12 = ((height * 3 / 2) + 63) & ~63;
-    int dec_buffer_size[2] = { width, bh_yv12 };  /* YV12 storage incl. chroma planes */
+    /* v23.7 对齐原厂 gal (0x107ea4)：SCREEN_FORMAT_YV12 (13) 由 libqnx-nvutil.so.1 内部自动追加 UV 行，
+     * BUFFER_SIZE 传 {width, align16(height)} 即可（此前误传 height*1.5 导致驱动二次乘 1.5 分配 2208 行浪费显存）；
+     * 同时将硬解表面池扩至 12 槽（4 参考帧 + 2 锁定槽 + 6 空闲周转槽，显存不足时自动降级 8 槽）。 */
+    int dec_h_aligned = (height + 15) & ~15;
+    int dec_buffer_size[2] = { width, dec_h_aligned };
     int dec_visible_size[2] = { width, height };  /* visible Y-plane dims */
     int dec_fmt = 13;          /* YV12 */
     int dec_usage = 0x480;     /* gal0's exact usage */
     screen_set_window_property_iv(g_dec.decode_win, 0x28, dec_visible_size); /* SIZE = visible */
-    screen_set_window_property_iv(g_dec.decode_win, 0x05, dec_buffer_size);  /* BUFFER_SIZE = storage */
+    screen_set_window_property_iv(g_dec.decode_win, 0x05, dec_buffer_size);  /* BUFFER_SIZE = Y-plane aligned dims */
     screen_set_window_property_iv(g_dec.decode_win, 0x0e, &dec_fmt);
     screen_set_window_property_iv(g_dec.decode_win, 0x30, &dec_usage);
-    /* No ID_STRING / VISIBLE — this window is not displayed, only for decode buffers */
-    /* Retry on EINTR — daemon may send SIGUSR1 (resume) right after spawning,
-     * and QNX 6.6 has no SA_RESTART so a long-running screen syscall can
-     * return -1 errno=4 even with sigprocmask blocking (apparently the
-     * block doesn't fully suppress EINTR here). */
+    int alloc_surfs = MAX_SURFACES;
     do {
-        rc = screen_create_window_buffers(g_dec.decode_win, MAX_SURFACES);
+        rc = screen_create_window_buffers(g_dec.decode_win, alloc_surfs);
     } while (rc < 0 && errno == EINTR);
+    if (rc != 0 && alloc_surfs > 8) {
+        alloc_surfs = 8;
+        do {
+            rc = screen_create_window_buffers(g_dec.decode_win, alloc_surfs);
+        } while (rc < 0 && errno == EINTR);
+    }
     if (rc) {
         LOG("create decode_win buffers failed rc=%d errno=%d\n", rc, errno);
         sigprocmask(SIG_SETMASK, &old_sig_mask, NULL);
         return -1;
     }
+    g_dec.alloc_surfaces = alloc_surfs;
     screen_get_window_property_pv(g_dec.decode_win, SCREEN_PROPERTY_RENDER_BUFFERS,
                                   (void**)g_dec.decode_bufs);
-    LOG("  decode_win YV12: %dx%d (bh=%d) bufs[0]=%p\n", width, height, bh_yv12, g_dec.decode_bufs[0]);
+    LOG("  decode_win YV12: %dx%d (bh=%d surfs=%d) bufs[0]=%p\n",
+        width, height, dec_h_aligned, alloc_surfs, g_dec.decode_bufs[0]);
     if (nv.SiblingCreate && g_dec.device) {
-        for (int i = 0; i < MAX_SURFACES; i++) {
+        for (int i = 0; i < alloc_surfs; i++) {
             int sr = nv.SiblingCreate(g_dec.device, g_dec.decode_bufs[i], &g_dec.decode_siblings[i]);
             if (sr != 0) { LOG("  decode_sibling[%d] FAILED rc=%d\n", i, sr); g_dec.decode_siblings[i] = NULL; }
         }
-        LOG("  decode_siblings[0..%d]=%p..%p\n", MAX_SURFACES-1,
-            g_dec.decode_siblings[0], g_dec.decode_siblings[MAX_SURFACES-1]);
+        LOG("  decode_siblings[0..%d]=%p..%p\n", alloc_surfs - 1,
+            g_dec.decode_siblings[0], g_dec.decode_siblings[alloc_surfs - 1]);
     }
 
     /* post_win = RGBX8888 displayable. RGBA siblings will be mixer outputs. */
@@ -1794,7 +1808,7 @@ static int setup_screen(int width, int height) {
                                                     SCREEN_PROPERTY_VISIBLE, &vis);
         screen_flush_context(g_dec.scr_ctx, 0);
         do {
-            rc = screen_create_window_buffers(g_dec.post_win, MAX_SURFACES);
+            rc = screen_create_window_buffers(g_dec.post_win, MAX_POST_BUFFERS);
         } while (rc < 0 && errno == EINTR);
         if (rc) {
             LOG("create post_win buffers failed rc=%d errno=%d\n", rc, errno);
@@ -1814,7 +1828,7 @@ static int setup_screen(int width, int height) {
         LOG("  post_win: %dx%d fmt=%d usage=0x%x set_id_rc=%d set_vis_rc=%d "
             "got_id=\"%s\" got_visible=%d (n=%d bufs=[%p,%p])\n",
             width, height, pfmt, pusage,
-            id_rc, vis_rc, idbuf, got_vis, MAX_SURFACES,
+            id_rc, vis_rc, idbuf, got_vis, MAX_POST_BUFFERS,
             g_dec.post_bufs[0], g_dec.post_bufs[1]);
     }
 
@@ -1898,7 +1912,7 @@ static int setup_screen(int width, int height) {
 #endif
         nv.SiblingCreate && g_dec.device) {
         int i;
-        for (i = 0; i < MAX_SURFACES; i++) {
+        for (i = 0; i < MAX_POST_BUFFERS; i++) {
             int sr = nv.SiblingCreate(g_dec.device, g_dec.post_bufs[i], &g_dec.scr_siblings[i]);
             LOG("  sibling[%d]: rc=%d nv_surf=%p\n", i, sr, g_dec.scr_siblings[i]);
             if (sr != 0) g_dec.scr_siblings[i] = NULL;
@@ -2067,30 +2081,71 @@ static int setup_screen(int width, int height) {
 /*  Parser callbacks                                                  */
 /* ------------------------------------------------------------------ */
 
-/* BeginSequence: SPS parsed → create decoder + mixer + surfaces */
+/* BeginSequence: SPS parsed → create decoder + mixer + surfaces
+ * v23.7 根治大面积红块/绿块/宏块花屏（对齐原厂 gal 0x107db0 与 libairplay.so 0xbac1e..0xbacee）：
+ *   _NVDSequenceInfo 中 si[4] (+0x10) 才是 nDecodeBuffers（iPhone 高德流为 5），si[5] (+0x14) 是 bProgSeq (=1)。
+ *   旧版误读 si[5] 导致 NvMediaVideoDecoderCreateEx(maxReferences=1)，当 iPhone High Profile 使用多参考帧
+ *   (ref_idx_l0 >= 1，实车稳态持有 4 个参考帧) 时硬件参考槽/colMV 表越界损坏单帧，下一帧切回 ref_idx=0 自愈。 */
 static int cb_begin_sequence(void* user, int* si) {
+    (void)user;
     if (!si) return 0;
-    int w = si[10], h = si[0xb], dpb = si[5];
+    int w = si[10] > 0 ? si[10] : si[8];
+    int h = si[0xb] > 0 ? si[0xb] : si[9];
+    int n_dec = si[4];
+    int prog_seq = si[5];
     int bs_size = si[0x16];
-    if (bs_size < 0x80000) bs_size = 0x100000;
-    int nbuf = dpb + 4; if (nbuf < 4) nbuf = 4; if (nbuf > MAX_SURFACES) nbuf = MAX_SURFACES;
+    if (bs_size < 0x100000) bs_size = 0x100000;
 
-    LOG("BeginSequence: %dx%d dpb=%d bs_size=0x%x\n", w, h, dpb, bs_size);
-    g_dec.width = w;
-    g_dec.height = h;
+    int base_n = (n_dec > 3) ? n_dec : 3;
+    int max_refs = base_n - 1;
+    if (max_refs < 8) max_refs = 8;
+    if (max_refs > 16) max_refs = 16;
+    int in_bufs = (base_n < 8) ? base_n : 8;
 
     /* Setup screen display FIRST — siblings must exist before we use them
      * as decoder targets (gal0 sibling-as-target pattern). */
-    if (!g_dec.scr_ready) setup_screen(w, h);
+    if (!g_dec.scr_ready) {
+        g_dec.width = w;
+        g_dec.height = h;
+        setup_screen(w, h);
+    }
 
-    /* Create decoder */
+    int avail_surfs = (g_dec.alloc_surfaces > 0) ? g_dec.alloc_surfaces : MAX_SURFACES;
+    if (g_dec.num_surfaces == 0) {
+        g_dec.num_surfaces = avail_surfs;
+        for (int i = 0; i < avail_surfs; i++) {
+            g_dec.surfaces[i] = g_dec.decode_siblings[i];
+            g_dec.surf_refcount[i] = 0;
+            LOG("  surface[%d]=%p (YV12 decode sibling)\n", i, g_dec.surfaces[i]);
+        }
+    }
+
+    int nbuf = n_dec + 5;
+    if (nbuf < 10) nbuf = 10;
+    if (nbuf > g_dec.num_surfaces) nbuf = g_dec.num_surfaces;
+
+    LOG("BeginSequence: %dx%d n_dec=%d prog=%d max_refs=%d in_bufs=%d nbuf=%d bs_size=0x%x\n",
+        w, h, n_dec, prog_seq, max_refs, in_bufs, nbuf, bs_size);
+
+    /* 若运行期分辨率或所需参考帧上限增大，安全销毁旧硬解实例重建 */
+    if (g_dec.decoder && (w != g_dec.width || h != g_dec.height || max_refs > g_dec.max_refs)) {
+        LOG("  recreating decoder (%dx%d refs=%d -> %dx%d refs=%d)\n",
+            g_dec.width, g_dec.height, g_dec.max_refs, w, h, max_refs);
+        if (nv.DecoderDestroy) nv.DecoderDestroy(g_dec.decoder);
+        g_dec.decoder = NULL;
+    }
+    g_dec.width = w;
+    g_dec.height = h;
+
+    /* Create decoder with proper maxReferences (>= 8) and bProgSeq attribute */
     if (!g_dec.decoder && nv.DecoderCreate) {
         g_dec.decoder = nv.DecoderCreate(0, (uint32_t)w, (uint32_t)h,
-                                          (uint32_t)dpb, (uint32_t)bs_size, (uint32_t)nbuf, 0);
-        LOG("  decoder=%p\n", g_dec.decoder);
+                                          (uint32_t)max_refs, (uint32_t)bs_size, (uint32_t)in_bufs, 0);
+        g_dec.max_refs = max_refs;
+        LOG("  decoder=%p (max_refs=%d in_bufs=%d)\n", g_dec.decoder, max_refs, in_bufs);
         if (g_dec.decoder && nv.DecoderSetAttr) {
-            int dpb_val = dpb;
-            nv.DecoderSetAttr(g_dec.decoder, 1, &dpb_val);
+            int prog_val = prog_seq;
+            nv.DecoderSetAttr(g_dec.decoder, 1, &prog_val);
         }
     }
 
@@ -2101,19 +2156,6 @@ static int cb_begin_sequence(void* user, int* si) {
         g_dec.mixer = nv.MixerCreate(g_dec.device, (uint32_t)w, (uint32_t)h, aspect,
                                       0,0,0,0,0,0,0,0, 0x20000, 0);
         LOG("  mixer=%p (unused; siblings are decode targets)\n", g_dec.mixer);
-    }
-
-    /* OPTION B-PRIME v1: decode_siblings (YV12, from decode_win) as decoder
-     * targets. These DO get the TVMR +8 flag set after decode (proven in
-     * Option B basic config). Mixer will read these and render YV12 → RGBA
-     * into post_win's siblings. */
-    if (g_dec.num_surfaces == 0) {
-        g_dec.num_surfaces = MAX_SURFACES;
-        for (int i = 0; i < MAX_SURFACES; i++) {
-            g_dec.surfaces[i] = g_dec.decode_siblings[i];
-            g_dec.surf_refcount[i] = 0;
-            LOG("  surface[%d]=%p (YV12 decode sibling)\n", i, g_dec.surfaces[i]);
-        }
     }
 
     return nbuf;
@@ -2476,26 +2518,40 @@ static int             g_post_err_cnt = 0;
 
 static int cl_pick_next_pidx(void) {
     int pidx = g_dec.post_buf_idx;
-    if (pidx == g_last_posted_pidx) pidx = (pidx + 1) % MAX_SURFACES;
-    g_dec.post_buf_idx = (pidx + 1) % MAX_SURFACES;
+    if (pidx == g_last_posted_pidx) pidx = (pidx + 1) % MAX_POST_BUFFERS;
+    g_dec.post_buf_idx = (pidx + 1) % MAX_POST_BUFFERS;
     return pidx;
 }
 
-/* v21.1: 遵循 QNX Screen 缓冲所有权约定，每次送显前向窗口实时查询当前可用的 RENDER_BUFFERS，
- * 严禁盲目轮转启动时的旧句柄数组或向合成器重提正在扫描输出的 Front Buffer（消除 0.1s 偶发闪屏/透底）。 */
+/* v23.7: 经典模式 8 缓冲严格 FIFO 轮转选槽：
+ * /sbin/screen (0x080717b8) 在 Mailbox 模式下将刚弹出的缓冲插回 RENDER_BUFFERS[0]，若每次固定取 rbufs[0]
+ * 会使 8 缓冲退化为 2 缓冲热乒乓覆写；改为按 post_buf_idx FIFO 顺序挑选当前在 RENDER_BUFFERS 池中且非在显的缓冲。 */
 static screen_buffer_t cl_pick_render_buf(int *out_pidx) {
-    screen_buffer_t rbufs[MAX_SURFACES];
+    screen_buffer_t rbufs[MAX_POST_BUFFERS];
     memset(rbufs, 0, sizeof(rbufs));
     if (g_dec.post_win &&
         screen_get_window_property_pv(g_dec.post_win, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)rbufs) == 0 &&
         rbufs[0] != NULL) {
+        int start = g_dec.post_buf_idx % MAX_POST_BUFFERS;
+        for (int step = 0; step < MAX_POST_BUFFERS; step++) {
+            int cand = (start + step) % MAX_POST_BUFFERS;
+            screen_buffer_t cb = g_dec.post_bufs[cand];
+            if (!cb || cb == g_last_posted_buf) continue;
+            for (int r = 0; r < MAX_POST_BUFFERS && rbufs[r] != NULL; r++) {
+                if (rbufs[r] == cb) {
+                    g_dec.post_buf_idx = (cand + 1) % MAX_POST_BUFFERS;
+                    if (out_pidx) *out_pidx = cand;
+                    return cb;
+                }
+            }
+        }
         screen_buffer_t chosen = rbufs[0];
         if (g_last_posted_buf && chosen == g_last_posted_buf && rbufs[1] != NULL) {
             chosen = rbufs[1];
         }
         if (out_pidx) {
             int found = -1;
-            for (int i = 0; i < MAX_SURFACES; i++) {
+            for (int i = 0; i < MAX_POST_BUFFERS; i++) {
                 if (g_dec.post_bufs[i] == chosen) { found = i; break; }
             }
             *out_pidx = found;
@@ -2786,8 +2842,17 @@ static int cb_display_picture(void* user, void* disp_info) {
     struct timespec ts0, ts1, ts2, ts3;
     clock_gettime(CLOCK_MONOTONIC, &ts0);
 
-    /* Wait for decoder before mixer/blit reads; 与原厂 libairplay.so (0xb8264) 对齐，校验 SurfaceWait 与解码状态 */
+    /* Wait for decoder before mixer/blit reads; 对齐原厂 libairplay.so (0xb8264) 与 gal (0x10883a)，
+     * 由于 screen-nvidia.so nv_blit 仅识别 VIC 栅栏魔数 0x6789abcd 而对 NVDEC 栅栏失明，此处显式执行
+     * SurfaceWait + SurfaceLock/Unlock 排空 TVMR DMA 与内存控制器写缓冲后再交给 VIC screen_blit。 */
     int sw_rc = nv.SurfaceWait ? nv.SurfaceWait(yuv_surface, 0) : 0;
+    if (sw_rc == 0 && nv.SurfaceLock && nv.SurfaceUnlock) {
+        uint8_t smap[256] __attribute__((aligned(8)));
+        memset(smap, 0, sizeof(smap));
+        if (nv.SurfaceLock(yuv_surface, smap) == 0) {
+            nv.SurfaceUnlock(yuv_surface);
+        }
+    }
     clock_gettime(CLOCK_MONOTONIC, &ts1);
 
     int pidx = -1;
@@ -2922,7 +2987,7 @@ static int cb_display_picture(void* user, void* disp_info) {
     g_batch_deferred = 0;
     screen_buffer_t dst_buf = cl_pick_render_buf(&pidx);
     if (!dst_buf) return 1;
-    dst_sibling = (pidx >= 0 && pidx < MAX_SURFACES) ? g_dec.scr_siblings[pidx] : NULL;
+    dst_sibling = (pidx >= 0 && pidx < MAX_POST_BUFFERS) ? g_dec.scr_siblings[pidx] : NULL;
     int mr = screen_blit(g_dec.scr_ctx, dst_buf,
                          g_dec.decode_bufs[didx], blit_attribs);
 #ifdef USE_DASH
@@ -2998,49 +3063,43 @@ static int cb_alloc_picture(void* user, void** pic_buf) {
             g_dec.num_surfaces > 0 ? g_dec.num_surfaces - 1 : 0,
             g_dec.num_surfaces > 0 ? g_dec.surfaces[g_dec.num_surfaces - 1] : NULL);
     }
-    /* round-robin: never hand back the surface that was just decoded (it is the
-     * reference for the next P-frame when the stream uses 1 ref frame / dpb=1),
-     * and never overwrite g_pinned_didx while deferred/idle blits still read it. */
+    /* v23.7: 12 槽轮转分配，严禁在任何分支覆盖 surf_refcount > 0 的 DPB 参考帧或当前锁定的 g_pinned_didx；
+     * pass 0 同时避开 g_pinned_didx 与 g_prev_pinned_didx，pass 1 仅允许回收 g_prev_pinned_didx。 */
     static int rr_next = 0;
-    int i, k, pass;
-    for (pass = 0; pass < 2; pass++) {
-        for (k = 0; k < g_dec.num_surfaces; k++) {
-            i = (rr_next + k) % g_dec.num_surfaces;
-            if (g_dec.surf_refcount[i] == 0 && g_dec.surfaces[i] &&
-                (pass == 1 || (i != g_pinned_didx && i != g_prev_pinned_didx))) {
-                if (pass == 1 && i == g_pinned_didx) {
-                    g_pinned_didx = -1;
-#ifdef USE_DASH
-                    g_have_clean_didx = 0;
-#endif
+    static int pic_bufs[MAX_SURFACES][6];
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) usleep(2000);
+        for (int pass = 0; pass < 2; pass++) {
+            for (int k = 0; k < g_dec.num_surfaces; k++) {
+                int i = (rr_next + k) % g_dec.num_surfaces;
+                if (g_dec.surf_refcount[i] == 0 && g_dec.surfaces[i] &&
+                    i != g_pinned_didx &&
+                    (pass == 1 || i != g_prev_pinned_didx)) {
+                    if (i == g_prev_pinned_didx) g_prev_pinned_didx = -1;
+                    rr_next = (i + 1) % g_dec.num_surfaces;
+                    pic_bufs[i][0] = i;
+                    pic_bufs[i][1] = 0;
+                    pic_bufs[i][2] = (int)g_dec.surfaces[i];
+                    pic_bufs[i][3] = 0;
+                    pic_bufs[i][4] = 1; /* refcount = 1 */
+                    pic_bufs[i][5] = g_dec.frames_decoded;
+                    g_dec.surf_refcount[i] = 1;
+                    *pic_buf = &pic_bufs[i][0];
+                    return 1;
                 }
-                if (i == g_prev_pinned_didx) g_prev_pinned_didx = -1;
-                rr_next = (i + 1) % g_dec.num_surfaces;
-                /* Build a mini picture buffer struct:
-                 * [0]=index, [1]=0, [2]=surface_ptr, [3]=0, [4]=refcount, [5]=0 */
-                static int pic_bufs[MAX_SURFACES][6];
-                pic_bufs[i][0] = i;
-                pic_bufs[i][1] = 0;
-                pic_bufs[i][2] = (int)g_dec.surfaces[i];
-                pic_bufs[i][3] = 0;
-                pic_bufs[i][4] = 1; /* refcount = 1 */
-                pic_bufs[i][5] = g_dec.frames_decoded;
-                g_dec.surf_refcount[i] = 1;
-                *pic_buf = &pic_bufs[i][0];
-                return 1;
             }
         }
     }
     /* Failure path: dump full state so we can see WHY no surface was free. */
     {
-        char rcbuf[80]; int o = 0;
-        for (int i = 0; i < MAX_SURFACES && o < 70; i++)
+        char rcbuf[96]; int o = 0;
+        int n = g_dec.num_surfaces > 0 ? g_dec.num_surfaces : MAX_SURFACES;
+        for (int i = 0; i < n && o < 84; i++)
             o += snprintf(rcbuf + o, sizeof(rcbuf) - o, "%d%s",
-                          g_dec.surf_refcount[i], i == MAX_SURFACES - 1 ? "" : ",");
+                          g_dec.surf_refcount[i], i == n - 1 ? "" : ",");
         rcbuf[o] = '\0';
-        LOG("AllocPictureBuffer: no free surfaces! (call #%d) num=%d rc=[%s] s[0]=%p s[7]=%p\n",
-            alloc_dbg, g_dec.num_surfaces, rcbuf,
-            g_dec.surfaces[0], g_dec.surfaces[7]);
+        rdbg_err("AllocPictureBuffer: no free surfaces! (call #%d) num=%d pin=%d rc=[%s]\n",
+                 alloc_dbg, g_dec.num_surfaces, g_pinned_didx, rcbuf);
     }
     return 0;
 }
@@ -3176,21 +3235,27 @@ int run_h264_mode(int argc, char** argv) {
     /* Dump mode */
     if (dump_mode) {
         int out_fd = open("/tmp/cluster_from_shm.h264", O_WRONLY|O_CREAT|O_TRUNC, 0644);
-        uint32_t read_pos = shm->write_pos;
         uint32_t last_total = shm->total_bytes;
+        __sync_synchronize();
+        uint32_t read_pos = last_total & (CLUSTER_RING_SIZE - 1u);
         int dump_bytes = 0;
         uint64_t t0 = now_us();
         LOG("dumping...\n");
         while (dump_bytes < 4*1024*1024) {
             uint32_t total = shm->total_bytes;
             if (total == last_total) { usleep(1000); if (dump_bytes>0 && now_us()-t0>10000000ULL) break; continue; }
+            __sync_synchronize();
             t0 = now_us();
-            uint32_t wp = shm->write_pos;
-            uint32_t avail = (wp >= read_pos) ? wp-read_pos : CLUSTER_RING_SIZE-read_pos+wp;
+            uint32_t avail = total - last_total;
+            if (avail > CLUSTER_RING_SIZE - 65536u) {
+                last_total = total;
+                read_pos = total & (CLUSTER_RING_SIZE - 1u);
+                continue;
+            }
             if (avail > 0 && out_fd >= 0) {
                 if (read_pos+avail <= CLUSTER_RING_SIZE) { write(out_fd, shm->ring+read_pos, avail); }
                 else { uint32_t f=CLUSTER_RING_SIZE-read_pos; write(out_fd,shm->ring+read_pos,f); write(out_fd,shm->ring,avail-f); }
-                read_pos = (read_pos+avail) % CLUSTER_RING_SIZE;
+                read_pos = (read_pos+avail) & (CLUSTER_RING_SIZE - 1u);
                 dump_bytes += avail;
             }
             last_total = total;
@@ -3245,6 +3310,12 @@ int run_h264_mode(int argc, char** argv) {
 
     float fps = 30.0f;
     nv.ParserSetAttr(parser, 9, 4, &fps);
+    /* v23.7 对齐原厂 libairplay.so (0xb7d46)：开启零显示重排扣帧延迟 (attr=4, ZeroDisplayDelay=1)，
+     * 配合 cl_probe 12B AUD 双哨兵与 parse_data[3]=1，消除 decoded 领先 displayed 1 帧的驻车 250ms 延迟。 */
+    if (nv.ParserSetAttr) {
+        uint8_t zero_disp_delay = 1;
+        nv.ParserSetAttr(parser, 4, 1, &zero_disp_delay);
+    }
 
     /* Load canim splash into a CPU buffer once. h264 child paints it into
      * post_buf on STAGE_PAUSED so disp 33 stays owned by post_win throughout
@@ -3267,16 +3338,12 @@ int run_h264_mode(int argc, char** argv) {
         }
     }
 
-    /* Main decode loop: read from SHM, feed to parser. Start from CURRENT
-     * write position so we get fresh data with valid NAL boundaries. */
-    uint32_t read_pos = 0, last_total = 0;
-    for (;;) {
-        uint32_t t1 = shm->total_bytes;
-        __sync_synchronize();
-        uint32_t w1 = shm->write_pos;
-        __sync_synchronize();
-        if (shm->total_bytes == t1) { read_pos = w1; last_total = t1; break; }
-    }
+    /* Main decode loop: read from SHM, feed to parser.
+     * v23.7: CLUSTER_RING_SIZE (2^21) 为严格 2 的幂，读写偏移统一由单原子字 total_bytes & (RING_SIZE - 1) 派生，
+     * 彻底根除跨进程并发写时双变量读取 (write_pos vs total_bytes) 引起的边界撕裂。 */
+    uint32_t last_total = shm->total_bytes;
+    __sync_synchronize();
+    uint32_t read_pos = last_total & (CLUSTER_RING_SIZE - 1u);
     int feed_count = 0;
     uint64_t t0 = now_us();
     (void)t0;
@@ -3311,13 +3378,15 @@ int run_h264_mode(int argc, char** argv) {
         /* v19.5: the writer does not wait for us. If more than the ring holds was written since the last read, the
          * unread part was overwritten and what is left is a mix of old and new data: decoding it garbles the map
          * until the next key frame. Skip to the newest data and wait for a key frame instead (picture stays). */
-        if (delta > CLUSTER_RING_SIZE - 65536) {
-            uint32_t wp = shm->write_pos;
-            __sync_synchronize();
+        if (delta > CLUSTER_RING_SIZE - 65536u) {
             total = shm->total_bytes;
+            __sync_synchronize();
             rdbg_err("ring overrun: %u bytes behind, skipping to the newest data and waiting for a key frame\n",
                      (unsigned)delta);
-            read_pos = wp; last_total = total; g_wait_idr = 1; request_key_frame("overrun");
+            read_pos = total & (CLUSTER_RING_SIZE - 1u);
+            last_total = total;
+            g_wait_idr = 1;
+            request_key_frame("overrun");
             continue;
         }
         uint32_t avail = delta;
@@ -3335,17 +3404,17 @@ int run_h264_mode(int argc, char** argv) {
             memcpy(chunk + first, shm->ring, avail - first);
         }
         __sync_synchronize();
-        if ((uint32_t)(shm->total_bytes - last_total) > CLUSTER_RING_SIZE - 16384) {
+        if ((uint32_t)(shm->total_bytes - last_total) > CLUSTER_RING_SIZE - 16384u) {
             free(chunk);
-            uint32_t wp = shm->write_pos;
+            uint32_t newest = shm->total_bytes;
             __sync_synchronize();
-            last_total = shm->total_bytes;
-            read_pos = wp;
+            last_total = newest;
+            read_pos = newest & (CLUSTER_RING_SIZE - 1u);
             g_wait_idr = 1;
             request_key_frame("overrun-midread");
             continue;
         }
-        read_pos = (read_pos + avail) % CLUSTER_RING_SIZE;
+        read_pos = (read_pos + avail) & (CLUSTER_RING_SIZE - 1u);
         last_total += avail;
 
         /* Feed directly to parser — it handles NAL discovery internally.
@@ -3398,6 +3467,7 @@ int run_h264_mode(int argc, char** argv) {
         }
         parse_data[0] = (uint32_t)(chunk + feed_off);
         parse_data[1] = avail - feed_off;
+        parse_data[3] = 1; /* bCompletePicture: 对齐原厂 libairplay.so 0xba48c 立即吐帧 */
 
         int pr = nv.ParserParse(parser, parse_data);
         feed_count++;

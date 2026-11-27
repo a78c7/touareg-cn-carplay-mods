@@ -282,9 +282,11 @@ int main(int argc, char **argv) {
     time_t shown_t = 0;
     const char *did = getenv("CL_DISPID");
     if (!did || !*did) { setenv("CL_DISPID", "58", 1); did = "58"; }
-    char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate10;st", did);   /* ours on top, native 33 kept underneath */
+    /* v23.7: 将投屏激活期 Display 4 合成器刷新率由 rate10 (10Hz=100ms/帧) 提升至 rate60 (60Hz=16.7ms/帧)，
+     * 释放真 60fps 上屏并消除 0.1s 单帧滞留放大窗；断开回退 back_seq 仍恢复原厂 rate10。 */
+    char show_seq[64]; snprintf(show_seq, sizeof show_seq, "hold%s,33;rate60;st", did);   /* ours on top, native 33 kept underneath */
     const char *back_seq = getenv("CL_BACKSEQ") ? getenv("CL_BACKSEQ") : "unhold;33;vis1;rate10;st";
-    logm("clusterd v23.0 start", getpid());
+    logm("clusterd v23.7 start", getpid());
     for (;;) {
         int safe_mode = (access("/mnt/app/eso/bin/apps/cluster/safe_mode", F_OK) == 0 ||
                          access("/tmp/vw_cluster_safe_mode", F_OK) == 0 ||
@@ -379,6 +381,9 @@ int main(int argc, char **argv) {
             if (child <= 0) {
                 child = fork();
                 if (child == 0) {
+                    if (access("/mnt/app/eso/bin/apps/cluster/v23_no_nvwsi_fifo", F_OK) != 0) {
+                        setenv("NVWSI_ENABLE_BUFFER_SYNC_OPTS", "1", 1);
+                    }
                     if (want_v23) {
                         char *vargv[32];
                         int n = 0;

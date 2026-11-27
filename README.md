@@ -11,7 +11,7 @@
 单 U 盘免拆免升系统，解锁途锐无线 / 全屏 CarPlay、抬头显示导航、液晶仪表大地图与行车数据，并支持手机无线设置和升级。
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>下载 v23.6</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>下载 v23.7</b></a> ·
   <a href="#能实现哪些功能">功能清单</a> ·
   <a href="#4-步免拆安装">4 步安装</a> ·
   <a href="#适用车型与安装前须知">能不能装</a> ·
@@ -124,7 +124,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 > [!NOTE]
 > - **首次打开提示未签名**：桌面配置器未购商业签名，Windows 点「更多信息 → 仍要运行」，Mac 在「系统设置 → 隐私与安全性」点「仍要打开」；程序由 GitHub Actions 从 [`tools/configurator`](tools/configurator) 源码自动构建并附 `SHA256SUMS.txt`，仅本机 `127.0.0.1` 运行、绝不联网。
 > - **装完看不到左右信息框或被圆盘盖住**：按方向盘右侧左右翻页键切到仪表「导航」页，再按一下 **`VIEW` 键**收起两侧原厂圆表盘即可完整显示（若习惯保留双圆表盘，可在车机仪表组合设置里将两侧圆盘内显选为空白避免遮挡）。
-> - **老版本升级提醒**：`v22.01` 及更早版本升级到 `v22.1` / `v23.6` 需先用 U 盘覆盖刷入一次（自动保留原有配置与管理口令；早期未设口令的首次开机将在仪表屏自动显示 6 位随机口令，手机登录后永久隐藏），之后即可继续手机无线升级。
+> - **老版本升级提醒**：`v22.01` 及更早版本升级到 `v22.1` / `v23.7` 需先用 U 盘覆盖刷入一次（自动保留原有配置与管理口令；早期未设口令的首次开机将在仪表屏自动显示 6 位随机口令，手机登录后永久隐藏），之后即可继续手机无线升级。
 > - **首次刷完仍有黑边**：在 iPhone 蓝牙/CarPlay 设置中「忘记此车辆」重连一次即可。
 
 ---
@@ -201,7 +201,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 4. `/mnt/app` 默认只读：改文件前先 `mount -uw /mnt/app` 并备份原文件，用 `.new` 写完原子 `mv` 替换后立刻 `sync && mount -ur /mnt/app` 恢复只读；改完仪表配置执行 `slay -f cl_render` 秒级刷新（无需重启车机）。
 5. 渲染架构与帧率护栏（极重要）：
    - `cl_render` 的 `capture=h264` 地图模式走 NVDEC 硬解 + `screen_blit`，`dash.c` 是 CPU 软渲两侧 295×308 小框（开启 `smooth=1` 即可流畅显示数字与运动条）；严禁在 `dash.c` 里用 CPU 循环做 1920×639 全屏复杂动画，必然掉帧发卡！
-   - 若要开发全屏 60fps 动效仪表、指针、粒子或同屏 CarPlay 地图自定义主题，优先使用 `v23.0` / `v23.6` 正式的 `src/cl_render/v23_gles.c`（`v23_mode`，QuickJS + OpenGL ES 2.0 + 独立 `own_ctx` + 4 槽离屏桥物理隔离 60 fps 单画布引擎）；纯独立 C 试验通道为 `src/cl_render/gles60.c`（`capture=gles60`，窗口 `58`，`eglSwapInterval(dpy, 1)`，通过 `eglGetProcAddress` 动态解析 `gl*` 函数，绝不直接链接 `-lGLESv2`）。
+   - 若要开发全屏 60fps 动效仪表、指针、粒子或同屏 CarPlay 地图自定义主题，优先使用 `v23.0` / `v23.7` 正式的 `src/cl_render/v23_gles.c`（`v23_mode`，QuickJS + OpenGL ES 2.0 + 独立 `own_ctx` + 5 槽纯 `OPENGL_ES2` 硬件零拷贝 60 fps 单画布引擎）；纯独立 C 试验通道为 `src/cl_render/gles60.c`（`capture=gles60`，窗口 `58`，`eglSwapInterval(dpy, 1)`，通过 `eglGetProcAddress` 动态解析 `gl*` 函数，绝不直接链接 `-lGLESv2`）。
    - 车机已启用 3 次崩溃安全模式熔断（`/mnt/app/eso/bin/apps/cluster/safe_mode` 或 `/tmp/vw_*_safe_mode`），改动前请先用电脑端 `tools/preview/index.html` 本地验证。
 6. 完整接口表与开发界限见公开仓库：https://github.com/a78c7/touareg-cn-carplay-mods/tree/main/docs
 
