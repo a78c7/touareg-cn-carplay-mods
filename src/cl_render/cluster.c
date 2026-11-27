@@ -768,9 +768,10 @@ static uint64_t now_us(void);
 int main(int argc, char **argv) {
     int rc, i;
 
-    /* v23.7: 在任何 EGL / libnvwsi / libscreen 初始化前开启 NVIDIA WSI 原生缓冲区同步与 FIFO 保序回收，
-     * 消除 libnvwsi 默认乱序回绕与 flags=0 无栅栏提交引发的 Display 4 跨进程采样竞态（建 v23_no_nvwsi_fifo 可关闭）。 */
-    if (access("/mnt/app/eso/bin/apps/cluster/v23_no_nvwsi_fifo", F_OK) != 0) {
+    /* v23.8: 默认保持原厂 NVWSI_ENABLE_BUFFER_SYNC_OPTS=0（与 v23.0~v23.6 及原厂 MH2p 一致），
+     * 避免对 displaymanager 接管窗口 58 注入非原厂 SCREEN_MODE_FIFO 引发单帧整屏黑闪 (#14)；建 v23_nvwsi_fifo 可实验开启。 */
+    if (access("/mnt/app/eso/bin/apps/cluster/v23_nvwsi_fifo", F_OK) == 0 ||
+        access("/tmp/v23_nvwsi_fifo", F_OK) == 0) {
         setenv("NVWSI_ENABLE_BUFFER_SYNC_OPTS", "1", 1);
     }
 

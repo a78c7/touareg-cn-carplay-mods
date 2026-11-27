@@ -1669,14 +1669,20 @@ static void v23_write_status_json(const v23_sandbox_t *cur_sb, const v23_gl_ctx_
     v23_json_escape(gc->shader_err, sh_e, sizeof(sh_e));
     v23_json_escape(source ? source : "builtin", src_e, sizeof(src_e));
 
+    int target_fps = (access("/mnt/app/eso/bin/apps/cluster/v23_rate60", F_OK) == 0 ||
+                      access("/tmp/v23_rate60", F_OK) == 0) ? 60 : 30;
+    const char *nvwsi_env = getenv("NVWSI_ENABLE_BUFFER_SYNC_OPTS");
+    int nvwsi_on = (nvwsi_env && strcmp(nvwsi_env, "1") == 0) ? 1 : 0;
+
     char buf[4096];
     int o = snprintf(buf, sizeof(buf),
-        "{\"ok\":%s,\"mode\":\"v23_gles60\",\"engine_ver\":\"v23.7\",\"map_slots\":%d,\"win_bufs\":%d,"
+        "{\"ok\":%s,\"mode\":\"v23_gles60\",\"engine_ver\":\"v23.8\",\"target_fps\":%d,\"nvwsi_fifo\":%s,\"map_slots\":%d,\"win_bufs\":%d,"
         "\"glitch_traps\":%u,"
         "\"source\":\"%s\",\"theme_id\":\"%s\",\"theme_name\":\"%s\","
         "\"active_idx\":%d,\"theme_count\":%d,\"compile_ms\":%.2f,\"fps\":%d,\"map_fps\":%d,"
         "\"map_zero_copy\":%s,\"night\":%s,\"fallback\":%s,\"error\":%s%s%s,\"shader_error\":%s%s%s,\"themes\":[",
         (!fallback && (!err_msg || !err_msg[0])) ? "true" : "false",
+        target_fps, nvwsi_on ? "true" : "false",
         V23_MAP_SLOTS, gc->win_bufs, (unsigned)g_v23_probe.traps,
         src_e, id_e, name_e, idx, cur_sb ? cur_sb->entry_count : 1,
         cur_sb ? cur_sb->last_compile_ms : 0.0, fps, map_fps,
@@ -2160,14 +2166,23 @@ static int v23_run_gl_loop(int with_carplay_map) {
         fallback_active = 1;
     }
 
-    v23_write_status_json(fb_sb, gc, cur_source, fallback_active, cur_err, 60, with_carplay_map ? 20 : 0);
+    /* v23.8 帧率网格对齐：默认 30fps (33,333us)，将 V23_WIN_BUFFERS=4 的安全环深从 66.7ms 翻倍至 133.3ms，
+     * 彻底覆盖主屏 10208 整分唤醒 WFD_COMMIT_ENTIRE_DEVICE 的 70~100ms 阻塞窗，同时与 CarPlay 28~30fps 地图流 1:1 同步；
+     * 建 v23_rate60 时同步切换至 60fps (16,667us)。 */
+    int target_fps = (access("/mnt/app/eso/bin/apps/cluster/v23_rate60", F_OK) == 0 ||
+                      access("/tmp/v23_rate60", F_OK) == 0) ? 60 : 30;
+    uint64_t frame_us = (target_fps > 35) ? 16667ULL : 33333ULL;
+    uint32_t flip_min_swaps = (target_fps > 35) ? 2u : 1u;
+    uint64_t flip_min_us = (target_fps > 35) ? 30000ULL : 28000ULL;
+
+    v23_write_status_json(fb_sb, gc, cur_source, fallback_active, cur_err, target_fps, with_carplay_map ? 20 : 0);
 
     uint64_t t_start = v23_now_us(), t_prev = t_start;
     uint64_t last_hot_ms = 0, last_dash_ms = 0, last_fps_us = t_start, last_stat_ms = 0;
-    int fps_frames = 0, fps_map_frames = 0, meas_fps = 60, meas_map_fps = with_carplay_map ? 20 : 0;
+    int fps_frames = 0, fps_map_frames = 0, meas_fps = target_fps, meas_map_fps = with_carplay_map ? 20 : 0;
     uint32_t swaps_since_flip = 0;
     uint64_t last_flip_us = 0;
-    uint64_t next_frame_us = t_start + 16667ULL;
+    uint64_t next_frame_us = t_start + frame_us;
 
     while (!g_v23_stop) {
         if (access("/tmp/vwcn_user_native", F_OK) == 0) {
@@ -2310,7 +2325,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
             if (g_v23_map.has_fresh &&
                 (!gc->map_ever_flipped ||
                  !gc->map_zero_copy ||
-                 (swaps_since_flip >= 2u && (t_now - last_flip_us) >= 30000ULL))) {
+                 (swaps_since_flip >= flip_min_swaps && (t_now - last_flip_us) >= flip_min_us))) {
                 uint32_t seq = g_v23_map.seq;
                 int old_ret2          = g_v23_map.retired2_idx;
                 g_v23_map.retired2_idx = g_v23_map.retired1_idx;
@@ -2433,8 +2448,8 @@ static int v23_run_gl_loop(int with_carplay_map) {
             v23_sandbox_render_frame(fb_sb, &gc->cur_bus, NULL, NULL);
         }
 
-        /* 6. 叠画顶部安全提示横幅并按 16667us 单调绝对网格精准锁 60fps 送显
-         *    （4 缓冲下 libEGL 不阻塞 VSync，扣除 1000us QNX 1ms 时钟向上取整余量避免掉帧至 53fps，慢帧自动重对齐不飙帧） */
+        /* 6. 叠画顶部安全提示横幅并按单调绝对网格（默认 33333us=30fps，建 v23_rate60 为 16667us=60fps）送显
+         *    （4 缓冲下 libEGL 不阻塞 VSync，扣除 1000us QNX 1ms 时钟向上取整余量，慢帧自动重对齐不飙帧） */
         v23_draw_banner(gc, t_now);
         eglSwapBuffers(edpy, esurf);
         if (swaps_since_flip < 1000000u) swaps_since_flip++;
@@ -2443,10 +2458,10 @@ static int v23_run_gl_loop(int with_carplay_map) {
             if (t_after + 1100ULL < next_frame_us) {
                 usleep((useconds_t)(next_frame_us - t_after - 1000ULL));
             }
-            next_frame_us += 16667ULL;
+            next_frame_us += frame_us;
             t_after = v23_now_us();
-            if (next_frame_us < t_after || next_frame_us > t_after + 33334ULL) {
-                next_frame_us = t_after + 16667ULL;
+            if (next_frame_us < t_after || next_frame_us > t_after + frame_us * 2ULL) {
+                next_frame_us = t_after + frame_us;
             }
         }
 
