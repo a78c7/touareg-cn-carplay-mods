@@ -14,6 +14,8 @@ BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 AUDIT_SH="$BASE_DIR/VW_ShopAudit/Update/install.sh"
 TAKEOVER_SH="$BASE_DIR/VW_ShopTakeover/Update/install.sh"
 ROLLBACK_SH="$BASE_DIR/VW_ShopRollback/Update/install.sh"
+BYPASSA_SH="$BASE_DIR/VW_ShopBypassA/Update/install.sh"
+BYPASSA_RB_SH="$BASE_DIR/VW_ShopBypassARollback/Update/install.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -22,7 +24,7 @@ pass() { echo "PASS: $*"; }
 
 # 0) 语法与 QNX 6.6 工具禁令静态检查
 echo "=== [0] Static syntax & QNX 6.6 compatibility check ==="
-for f in "$AUDIT_SH" "$TAKEOVER_SH" "$ROLLBACK_SH"; do
+for f in "$AUDIT_SH" "$TAKEOVER_SH" "$ROLLBACK_SH" "$BYPASSA_SH" "$BYPASSA_RB_SH"; do
     sh -n "$f"
     if command -v ksh >/dev/null 2>&1; then
         ksh -n "$f"
@@ -315,5 +317,121 @@ grep -q "scripts/init_shop.sh" "$RPT" || fail "REPORT.txt missing /mnt/app/etc/s
 [ "$(cksum "$S8/app/eso/bin/apps/dio_manager")" = "$_pre_dio_crc" ] || fail "VW_ShopAudit modified dio_manager!"
 pass "VW_ShopAudit deep read-only audit + zero stderr + zero mutations verified"
 
+# ---- 构建逼真的 Issue #10/#17 变体 A 车机环境 ----
+setup_car_variant_a() {
+    _root="$1"
+    rm -rf "$_root"
+    mkdir -p "$_root/app/eso/bin/apps/cluster" \
+             "$_root/ota/modkit/Logs" \
+             "$_root/persist_new" \
+             "$_root/usb/Mods/VW_ShopBypassA/Update"
+    cat > "$_root/app/eso/bin/servicemgrmibhigh" <<'EOF'
+#!/bin/sh
+
+/eso/bin/servicemgrmibhigh0 &
+
+slay -9 challenge ; slay -9 challenge
+slay -9 sshd ; slay -9 sshd
+EOF
+    chmod 755 "$_root/app/eso/bin/servicemgrmibhigh"
+    cp "$_root/app/eso/bin/servicemgrmibhigh" "$_root/app/eso/bin/del"
+    mk_elf "$_root/app/eso/bin/servicemgrmibhigh0" 493952 "STOCKSM0"
+    mk_elf "$_root/app/eso/bin/apps/dio_manager" 958480 "STOCKDIO"
+    printf '#!/bin/ksh\necho persist\n' > "$_root/ota/modkit/modkit_persist.sh"
+    chmod 755 "$_root/ota/modkit/modkit_persist.sh"
+}
+
+# ---- 场景 9：变体 A 正常首次绕过 + wrapper 语法验证 ----
+echo "=== [9] Variant A normal first-time bypass (Issue #10/#17) ==="
+S9="$TMP/s9"
+setup_car_variant_a "$S9"
+ORIG_SM0_CRC=$(cksum "$S9/app/eso/bin/servicemgrmibhigh0")
+OUT9=$(RELEASE_VERSION="MH2p_CN_VWG36_P2838" \
+    MEDIA_PATH="$S9/usb" \
+    MOD_PATH="$S9/usb/Mods/VW_ShopBypassA/Update" \
+    BYPASS_APP_ROOT="$S9/app" \
+    BYPASS_OTA_ROOT="$S9/ota" \
+    BYPASS_PERSIST_ROOT="$S9/persist_new" \
+    BYPASS_SKIP_MOUNT=1 \
+    sh "$BYPASSA_SH")
+echo "$OUT9" | grep -q "VW_ShopBypassA done" || fail "Variant A bypass did not complete"
+[ -f "$S9/usb/ShopBackupA/orig/MANIFEST.txt" ] || fail "ShopBackupA MANIFEST missing"
+[ -f "$S9/app/eso/bin/servicemgrmibhigh0.real" ] || fail "servicemgrmibhigh0.real missing"
+[ "$(cksum "$S9/app/eso/bin/servicemgrmibhigh0.real" | awk '{print $1":"$2}')" = "$(printf '%s\n' "$ORIG_SM0_CRC" | awk '{print $1":"$2}')" ] || fail "servicemgrmibhigh0.real checksum mismatch"
+grep -q "VW_ShopBypassA" "$S9/app/eso/bin/servicemgrmibhigh0" || fail "wrapper not installed at servicemgrmibhigh0"
+sh -n "$S9/app/eso/bin/servicemgrmibhigh0" || fail "generated wrapper failed sh -n"
+if command -v ksh >/dev/null 2>&1; then
+    ksh -n "$S9/app/eso/bin/servicemgrmibhigh0" || fail "generated wrapper failed ksh -n"
+fi
+if run_upstream_modkit_tail "$S9/app" "$S9/ota" >/dev/null 2>&1; then
+    fail "modkit_install.sh should report expected unknown patch state after Variant A wrapper!"
+fi
+pass "Variant A first-time bypass + ELF backup + wrapper syntax verified"
+
+# ---- 场景 10：变体 A 幂等重跑 ----
+echo "=== [10] Variant A idempotent re-run ==="
+OUT10=$(RELEASE_VERSION="MH2p_CN_VWG36_P2838" \
+    MEDIA_PATH="$S9/usb" \
+    MOD_PATH="$S9/usb/Mods/VW_ShopBypassA/Update" \
+    BYPASS_APP_ROOT="$S9/app" \
+    BYPASS_OTA_ROOT="$S9/ota" \
+    BYPASS_PERSIST_ROOT="$S9/persist_new" \
+    BYPASS_SKIP_MOUNT=1 \
+    sh "$BYPASSA_SH")
+echo "$OUT10" | grep -q "already bypassed" || fail "Variant A idempotency failed"
+pass "Variant A idempotent re-run"
+
+# ---- 场景 11：变体 B 车机误刷变体 A 绕过包（严格拦截零改动） ----
+echo "=== [11] Reject VW_ShopBypassA on Variant B car ==="
+S11="$TMP/s11"
+setup_car "$S11"
+mkdir -p "$S11/usb/Mods/VW_ShopBypassA/Update"
+rm -rf "$S11/usb/Mods/VW_ShopTakeover"
+OUT11=$(RELEASE_VERSION="MH2p_CN_VWG36_P2838" \
+    MEDIA_PATH="$S11/usb" \
+    MOD_PATH="$S11/usb/Mods/VW_ShopBypassA/Update" \
+    BYPASS_APP_ROOT="$S11/app" \
+    BYPASS_OTA_ROOT="$S11/ota" \
+    BYPASS_PERSIST_ROOT="$S11/persist_new" \
+    BYPASS_SKIP_MOUNT=1 \
+    sh "$BYPASSA_SH")
+echo "$OUT11" | grep -q "Variant B files" || fail "Variant B rejection guard failed"
+[ ! -e "$S11/app/eso/bin/servicemgrmibhigh0.real" ] || fail "Variant B car modified despite guard!"
+pass "Variant B car safely rejected by VW_ShopBypassA"
+
+# ---- 场景 12：变体 A 绕过包与回滚包同放防呆 ----
+echo "=== [12] Guard against placing VW_ShopBypassA and VW_ShopBypassARollback together ==="
+S12="$TMP/s12"
+setup_car_variant_a "$S12"
+mkdir -p "$S12/usb/Mods/VW_ShopBypassARollback/Update"
+OUT12=$(RELEASE_VERSION="MH2p_CN_VWG36_P2838" \
+    MEDIA_PATH="$S12/usb" \
+    MOD_PATH="$S12/usb/Mods/VW_ShopBypassA/Update" \
+    BYPASS_APP_ROOT="$S12/app" \
+    BYPASS_OTA_ROOT="$S12/ota" \
+    BYPASS_PERSIST_ROOT="$S12/persist_new" \
+    BYPASS_SKIP_MOUNT=1 \
+    sh "$BYPASSA_SH")
+echo "$OUT12" | grep -q "DO NOT place VW_ShopBypassA and VW_ShopBypassARollback" || fail "Variant A dual-mod guard failed"
+[ ! -e "$S12/app/eso/bin/servicemgrmibhigh0.real" ] || fail "car modified despite dual-mod guard!"
+pass "Variant A dual-mod conflict guard"
+
+# ---- 场景 13：变体 A 一键回滚 + 恢复标准 U 盘刷机兼容性 ----
+echo "=== [13] Variant A one-click rollback & unlock ModKit USB flashing ==="
+rm -rf "$S9/usb/Mods/VW_ShopBypassA"
+mkdir -p "$S9/usb/Mods/VW_ShopBypassARollback/Update"
+OUT13=$(RELEASE_VERSION="MH2p_CN_VWG36_P2838" \
+    MEDIA_PATH="$S9/usb" \
+    MOD_PATH="$S9/usb/Mods/VW_ShopBypassARollback/Update" \
+    BYPASS_APP_ROOT="$S9/app" \
+    BYPASS_SKIP_MOUNT=1 \
+    sh "$BYPASSA_RB_SH")
+echo "$OUT13" | grep -q "VW_ShopBypassARollback done" || fail "Variant A rollback did not complete"
+[ ! -e "$S9/app/eso/bin/servicemgrmibhigh0.real" ] || fail "servicemgrmibhigh0.real not cleaned up"
+[ "$(cksum "$S9/app/eso/bin/servicemgrmibhigh0" | awk '{print $1":"$2}')" = "$(printf '%s\n' "$ORIG_SM0_CRC" | awk '{print $1":"$2}')" ] || fail "restored servicemgrmibhigh0 mismatch"
+TAIL13=$(run_upstream_modkit_tail "$S9/app" "$S9/ota")
+echo "$TAIL13" | grep -q "setup ModKit persistence" || fail "ModKit tail should succeed again after Variant A rollback!"
+pass "Variant A rollback + ModKit USB flashing unlocked verified"
+
 echo ""
-echo "ALL 8 SANDBOX SCENARIOS PASSED!"
+echo "ALL 13 SANDBOX SCENARIOS PASSED!"
