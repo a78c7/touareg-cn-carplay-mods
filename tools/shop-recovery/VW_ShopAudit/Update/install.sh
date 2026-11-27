@@ -9,7 +9,7 @@
 #    authorized_keys 仅输出算法、尾 8 位与注释；不复制大众原厂二进制或完整 viewhandler.zip。
 # 4. 仅依赖 QNX 6.6 RAM disk 原生工具（ksh / dd / awk / ls / mkdir / cp / rm / sync），不用 wc/find/stat/sed -i。
 
-echo "=== VW_ShopAudit (read-only) ==="
+echo "=== VW_ShopAudit v4 (read-only) ==="
 
 # 允许本地沙盒测试通过环境变量重定向路径（真车默认标准分区路径）
 _APP="${AUDIT_APP_ROOT:-/mnt/app}"
@@ -17,6 +17,8 @@ _OTA="${AUDIT_OTA_ROOT:-/mnt/ota}"
 _SYS="${AUDIT_SYSTEM_ROOT:-/mnt/system}"
 _PERSIST="${AUDIT_PERSIST_ROOT:-/mnt/persist_new}"
 _CRASH="${AUDIT_CRASH_ROOT:-/mnt/crashlogs}"
+_MISC="${AUDIT_MISC_ROOT:-/mnt/misc1}"
+_SWUP="${AUDIT_SWUP_ROOT:-/mnt/swup}"
 _SKIP_MOUNT="${AUDIT_SKIP_MOUNT:-0}"
 
 # 1) 定位 U 盘根目录并确认可写
@@ -218,7 +220,7 @@ scan_dir_keywords() {
             line = $0
             sub(/\r$/, "", line)
             low = tolower(line)
-            if (low ~ /servicemgrmibhigh|challenge|sshd|authorized_keys|\/eso\/bin\/del|\/mnt\/app\/eso\/bin\/shadow|crontab|slay[ \t]+-9|sleep[ \t]+(60|90|100|120|150|180|240|300)|mount[ \t]+-uw|autorunner|\/eso\/hmi\/lsd\/\.j/) {
+            if (low ~ /servicemgrmibhigh|challenge|sshd|authorized_keys|\/eso\/bin\/del|\/eso\/bin\/shadow|\/mnt\/app\/eso\/bin\/shadow|cp[ \t]+.*(del|shadow|servicemgrmibhigh)|crontab|slay[ \t]+-9|sleep[ \t]+(60|90|100|120|150|180|240|300)|mount[ \t]+-uw|autorunner|\/eso\/hmi\/lsd\/\.j/) {
                 hits++
                 if (hits == 1) printf "[HIT] %s\n", fn
                 if (hits <= 15) {
@@ -504,17 +506,9 @@ F4="$OUT/04_carplay_cluster_fs.txt"
     fi
 
     echo ""
-    echo "-- $_APP/eso/hmi/lsd/jars (VW* / custom jars & total count) --"
+    echo "-- $_APP/eso/hmi/lsd/jars (full ls -la) --"
     if [ -d "$_APP/eso/hmi/lsd/jars" ]; then
-        ls -l "$_APP/eso/hmi/lsd/jars" 2>/dev/null | awk '
-        BEGIN { total = 0 }
-        /^-/ {
-            total++
-            low = tolower($0)
-            if (low ~ /vw|cluster|popup|carplay|aafix|mod|patch/) print "  " $0
-        }
-        END { printf "total jar files: %d\n", total }
-        '
+        ls -la "$_APP/eso/hmi/lsd/jars" 2>/dev/null || true
     else
         echo "(jars dir not found)"
     fi
@@ -711,20 +705,28 @@ F2="$OUT/02_restore_hunt.txt"
         "$_APP/eso/bin" \
         "$_APP/eso/bin/apps" \
         "$_APP/eso/hmi/lsd" \
+        "$_APP/eso/hmi/lsd/config" \
         "$_APP/eso/config/production" \
         "$_APP/root" \
         "$_APP/etc" \
+        "$_APP/etc/scripts" \
         "$_APP/etc/rc.d" \
         "$_APP/armle/etc" \
+        "$_SYS" \
         "$_SYS/etc" \
+        "$_SYS/etc/autorunner" \
+        "$_SYS/etc/config" \
         "$_SYS/etc/eso" \
         "$_SYS/etc/eso/production" \
         "$_OTA" \
+        "$_OTA/.boot" \
         "$_OTA/app" \
         "$_OTA/app/.pers" \
         "$_OTA/system" \
         "$_OTA/ot" \
-        "$_OTA/modkit"
+        "$_OTA/modkit" \
+        "$_PERSIST" \
+        "$_MISC"
     do
         scan_dir_keywords "$_scan_d"
     done
@@ -732,12 +734,75 @@ F2="$OUT/02_restore_hunt.txt"
         [ -d "$_ota_sub" ] || continue
         scan_dir_keywords "$_ota_sub"
     done
+
     echo ""
-    echo "-- $_SYS/etc, $_SYS/etc/eso/production, $_APP/etc, $_APP/eso/config/production listing (ls -la) --"
-    for _ld in "$_SYS/etc" "$_SYS/etc/eso/production" "$_APP/etc" "$_APP/eso/config/production"; do
+    echo "-- v4 Deep Hunt: autorunner, /mnt/app/etc/scripts, /mnt/system, /mnt/ota/.boot, /mnt/persist_new, /mnt/misc1, /mnt/app top-level --"
+    for _ld in \
+        "$_SYS/etc/autorunner" \
+        "$_APP/etc/scripts" \
+        "$_SYS" \
+        "$_SYS/etc" \
+        "$_SYS/etc/config" \
+        "$_SYS/etc/db" \
+        "$_SYS/etc/eso" \
+        "$_SYS/etc/eso/production" \
+        "$_APP" \
+        "$_APP/etc" \
+        "$_APP/eso/config/production" \
+        "$_APP/eso/hmi/lsd/config" \
+        "$_OTA/.boot" \
+        "$_PERSIST" \
+        "$_MISC" \
+        "$_SWUP"
+    do
         echo "[$_ld]"
         [ -d "$_ld" ] && ls -la "$_ld" 2>/dev/null || echo "  (absent)"
     done
+
+    echo ""
+    echo "-- v4 Sanitized text dump of $_SYS/etc/autorunner/* & $_APP/etc/scripts/* (<= 32KB non-ELF) --"
+    for _dd in "$_SYS/etc/autorunner" "$_APP/etc/scripts" "$_OTA/.boot"; do
+        [ -d "$_dd" ] || continue
+        _dcands=$(ls -la "$_dd" 2>/dev/null | awk '
+        /^-/ {
+            sz = $5 + 0
+            if (sz <= 0 || sz > 32768) next
+            name = $NF
+            if (name == "." || name == "..") next
+            low = tolower(name)
+            if (low ~ /\.(so|jar|jxe|zip|gz|tar|bin|core|elf|db|sqlite|crt|der|pem|key|p12)$/) next
+            if (low ~ /(id_rsa|id_ed25519|_key|wpa\.conf|web\.pin|shadow|passwd|secret)/) next
+            print name
+        }')
+        for _fn in $_dcands; do
+            _fp="$_dd/$_fn"
+            [ -f "$_fp" ] || continue
+            if is_elf "$_fp"; then
+                echo "[ELF] $_fp ($(file_size_bytes "$_fp") B)"
+            else
+                echo "[FILE] $_fp ($(file_size_bytes "$_fp") B)"
+                dump_sanitized "$_fp" 60
+            fi
+        done
+    done
+
+    echo ""
+    echo "-- v4 Fast non-2020/2019/2018 file scan in $_APP/{bin,sbin,usr/bin,armle/bin,armle/sbin,armle/etc,armle/usr/bin} --"
+    for _bd in "$_APP/bin" "$_APP/sbin" "$_APP/usr/bin" "$_APP/armle/bin" "$_APP/armle/sbin" "$_APP/armle/etc" "$_APP/armle/usr/bin"; do
+        [ -d "$_bd" ] || continue
+        _odd=$(ls -la "$_bd" 2>/dev/null | awk '
+        /^-/ {
+            # QNX ls -la 列 8 为年份（如 2020）或 HH:MM（如 00:04 表示当年/开机时钟）
+            if ($8 != "2020" && $8 != "2019" && $8 != "2018" && $8 != "2017") {
+                print "  " $0
+            }
+        }')
+        if [ -n "$_odd" ]; then
+            echo "[$_bd]"
+            printf '%s\n' "$_odd"
+        fi
+    done
+
     for _app_sub in "$_APP/eso/bin/apps"/*; do
         [ -d "$_app_sub" ] || continue
         _an="${_app_sub##*/}"
