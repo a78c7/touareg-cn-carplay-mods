@@ -29,6 +29,7 @@ MH2p（MIB2+ High）是大众集团多个品牌共用的车机平台。据 [MH2p
 | [05 全屏 CarPlay 与 U 盘包](05-全屏CarPlay与U盘包.md) | 在车上就地打补丁（不分发大众文件）、「改装设置」程序 |
 | [06 给其他车型的建议](06-给其他车型的建议.md) | 换一台 MH2p 车（大众、奥迪、保时捷、宾利、兰博基尼），先查哪些东西、哪些能复用 |
 | [07 无线控制台与 SSH 开发](07-无线控制台与SSH开发.md) | 利用闲置 `bcm2` 连手机个人热点、避开开机 `io-pkt` 冲突、iOS 弯撇号与休眠兼容、Ed25519 主机密钥、`touareg.local` 与 `8080` 手机网页控制台 |
+| [08 全屏百度 CarLife 增强](08-全屏百度CarLife增强.md) | 15 寸点对点满屏（`1664×736@20fps`）、2016 原厂 SDK 防崩护盾、挡风 HUD 转向箭头与拔线 1 秒自动清 HUD、`bt_audio_lock` 蓝牙防抢焦点及与 CarPlay 共存边界 |
 
 ### 平台参考（按系统整理，查资料用）
 
@@ -76,6 +77,7 @@ Development notes (Chinese) from building these mods on a 2023 China-market impo
 - **Building without dumping the head unit**: compile-only stubs generated from the constant pool of an already-published plugin jar; rebuilt classes are byte-identical.
 - **Full-screen CarPlay** patched on the car (38 bytes in two entries of `skin3/viewhandler.zip`), so no VW file is distributed.
 - **Wireless console & SSH over phone hotspot (`bcm2`)**: `wpa_supplicant -D qwdi` on the idle `bcm2` STA interface (`dhcp.client -n -R` so stock `ecm0` telematics is untouched), delayed startup to avoid early `io-pkt` crashes, per-car Ed25519 keys, and `touareg_netd` serving `touareg.local` mDNS + PIN-protected HTTP console on `<bcm2_ip>:8080`.
+- **Full-screen wired Baidu CarLife enhancement (`docs/08`)**: in-place 19-byte `Cm_429C.jxe` + `skin3/info.txt` (`1673×748`) patch via `vhpatch_carlife`, plus `carlife_probe.so` (`LD_PRELOAD` scoped strictly to the `"carlife"` block) providing `1664×736@20fps` resolution/FPS negotiation, a `readCmdData` crash shield for modern CarLife+, HUD turn-by-turn projection with 1s `SIGKILL`-resilient auto-clear, and optional `bt_audio_lock` to keep Bluetooth media focus intact (100% independent from CarPlay; wired USB only, single-stream protocol).
 
 A system-organized platform reference (partitions, processes, HMI plug-in loading, datapool / BAP numbers, DSI vehicle-data tables with measured units and invalid values, display / displayable ids, libairplay hooks, iAP2 route-guidance fields) is in [`reference/`](reference/README.md). No VW files, nothing about bypassing any protection (component protection, feature activation, signatures).
 

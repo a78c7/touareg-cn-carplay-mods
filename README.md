@@ -8,10 +8,10 @@
 
 # 途锐 CarPlay 仪表改装包
 
-单 U 盘免拆免升系统，解锁途锐无线 / 全屏 CarPlay、抬头显示导航、液晶仪表大地图与行车数据，并支持手机无线设置和升级。
+单 U 盘免拆免升系统，解锁途锐无线 / 全屏 CarPlay、全屏百度 CarLife 增强、抬头显示导航、液晶仪表大地图与行车数据，并支持手机无线设置和升级。
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>下载 v23.7</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>下载 v24.0</b></a> ·
   <a href="#能实现哪些功能">功能清单</a> ·
   <a href="#4-步免拆安装">4 步安装</a> ·
   <a href="#适用车型与安装前须知">能不能装</a> ·
@@ -60,6 +60,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 | **中控与投屏** | **全屏 CarPlay** | 去掉原车中控屏两侧黑边，画面铺满 15 寸大屏（`P2878` 精确表已实测，`P2838`/`P2853`/`P9832` 等其余国行 15 寸 `P` 版自动指纹适配，不匹配时安全跳过） | 国行途锐 P 版 |
 | | **无线 CarPlay** | 解锁原车隐藏的无线 CarPlay，上车免插线自动连 | MH2p 通用 |
 | | **Android Auto** | 解锁原车隐藏的安卓投屏（中规改款前原厂未开放，按需勾选） | MH2p 通用 |
+| | **全屏百度 CarLife 增强** | 15 寸点对点满屏（`1664×736@20fps`）、现代 CarLife+ 防崩护盾、屏蔽仪表激活弹窗、可选蓝牙听歌防抢焦点，配合「导航上 HUD」解锁挡风 HUD 转向箭头与拔线 1 秒自动清 HUD；与 CarPlay 100% 独立共存（默认关闭按需勾选；仅支持有线，原厂无线 CarLife 为空壳，且协议仅单路视频不支持仪表第二屏地图） | 国行途锐 P 版 |
 | **抬头与仪表** | **导航上 HUD** | 苹果 / 高德 / 百度地图的转向箭头、距离、路名和车道直投前风挡抬头显示（需原车带 HUD，有线/无线都支持） | 国行途锐 P 版 |
 | | **仪表大地图 + 行车数据框** | CarPlay 地图直接显示在 12 寸液晶仪表中间（高德自动居中、方向盘可缩放）；左右对称大字显示 51 项真实车况（含氛围灯主题色、无功率/扭矩自动替补防死 0）与路口导航卡，并支持 60fps 自定义仪表皮肤 | 国行途锐 P 版 |
 | | **方向盘 `OK` 键切原车地图** | 地图页双击右侧 `OK` 键秒切 CarPlay 与原车地图；同时启用自定义皮肤时三连击 `OK` 切皮肤（不装本项则默认双击 `OK` 零延迟切皮肤） | 国行途锐 P 版 |
@@ -75,6 +76,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 | 车主需求 | 推荐勾选 | 说明 |
 | :--- | :--- | :--- |
 | **大多数途锐车主** | 直接点一键预设 **「驾驶推荐全套」**（全屏 + 无线 CarPlay + HUD + 仪表地图 + OK 双击切地图）；习惯用 Siri 可补勾「语音键短按唤 Siri」 | 兼顾导航体验，随时切回原车地图 |
+| **安卓用户（有线百度 CarLife）** | 单独勾选 **「全屏百度 CarLife 增强」**（默认关闭）；如需挡风 HUD 导航箭头同时勾「导航上 HUD」 | 与 CarPlay 100% 独立共存；仅支持有线，协议单路视频不支持仪表第二屏地图 |
 | **想手机调仪表、后续免拔盘升级** | 在上面基础上补勾 **「手机无线控制台」**（普通车主不用勾 SSH） | 后续改信息框、切皮肤、无线升级全在手机浏览器搞定 |
 | **被烦人弹窗困扰** | 按车上实际出现的弹窗补勾「去除输入用户名弹窗」或「屏蔽 SIM 提示」 | 两项独立生效，互不冲突 |
 | **老固件升 P2878 连不上无线** | 补勾「老固件升 P2878 无线 CarPlay 5GHz 区域修复」 | 出厂即为 `P2878` 且开启无线 CarPlay 后连接正常的车辆无需勾选 |
@@ -113,7 +115,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
    ├── Data/                          ← 必须直接放在 U 盘第一层
    ├── Meta/                          ← 必须直接放在 U 盘第一层
    ├── Mods/                          ← 默认为空，由「改装设置」自动移入已选模块
-   ├── 未选模块/                       ← 存放全部 12 个模块目录（11 项功能中 HUD 拆为 2 步）
+   ├── 未选模块/                       ← 存放全部 13 个模块目录（12 项功能中 HUD 拆为 2 步）
    └── 改装设置（Windows）.exe / （Mac）.command
    ```
 3. **运行「改装设置」勾选并保存（必做）**：双击 U 盘里的 **`改装设置（Windows）.exe`** 或 **`改装设置（Mac）.command`**（不运行直接插车不会安装任何功能）：
@@ -124,7 +126,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 > [!NOTE]
 > - **首次打开提示未签名**：桌面配置器未购商业签名，Windows 点「更多信息 → 仍要运行」，Mac 在「系统设置 → 隐私与安全性」点「仍要打开」；程序由 GitHub Actions 从 [`tools/configurator`](tools/configurator) 源码自动构建并附 `SHA256SUMS.txt`，仅本机 `127.0.0.1` 运行、绝不联网。
 > - **装完看不到左右信息框或被圆盘盖住**：按方向盘右侧左右翻页键切到仪表「导航」页，再按一下 **`VIEW` 键**收起两侧原厂圆表盘即可完整显示（若习惯保留双圆表盘，可在车机仪表组合设置里将两侧圆盘内显选为空白避免遮挡）。
-> - **老版本升级提醒**：`v22.01` 及更早版本升级到 `v22.1` / `v23.7` 需先用 U 盘覆盖刷入一次（自动保留原有配置与管理口令；早期未设口令的首次开机将在仪表屏自动显示 6 位随机口令，手机登录后永久隐藏），之后即可继续手机无线升级。
+> - **老版本升级提醒**：`v22.01` 及更早版本升级到 `v22.1` / `v24.0` 需先用 U 盘覆盖刷入一次（自动保留原有配置与管理口令；早期未设口令的首次开机将在仪表屏自动显示 6 位随机口令，手机登录后永久隐藏），之后即可继续手机无线升级。
 > - **首次刷完仍有黑边**：在 iPhone 蓝牙/CarPlay 设置中「忘记此车辆」重连一次即可。
 
 ---
@@ -201,7 +203,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 4. `/mnt/app` 默认只读：改文件前先 `mount -uw /mnt/app` 并备份原文件，用 `.new` 写完原子 `mv` 替换后立刻 `sync && mount -ur /mnt/app` 恢复只读；改完仪表配置执行 `slay -f cl_render` 秒级刷新（无需重启车机）。
 5. 渲染架构与帧率护栏（极重要）：
    - `cl_render` 的 `capture=h264` 地图模式走 NVDEC 硬解 + `screen_blit`，`dash.c` 是 CPU 软渲两侧 295×308 小框（开启 `smooth=1` 即可流畅显示数字与运动条）；严禁在 `dash.c` 里用 CPU 循环做 1920×639 全屏复杂动画，必然掉帧发卡！
-   - 若要开发全屏 60fps 动效仪表、指针、粒子或同屏 CarPlay 地图自定义主题，优先使用 `v23.0` / `v23.7` 正式的 `src/cl_render/v23_gles.c`（`v23_mode`，QuickJS + OpenGL ES 2.0 + 独立 `own_ctx` + 5 槽纯 `OPENGL_ES2` 硬件零拷贝 60 fps 单画布引擎）；纯独立 C 试验通道为 `src/cl_render/gles60.c`（`capture=gles60`，窗口 `58`，`eglSwapInterval(dpy, 1)`，通过 `eglGetProcAddress` 动态解析 `gl*` 函数，绝不直接链接 `-lGLESv2`）。
+   - 若要开发全屏 60fps 动效仪表、指针、粒子或同屏 CarPlay 地图自定义主题，优先使用 `v23.0` / `v24.0` 正式的 `src/cl_render/v23_gles.c`（`v23_mode`，QuickJS + OpenGL ES 2.0 + 独立 `own_ctx` + 5 槽纯 `OPENGL_ES2` 硬件零拷贝 60 fps 单画布引擎）；纯独立 C 试验通道为 `src/cl_render/gles60.c`（`capture=gles60`，窗口 `58`，`eglSwapInterval(dpy, 1)`，通过 `eglGetProcAddress` 动态解析 `gl*` 函数，绝不直接链接 `-lGLESv2`）。
    - 车机已启用 3 次崩溃安全模式熔断（`/mnt/app/eso/bin/apps/cluster/safe_mode` 或 `/tmp/vw_*_safe_mode`），改动前请先用电脑端 `tools/preview/index.html` 本地验证。
 6. 完整接口表与开发界限见公开仓库：https://github.com/a78c7/touareg-cn-carplay-mods/tree/main/docs
 
@@ -212,9 +214,9 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 
 完整笔记见 **[`docs/`](docs/README.md)**（每条结论均标注 **【途锐特有】** 或 **【MH2p 通用】**，适用于同平台大众途锐、奥迪、保时捷 PCM 5、宾利、兰博基尼 LIS III）：
 
-| 开发实战记录（[`docs/01~07`](docs/README.md)） | MH2p 平台参考（[`docs/reference/`](docs/reference/README.md)） | 核心源码目录（[`src/` & `tools/`](src)） |
+| 开发实战记录（[`docs/01~08`](docs/README.md)） | MH2p 平台参考（[`docs/reference/`](docs/reference/README.md)） | 核心源码目录（[`src/` & `tools/`](src)） |
 | :--- | :--- | :--- |
-| • [01 调试环境与工具](docs/01-调试环境与工具.md)<br>• [02 CarPlay 导航上 HUD](docs/02-CarPlay导航上HUD.md)<br>• [03 CarPlay 地图上仪表](docs/03-CarPlay地图上仪表.md)<br>• [04 仪表信息框与行车记录](docs/04-仪表信息框.md)<br>• [05 全屏补丁与 U 盘包](docs/05-全屏CarPlay与U盘包.md)<br>• [06 给其他车型的建议](docs/06-给其他车型的建议.md)<br>• [07 无线控制台与 SSH 开发](docs/07-无线控制台与SSH开发.md) | • [R1 系统结构与防火墙](docs/reference/R1-系统结构与文件位置.md)<br>• [R2 HMI（J9 Java 与 BAP）](docs/reference/R2-HMI-J9-Java.md)<br>• [R3 DSI 车辆数据实测表](docs/reference/R3-车辆数据接口.md)<br>• [R4 显示屏编号与 dmdt](docs/reference/R4-显示系统.md)<br>• [R5 CarPlay / iAP2 双栈](docs/reference/R5-CarPlay与iAP2.md)<br>• [仪表 1920×639 几何规范](docs/reference/CLUSTER_LAYOUT_SPEC.md) | • [`src/hud-java`](src/hud-java)：HMI 插件与 51 项遥测<br>• [`src/popup-filter-java`](src/popup-filter-java)：共享 Bundle 98 弹窗过滤<br>• [`src/cluster-probe`](src/cluster-probe)：双屏解密与有线 Cinemo 钩子<br>• [`src/clusterd`](src/clusterd)：仪表切屏与安全区守护<br>• [`src/cl_render`](src/cl_render)：H.264 硬解、信息框与 GLES2/QuickJS<br>• [`src/vhpatch`](src/vhpatch)：全屏 CarPlay 就地补丁器<br>• [`src/touareg_netd`](src/touareg_netd)：mDNS、8080 控制台与签名 OTA<br>• [`tools/configurator`](tools/configurator)：跨平台本地「改装设置」 |
+| • [01 调试环境与工具](docs/01-调试环境与工具.md)<br>• [02 CarPlay 导航上 HUD](docs/02-CarPlay导航上HUD.md)<br>• [03 CarPlay 地图上仪表](docs/03-CarPlay地图上仪表.md)<br>• [04 仪表信息框与行车记录](docs/04-仪表信息框.md)<br>• [05 全屏补丁与 U 盘包](docs/05-全屏CarPlay与U盘包.md)<br>• [06 给其他车型的建议](docs/06-给其他车型的建议.md)<br>• [07 无线控制台与 SSH 开发](docs/07-无线控制台与SSH开发.md)<br>• [08 全屏百度 CarLife 增强](docs/08-全屏百度CarLife增强.md) | • [R1 系统结构与防火墙](docs/reference/R1-系统结构与文件位置.md)<br>• [R2 HMI（J9 Java 与 BAP）](docs/reference/R2-HMI-J9-Java.md)<br>• [R3 DSI 车辆数据实测表](docs/reference/R3-车辆数据接口.md)<br>• [R4 显示屏编号与 dmdt](docs/reference/R4-显示系统.md)<br>• [R5 CarPlay / iAP2 双栈](docs/reference/R5-CarPlay与iAP2.md)<br>• [仪表 1920×639 几何规范](docs/reference/CLUSTER_LAYOUT_SPEC.md) | • [`src/hud-java`](src/hud-java)：HMI 插件与 51 项遥测<br>• [`src/popup-filter-java`](src/popup-filter-java)：共享 Bundle 98 弹窗过滤<br>• [`src/cluster-probe`](src/cluster-probe)：双屏解密与有线 Cinemo 钩子<br>• [`src/clusterd`](src/clusterd)：仪表切屏与安全区守护<br>• [`src/cl_render`](src/cl_render)：H.264 硬解、信息框与 GLES2/QuickJS<br>• [`src/vhpatch`](src/vhpatch)：全屏 CarPlay 就地补丁器<br>• [`src/carlife`](src/carlife)：全屏百度 CarLife 探针与补丁器<br>• [`src/touareg_netd`](src/touareg_netd)：mDNS、8080 控制台与签名 OTA<br>• [`tools/configurator`](tools/configurator)：跨平台本地「改装设置」 |
 
 </details>
 
@@ -227,7 +229,7 @@ https://github.com/user-attachments/assets/618e8fe2-e579-4aed-b9de-ab50b8576374
 - **商标声明**：`Volkswagen` 与 `Touareg` 为 Volkswagen AG 注册商标；`CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.`
 
 ### 开源协议边界（零冲突统一口径）
-- **独立原创组件**：`src/hud-java`、`src/popup-filter-java`、`src/cluster-probe`（含独立重写的 `wired/cl_wired*.c`）、`src/clusterd`、`src/touareg_netd`、`src/vhpatch`、`src/common`、`tools/` 及全部 `VW_*` 脚本遵循 **[PolyForm Noncommercial 1.0.0](LICENSE) + [非商业附加条款](LICENSE.ADDITIONAL-TERMS.md)**（不含大众/苹果原厂文件；严禁商用、转售、付费代刷或商业捆绑）；`docs/` 文档文字采用 **CC BY-SA 4.0**。
+- **独立原创组件**：`src/hud-java`、`src/popup-filter-java`、`src/cluster-probe`（含独立重写的 `wired/cl_wired*.c`）、`src/clusterd`、`src/touareg_netd`、`src/vhpatch`、`src/carlife`、`src/common`、`tools/` 及全部 `VW_*` 脚本遵循 **[PolyForm Noncommercial 1.0.0](LICENSE) + [非商业附加条款](LICENSE.ADDITIONAL-TERMS.md)**（不含大众/苹果原厂文件；严禁商用、转售、付费代刷或商业捆绑）；`docs/` 文档文字采用 **CC BY-SA 4.0**。
 - **改编与第三方组件**：基于 `fifthBro/mh2p-cluster` 改编的 `src/cl_render/` 整体代码及其编译产物 `cl_render`（**不叠加附加条款**；其内嵌 `quickjs/` 遵循 MIT、`dash_font.h` 遵循 SIL OFL 1.1、`stb_truetype.h` 遵循 Public Domain / MIT）、以及 `dio_cluster.so`、ModKit 及可选 LawPaul 模块遵循 **[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)**（同样严禁商用）。完整署名与全部第三方许可见 **[THIRD_PARTY_NOTICES.md](LICENSES/THIRD_PARTY_NOTICES.md)**。
 
 ### 社区引用与致谢

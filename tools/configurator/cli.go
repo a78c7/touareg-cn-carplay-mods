@@ -261,7 +261,7 @@ func printCLIUsage(w io.Writer) {
   --json                 以 JSON 格式输出结果
 
 可用功能 ID：
-  fullscreen, carplay, aa, hud, cluster, mapswitch, siri, wifi5gfix, nobtauth, nosimpopup, wifi
+  fullscreen, carplay, aa, carlife, hud, cluster, mapswitch, siri, wifi5gfix, nobtauth, nosimpopup, wifi
 `, version)
 }
 

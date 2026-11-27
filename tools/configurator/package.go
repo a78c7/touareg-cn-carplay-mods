@@ -27,6 +27,7 @@ var features = []feature{
 	{"fullscreen", "全屏 CarPlay", "去掉黑边，CarPlay 铺满整个中控屏（仅改款前 15 英寸 Discover Premium / MH2p，不含 9.2 英寸领航版及 2024+ MIB3 / 中规 2025–2026 Asterix 改款）", []string{"VW_FullScreenCarPlay"}},
 	{"carplay", "无线 CarPlay", "开启原厂未激活的无线 CarPlay（LawPaul 作品）", []string{"AppleCarPlay"}},
 	{"aa", "Android Auto", "开启原厂未激活的 Android Auto，安卓手机投屏（2019–2023 中规改款前原厂不含 AA，按需解锁；LawPaul 作品）", []string{"AndroidAuto"}},
+	{"carlife", "全屏百度 CarLife 增强", "去掉黑边点对点 15 寸满屏（1664×736@20fps）+ 现代 CarLife+ 防崩护盾 + 屏蔽仪表激活弹窗 + 支持蓝牙听歌防抢焦点，与 CarPlay 100% 独立共存；勾选「导航上 HUD」后同步解锁挡风玻璃 HUD 转向箭头（仅改款前 15 寸国行 MH2p P 版）", []string{"VW_FullScreenCarLife"}},
 	{"hud", "导航上 HUD", "CarPlay 导航的转向箭头、到路口距离、路名、车道显示在平视显示器（HUD）上（需实车配备 HUD；无 HUD 车型如领航版不投射风挡）", []string{"VW_HUD_1_RouteGuidance", "VW_HUD_2_ClusterNav"}},
 	{"cluster", "仪表地图 + 大字运动信息框", "手机导航地图投屏到 12 英寸全液晶仪表（数字驾驶舱）中央，左右两侧自由定制 51 项真实行车数据（大号粗体 + 运动刻度条 + 氛围灯主题色）与大字导航卡；不含 9.2 英寸指针仪表领航版，需配合「导航上 HUD」", []string{"VW_HUD_3_CarPlayCluster"}},
 	{"mapswitch", "方向盘 OK 双击切换 CarPlay / 原车地图", "方向盘右侧 OK 键双击（480 ms 判定窗）在 CarPlay 导航地图与原车自带地图之间来回切换（装本模块后，v23 多皮肤切换顺延为三连击 OK；2019–2020 为实体键、2021–2023 为触控键）；需配合「导航上 HUD」与「仪表地图 + 大字运动信息框」", []string{"VW_HUD_4_OkMapSwitch"}},

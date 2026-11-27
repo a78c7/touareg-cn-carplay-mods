@@ -321,7 +321,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:22px;line-height:1.7}
 
   <footer>
     <b>开源免费与非官方关联声明</b>：本项目为独立开源社区技术研究，与大众汽车（Volkswagen）、Apple、Google、百度（Baidu）无任何官方关联、授权或背书；按 PolyForm Noncommercial 1.0.0 + 附加条款开源发布于 <code>github.com/a78c7/touareg-cn-carplay-mods</code>，仅供个人非商业学习与研究，严禁售卖、付费代刷或商业捆绑。Volkswagen / Touareg / 4MOTION 为大众汽车集团注册商标；CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.<br>
-    <b>适用与排除清单</b>：全屏 CarPlay、HUD、仪表地图、OK 键切换、语音键短按唤 Siri 与 5GHz 区域修复仅适用于第三代途锐改款前（CR7，2019–2023 款中规进口版）配备 <b>15 英寸 Discover Premium（MH2p / MIB2+ High）+ 12 英寸数字驾驶舱</b> 的 P 版车机（<code>MH2p_CN_VWG36_P*</code>，<code>P2878</code> 已全功能实车验证；其余 P 版自动探测适配，皮肤不一致时全屏补丁自动安全跳过不改文件）；<b>不适用</b>改款前低配 9.2 英寸 Discover Pro 领航（特别）版（机械指针仪表、无 HUD）、欧版 MY2024+ MIB3（Discover Pro Max）及中规 2025–2026 改款新途锐（15.05 英寸 Asterix 系统）。蓝牙与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。<br>
+    <b>适用与排除清单</b>：全屏 CarPlay、全屏百度 CarLife 增强、HUD、仪表地图、OK 键切换、语音键短按唤 Siri 与 5GHz 区域修复仅适用于第三代途锐改款前（CR7，2019–2023 款中规进口版）配备 <b>15 英寸 Discover Premium（MH2p / MIB2+ High）+ 12 英寸数字驾驶舱</b> 的 P 版车机（<code>MH2p_CN_VWG36_P*</code>，<code>P2878</code> 已全功能实车验证；其余 P 版自动探测适配，皮肤不一致时全屏补丁自动安全跳过不改文件）；<b>不适用</b>改款前低配 9.2 英寸 Discover Pro 领航（特别）版（机械指针仪表、无 HUD）、欧版 MY2024+ MIB3（Discover Pro Max）及中规 2025–2026 改款新途锐（15.05 英寸 Asterix 系统）。蓝牙与 SIM 弹窗屏蔽适用于大众 MH2p 车机；无线 CarPlay、Android Auto 与手机无线控制台适用于同平台 MH2p 车机。改装风险自负。<br>
     本程序只修改这个 U 盘里的文件：不选的功能文件夹移到「未选模块」（车机不会刷它），卸载的功能里放一个 uninstall.txt，信息框设置写进 dash.conf，并删掉 Mac 自动生成的隐藏文件（._ 开头的文件和 .DS_Store）。不联网、不上传任何东西。
   </footer>
 </div>
@@ -488,6 +488,8 @@ function featNotes(id){
   const out = [];
   if (notes[id]) out.push(notes[id]);
   if (id === 'fullscreen' && sel.fullscreen === 'uninstall') out.push(['info', '在车上把改过的地方按补丁表改回原样，不需要当初那个 U 盘里的备份。']);
+  if (id === 'carlife' && sel.carlife === 'install') out.push(['info', '与 CarPlay / Android Auto 100% 独立共存，可单独安装；如需百度 CarLife 导航转向箭头上风挡 HUD，可同时勾选「导航上 HUD」。']);
+  if (id === 'carlife' && sel.carlife === 'uninstall') out.push(['info', '卸载后无损恢复原厂 CarLife 分辨率与配置，不影响 CarPlay / HUD / 仪表地图。']);
   if (id === 'carplay' && sel.carplay === 'uninstall' && sel.aa !== 'uninstall') out.push(['warn', '无线 CarPlay 和 Android Auto 共用一部分授权，只卸载 CarPlay 可能让 Android Auto 也失效。如果卸载后 Android Auto 不能用，再刷一次只把 Android Auto 选为安装。']);
   if (id === 'aa' && sel.aa === 'uninstall' && sel.carplay === 'skip') out.push(['warn', 'Android Auto 和无线 CarPlay 共用一部分授权，只卸载 Android Auto 可能影响 CarPlay；建议把无线 CarPlay 同时选为安装（会重新写入授权）。']);
   if (id === 'nobtauth' && sel.nobtauth === 'install') out.push(['info', '通过共享 HMI 弹窗过滤插件（Bundle 98）仅拦截蓝牙 OBEX 认证弹窗，与「导航上 HUD」（Bundle 97）及 SIM 弹窗屏蔽互不冲突，可单独安装或卸载。']);
@@ -749,7 +751,7 @@ $('save').addEventListener('click', async () => {
     lastSSHKey = r.sshPrivKey || ''; lastSSHGuide = r.sshGuide || '';
     const sshBanner = lastSSHKey ? `<div class="msg info" style="margin:10px 0"><b>已生成本车专属 SSH 密钥对</b>${r.sshKeySavedDir ? `，私钥已自动保存到电脑：<code>${esc(r.sshKeySavedDir)}</code>` : ''}（U 盘内不保留私钥，请妥善保存）。<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="dlpriv">下载私钥 touareg_ed25519</button><button class="btn" type="button" id="dlguide">下载连接说明.txt</button></div></div>` : '';
     const hasAction = S.features.some(f => sel[f.id] !== 'skip');
-    const keepNote = sel.fullscreen !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip' || sel.nosimpopup !== 'skip' || sel.nobtauth !== 'skip';
+    const keepNote = sel.fullscreen !== 'skip' || sel.carlife !== 'skip' || sel.hud !== 'skip' || sel.cluster !== 'skip' || sel.nosimpopup !== 'skip' || sel.nobtauth !== 'skip';
     const canEject = !!(S.vol && S.vol.removable);
     const ejectBtn = canEject ? '<button class="primary" type="button" id="eject" style="margin-right:8px;padding:8px 18px;font-size:14px">⏏ 一键安全弹出 U 盘并退出</button>' : '';
     $('result').innerHTML = `<div class="msg ok"><b>已保存并刷盘。</b><ul>${(r.log || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>

@@ -252,7 +252,7 @@ else
 fi
 
 ls /mnt/crashlogs/core/io-pkt-v6-hc*.core.gz 2>/dev/null | awk 'END{print NR+0}' > "$D/iopkt_base_cores"
-echo "v23.7" > "$D/ota_version"
+echo "v24.0" > "$D/ota_version"
 rm -f "$D/disable"
 sync
 # 注意：绝不能在此执行 mount -ur /mnt/app，上游 modkit_install.sh 后续仍需写入 /mnt/app/eso/bin/servicemgrmibhigh

@@ -8,10 +8,10 @@
 
 # VW Touareg (CR7 / MH2p) CarPlay & Cockpit Mods
 
-Single-USB, no-disassembly, no-firmware-upgrade toolkit unlocking wireless & full-screen CarPlay, Windshield HUD navigation, Digital Cockpit map & live driving telemetry, plus phone-based wireless setup and updates.
+Single-USB, no-disassembly, no-firmware-upgrade toolkit unlocking wireless & full-screen CarPlay, full-screen Baidu CarLife enhancement, Windshield HUD navigation, Digital Cockpit map & live driving telemetry, plus phone-based wireless setup and updates.
 
 <p>
-  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v23.7</b></a> ·
+  <a href="https://github.com/a78c7/touareg-cn-carplay-mods/releases/latest"><b>Download v24.0</b></a> ·
   <a href="#features">Features</a> ·
   <a href="#4-step-usb-installation">4-Step Install</a> ·
   <a href="#compatibility">Compatibility</a> ·
@@ -60,6 +60,7 @@ No command line required — double-click the offline configurator on your USB d
 | **Display & Projection** | **Full-Screen CarPlay** | Removes side black bars so CarPlay fills the 15" center screen (exact CRC table verified on `P2878`; other CN 15" `P*` builds such as `P2838`/`P2853`/`P9832` auto-adapt via strict bytecode fingerprinting and safely skip if mismatched) | CN Touareg `P*` |
 | | **Wireless CarPlay** | Unlocks factory-inactive Wireless CarPlay for cable-free auto-connect | MH2p Generic |
 | | **Android Auto** | Unlocks factory-inactive Android Auto (CN 2019–2023 pre-facelift ships without factory Android Auto) | MH2p Generic |
+| | **Full-Screen Baidu CarLife** | Native 1:1 15" full-screen (`1664×736@20fps`), crash shield for modern CarLife+, blocks cluster activation popup, optional Bluetooth audio focus lock; pairs with Navigation to HUD for Windshield HUD turn arrows with 1s auto-clear on unplug; 100% independent from CarPlay (off by default; wired USB only — stock wireless CarLife is a stub; single-stream protocol, no 2nd-screen cluster map) | CN Touareg `P*` |
 | **HUD & Cluster** | **Navigation to HUD** | Projects Apple Maps, AMap, or Baidu turn arrows, distance, street names, and lanes onto the Windshield HUD (requires factory HUD; works wired & wireless) | CN Touareg `P*` |
 | | **Cluster Map + Driving Telemetry** | Displays live CarPlay map in the 12" Digital Cockpit (auto-centers AMap, supports steering-wheel zoom) with symmetrical 51-channel driving gauges (ambient accent color & dead-zero auto-fallback), navigation card, and 60 fps custom themes | CN Touareg `P*` |
 | | **Steering-Wheel `OK` Map Switch** | Double-tap right `OK` (`480 ms` window) on the map screen to toggle CarPlay/stock map; triple-tap `OK` cycles custom themes when both are active (without this module, double-tap `OK` switches themes directly) | CN Touareg `P*` |
@@ -75,6 +76,7 @@ No command line required — double-click the offline configurator on your USB d
 | Owner Profile | Recommended Selection | Notes |
 | :--- | :--- | :--- |
 | **Most Touareg owners** | Click the one-click preset **Driving Essentials** (Full-Screen + Wireless CarPlay + HUD + Cluster Map + `OK` Map Switch); add Short-Press Siri if desired | Balanced navigation with instant fallback to stock map |
+| **Android owners (wired Baidu CarLife)** | Enable **Full-Screen Baidu CarLife** (off by default); also enable **Navigation to HUD** for windshield turn arrows | 100% independent from CarPlay; wired USB only, single-stream protocol (no 2nd-screen cluster map) |
 | **Phone setup + cable-free updates** | Add **Mobile Wireless Console** (leave SSH unchecked for daily use) | Adjust gauges, switch themes, and install signed updates from your phone browser |
 | **Annoying popups** | Enable **Suppress Bluetooth "Enter Username"** or **Suppress "SIM for Data Only"** as needed | Independent toggles, zero conflict |
 | **Upgraded to P2878 and lost wireless** | Enable **P2878 5 GHz Wireless Region Fix** | Not needed on factory `P2878` units where wireless CarPlay already works after activation |
@@ -113,7 +115,7 @@ No command line required — double-click the offline configurator on your USB d
    ├── Data/                          ← Must sit directly at USB root
    ├── Meta/                          ← Must sit directly at USB root
    ├── Mods/                          ← Empty by default; populated by the configurator
-   ├── 未选模块/                       ← Holds all 12 module folders (HUD = VW_HUD_1 + VW_HUD_2)
+   ├── 未选模块/                       ← Holds all 13 module folders (HUD = VW_HUD_1 + VW_HUD_2)
    └── 改装设置（Windows）.exe / （Mac）.command
    ```
 3. **Run the Configurator & Save (Required)**: Launch **`改装设置（Windows）.exe`** or **`改装设置（Mac）.command`** from the USB root (flashing without running it installs nothing):
@@ -123,7 +125,7 @@ No command line required — double-click the offline configurator on your USB d
 
 > [!NOTE]
 > - **Unsigned Binary Warning**: The desktop configurator has no commercial signing certificate (Windows: *More info → Run anyway*; macOS: *System Settings → Privacy & Security → Open Anyway*). Built by GitHub Actions from [`tools/configurator`](tools/configurator) with `SHA256SUMS.txt`; binds only to `127.0.0.1` and never connects to the internet.
-> - **Upgrading from `v22.01` or Earlier**: Flash `v22.1` / `v23.7` **once via USB** (preserves existing `cl.conf` and `web.pin`; if `web.pin` was never set, a 6-digit PIN displays on the cluster on first boot and clears after first login); wireless OTA resumes afterward.
+> - **Upgrading from `v22.01` or Earlier**: Flash `v22.1` / `v24.0` **once via USB** (preserves existing `cl.conf` and `web.pin`; if `web.pin` was never set, a 6-digit PIN displays on the cluster on first boot and clears after first login); wireless OTA resumes afterward.
 > - **Black Borders After First Flash**: Tap *Forget This Car* in iPhone Bluetooth/CarPlay settings and reconnect once.
 
 ---
@@ -182,7 +184,7 @@ Enable key-only SSH (`:2012`) in the configurator (per-car Ed25519 key saved to 
 
 ### Engineering Docs & Source Index
 
-Full Chinese engineering guides (`docs/01–07`) and MH2p platform reference (`docs/reference/R1–R5`, `CLUSTER_LAYOUT_SPEC.md`, each note tagged **Touareg-specific** vs **MH2p-generic** for VW Touareg, Audi, Porsche PCM 5, Bentley, Lamborghini LIS III) live in **[`docs/README.md`](docs/README.md)** alongside full source under [`src/`](src) and [`tools/`](tools).
+Full Chinese engineering guides (`docs/01–08`, including Baidu CarLife enhancement in `docs/08`) and MH2p platform reference (`docs/reference/R1–R5`, `CLUSTER_LAYOUT_SPEC.md`, each note tagged **Touareg-specific** vs **MH2p-generic** for VW Touareg, Audi, Porsche PCM 5, Bentley, Lamborghini LIS III) live in **[`docs/README.md`](docs/README.md)** alongside full source under [`src/`](src) and [`tools/`](tools).
 
 </details>
 
@@ -195,7 +197,7 @@ Full Chinese engineering guides (`docs/01–07`) and MH2p platform reference (`d
 - **Trademarks**: Volkswagen and Touareg are registered trademarks of Volkswagen AG. CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.
 
 ### License Boundaries
-- **Independent Original Components**: `src/hud-java`, `src/popup-filter-java`, `src/cluster-probe` (including independently rewritten `wired/cl_wired*.c`), `src/clusterd`, `src/touareg_netd`, `src/vhpatch`, `src/common`, `tools/`, and all `VW_*` scripts are licensed under **[PolyForm Noncommercial 1.0.0](LICENSE) + [Additional Non-Commercial Terms](LICENSE.ADDITIONAL-TERMS.md)** (no OEM VW/Apple binaries; reselling, paid flashing, or commercial bundling strictly prohibited); `docs/` text is licensed under **CC BY-SA 4.0**.
+- **Independent Original Components**: `src/hud-java`, `src/popup-filter-java`, `src/cluster-probe` (including independently rewritten `wired/cl_wired*.c`), `src/clusterd`, `src/touareg_netd`, `src/vhpatch`, `src/carlife`, `src/common`, `tools/`, and all `VW_*` scripts are licensed under **[PolyForm Noncommercial 1.0.0](LICENSE) + [Additional Non-Commercial Terms](LICENSE.ADDITIONAL-TERMS.md)** (no OEM VW/Apple binaries; reselling, paid flashing, or commercial bundling strictly prohibited); `docs/` text is licensed under **CC BY-SA 4.0**.
 - **Adapted & Third-Party Components**: The adapted `src/cl_render/` codebase and compiled binary `cl_render` (without imposing Additional Terms; embedded `quickjs/` retains MIT, `dash_font.h` retains SIL OFL 1.1, and `stb_truetype.h` retains Public Domain / MIT), together with `dio_cluster.so`, ModKit, and optional LawPaul modules follow **[CC BY-NC-SA 4.0](LICENSES/CC-BY-NC-SA-4.0.md)**. Full attributions are listed in **[THIRD_PARTY_NOTICES.md](LICENSES/THIRD_PARTY_NOTICES.md)**.
 
 ### Credits

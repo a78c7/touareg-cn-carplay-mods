@@ -1,5 +1,35 @@
 # 版本说明（发布时自动取对应版本的一节作为 Release 说明）
 
+## v24.0
+> **首次新增「全屏百度 CarLife 原生增强」模块（15 寸点对点满屏 + 现代 CarLife+ 防崩护盾 + 挡风 HUD 转向箭头 + 蓝牙防抢焦点，默认关闭按需勾选、与 CarPlay 100% 独立共存）+ 根治仪表单帧黑闪（`30fps/rate30` 133ms 安全环深 & 恢复原厂 `NVWSI=0`，#14）+ CarPlay 期 `bcm2` 扫描节流 / MH2p GNSS 海拔 DSI 修复 / 多帧白闪黑匣子 + `#17` 商业改装暗桩变体 A 安全绕过与审计工具箱升级**：正式将实车验通的有线百度 CarLife 原生增强集成进主仓库（`VW_FullScreenCarLife`、`src/carlife/`、`docs/08` 及桌面「改装设置」独立勾选项）；同步合入仪表单帧整屏黑闪根治（#14）、CarPlay 期间降低 `bcm2` 后台扫频干扰、修复途锐 MH2p GNSS 海拔读取、增强白天多帧白闪自动抓拍，以及 `#17` `VW_ShopAudit v2~v4` 与变体 A 零损绕过/回滚工具箱。已装 `v22.1+` 与 `8080` 无线控制台的车主上传 `touareg-ota-v24.0.tar` 并点「软重启车机」即可完成核心组件离线升级；如需首次安装「全屏百度 CarLife 增强」，请下载本版 U 盘 `zip` 包通过桌面「改装设置」按需勾选刷入。
+
+- **首次新增「全屏百度 CarLife 原生增强」独立模块（`VW_FullScreenCarLife` + `src/carlife/` + `tools/configurator/` + `docs/08-全屏百度CarLife增强.md`）**：
+  - **15 寸点对点满屏与真帧率控制**：`vhpatch_carlife` 在车机本地原地修补 `skin3/viewhandler.zip` 内 `Cm_429C.jxe`（19 字节，`P2878` 精确表核对 + 其余国行 15 寸 `P` 版 `CARLIFE_MAIN` J9 字节码唯一指纹兜底，绝不触碰 CarPlay `Am.jxe`/`Cm_0409.jxe`），`skin3/info.txt` 画布扩至 `1673×748`（保留 CRLF），`carlife_probe.so` 协商 `1664×736@20fps`（16px 宏块对齐，`0x0001800C` 真帧率控制，支持 `res.conf` 持久化与 `/tmp/carlife_fps_req` 热切）；
+  - **2016 原厂 SDK 防崩护盾、SPS/PPS 缓存与蓝牙防抢焦点**：Hook `CConnectManager::readCmdData` 在包头层安全吸收新版未知指令与 `13–19 KB` PNG 转向图包（`0x10031/33/34`），原生零崩溃 protobuf wire 解析 `0x00010030`；持续提取缓存 H.264 SPS/PPS 参数集；掩码 `ModuleStatus(NAVI=1 -> 0)` 消除原厂仪表「导航已在移动设备上激活」弹窗；内置可选 `bt_audio_lock` 开关屏蔽 CarLife 抢占 `RESOURCE_AUDIO_MEDIA`，稳住 `VW BT` 蓝牙听歌同时保持 USB PCM 导航语音直通；
+  - **挡风 HUD 转向箭头与 1 秒自动清屏（与 CarPlay 100% 独立共存）**：主动完成 `0x00018043 -> 0x00010044 -> 0x00018045` 订阅握手并将 74 项转向码映射至 `/tmp/cluster_cp.state`（勾选「导航上 HUD」即同步点亮挡风 HUD），通过 `SPAWN_SETSID | SPAWN_NOZOMBIE` 独立守护子进程抗 `SIGKILL` 实现拔线约 1 秒自动清 HUD；仅改 `"carlife"` 块且在桌面「改装设置」中默认关闭按需勾选（仅支持有线 USB，原厂无线 CarLife 为空壳；协议仅单路视频，不支持 12 寸仪表第二屏地图）。
+- **根治 CarPlay 仪表单帧整屏黑闪（`src/cl_render/cluster.c` + `v23_gles.c` + `src/clusterd/clusterd.c`，`02f3ddb`，[#14](https://github.com/a78c7/touareg-cn-carplay-mods/issues/14)）**：
+  - **Display 4 帧率网格对齐 `30fps / rate30`（`133.3 ms` 安全环深）**：投屏激活期默认将 Display 4 合成器设为 `rate30`（`33.3 ms`/帧，与 iPhone CarPlay 仪表流 1:1 同步且较 `rate10` 仍丝滑 3 倍），配合 4 缓冲把安全环深从 `66.7 ms` 翻倍至 `133.3 ms`，彻底覆盖主屏整分唤醒 `WFD_COMMIT_ENTIRE_DEVICE` 的 `70~100 ms` 阻塞窗（建 `v23_rate60` / `v23_rate10` 可按需切换，断开仍恢复原厂 `rate10`）；
+  - **恢复原厂默认 `NVWSI_ENABLE_BUFFER_SYNC_OPTS=0`**：避免对 `displaymanager` 接管窗口 `58` 注入非原厂 `SCREEN_MODE_FIFO` 引发单帧整屏黑闪（建 `v23_nvwsi_fifo` 可实验开启）；`theme_status.json` 同步上报 `target_fps` 与 `nvwsi_fifo` 实时状态。
+- **CarPlay 期 `bcm2` Wi-Fi 扫描节流 + MH2p GNSS 海拔 DSI 修复 + 多帧白闪黑匣子（`8ef7886`）**：
+  - **`bcm2` 动态 `SCAN_INTERVAL` 节流（`src/touareg_netd/touareg_netd.c`）**：当 `bcm2` 热点客户端未关联超过 `45 s` 时，通过控制套接字动态调大 `wpa_supplicant` 扫描间隔（CarPlay 推流或车速 `>= 5 km/h` 时拉长至 `180 s`，驻车空闲 `20 s`，关联或断开恢复 `5 s`），降低后台扫频对同片博通 RSDB 无线 CarPlay 链路的瞬时干扰；
+  - **修复 MH2p GNSS 海拔（`alt`）无上报（`src/hud-java/vwcn/ExtraDSI.java` + `docs/reference/R3-车辆数据接口.md`）**：优先订阅途锐 MH2p 原厂实际推送的 `de.vw.mib.dsi.nav.DSIPositionInformation` / `org.dsi.ifc.nav.DSIPositionInformation`（`ATTR_SOPOSPOSITION = 1`），仅在旧版 MIB2 回退 `org.dsi.ifc.navigation.DSINavigation`（`28`），并过滤冷车无卫星时的初始 `0` 值；
+  - **多帧瞬态白闪黑匣子抓拍（`src/cl_render/v23_gles.c`）**：在既有单帧脉冲检测之外新增 `luma_hist` / `white_pct` 连续帧监测，覆盖白天浅底高德地图下 `1~5` 帧（`0.05~0.25 s`）瞬态全屏白闪回落并自动保存 4 帧用于定位。
+- **`#17` 商业改装暗桩工具箱升级（`tools/shop-recovery/`：`VW_ShopAudit v2~v4` + `VW_ShopBypassA` / `VW_ShopBypassARollback`）**：
+  - **`VW_ShopAudit v2~v4` 只读深度体检**：提速约 `20×` 避免 SWDL 超时、修正 `file_size_bytes`，全面扩展只读扫描范围至 `/mnt/app/eso/bin` 全目录、`.pers` / `lsd.sh`、`/mnt/system/etc/autorunner`、`/mnt/app/etc/scripts`、`/mnt/ota/{app,system,ot,.boot}`、自定义 JAR 与非原厂文件；
+  - **变体 A 零损绕过与一键回滚（`VW_ShopBypassA` / `VW_ShopBypassARollback`）**：针对 `#10` / `#17` 变体 A（109B `servicemgrmibhigh` 被底层定时覆写，但 `servicemgrmibhigh0` 与 `dio_manager` 均为纯原厂 ELF），先强校验拒绝变体 B 并备份清单至 `ShopBackupA/orig/MANIFEST.txt`，再将原厂 `servicemgrmibhigh0` 原子备份为 `servicemgrmibhigh0.real` 并部署轻量防重入 wrapper 拉起 `modkit_persist.sh`；配套 `VW_ShopBypassARollback` 验明原厂 ELF 及清单后 30 秒原子还原恢复标准 ModKit U 盘刷机兼容；沙盒测试 `test_shop_recovery.sh` 扩展至 13 个场景全部通过。
+- **U 盘安装脚本版本号同步**：
+  - `VW_WiFi_Dev/Update/install.sh` 写入的 `ota_version` 同步更新至 `v24.0`。
+- **车机 QNX 6.6 ARMv7 二进制 & Java 1.4 校验和（全部通过 `DT_HASH+GNU_HASH`、ABI 与 Java `48.0` 校验）**：
+  - `carlife_probe.so`（`29,992 B`，新增 CarLife U 盘模块）：`005b55df68e83712124c65166d18a2ee3918b45fa3c96ecda65f8e3df5bb5b33`
+  - `vhpatch_carlife`（`63,036 B`，新增 CarLife U 盘模块）：`30316208a309a94b410d144fa84256478646e3bf5817d73105e0be338a469757`
+  - `VWClusterNav_v6.jar`（`76,551 B`）：`3e4eba1e8d2b6a1320cad805216132e0e802462536f473877a25b0f68c696073`
+  - `cl_render`（`1,473,128 B`）：`06ffad3c9d6599e003e6b8031c44ce21120f13c303d14bcf14918425684ea831`
+  - `clusterd`（`22,088 B`）：`633b35c11878e197c33ed9c7d97f7594d5f4c2837b5b41d3303cb3528791d512`
+  - `touareg_netd`（`145,264 B`）：`33640ce1a5a9a95e57191f38e5729fe328718771a534e5d2e969528b202da456`
+  - `cl_probe.so`（`56,752 B`，与 `v23.7` 一致）：`6644a2e62e8534ba2648ea3116453a99431d88003e18ff97903f5b72ce4fdb99`
+  - `VWPopupFilter.jar`（`4,536 B`，与 `v23.7` 一致）：`fe192806e4465c1d83318ca314a19d8ab3526673b3987417e295f5254c5c5b81`
+  - `vhpatch`（`73,116 B`，全屏 CarPlay U 盘模块，与 `v23.4` 一致）：`111c01c29cd9b5e3201f516df7dcae38bfbfda5a15a17c6e0bd1ec96804057c8`
+
 ## v23.7
 > **指令级终极根治 0.1 秒大面积花屏与驻车快闪 + 恢复纯硬件零拷贝满血 60fps（~5% CPU、0 驱动报错）+ 合并 `#16` 商业双件套体检与零损接管工具箱**：通过对原厂固件（`gal`、`libairplay.so`、`displaymanager`、`/sbin/screen`、`screen-nvidia.so`、`libqnx-nvutil.so.1`、`libWFDnvidia.so`、`libnvwsi.so`）的完整指令级反汇编与实车毫秒级日志取证，一次性拔除造成“精确 0.1 秒”大面积红绿宏块花屏与原地驻车快闪的两类独立底层根因，同时修复 `v23.6` 因未缓存内存导致的 `glTexSubImage2D` 掉帧问题、恢复 5 槽纯 `SCREEN_USAGE_OPENGL_ES2` 零报错硬件零拷贝满血 60fps，并随本版正式打包 `v23.6` 之后合并入主干的 `#16` 商业改装暗桩只读检测与 `tools/shop-recovery` 零损接管/回滚工具箱。已装 `v22.1+` 与 `8080` 无线控制台的车主上传 `touareg-ota-v23.7.tar` 并点「软重启车机」即可完成升级。
 

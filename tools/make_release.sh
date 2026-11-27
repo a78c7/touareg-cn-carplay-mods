@@ -151,7 +151,7 @@ quick_guide = f"""途锐 MH2p CarPlay 改装包 {v} — 必看说明与免费开
 
 【非官方关联、商标与许可证声明】
 - 本项目为独立车主社区开源研究项目，与大众汽车集团（Volkswagen AG）、苹果公司（Apple Inc.）、谷歌公司（Google LLC）及百度公司（Baidu, Inc.）无任何关联、背书或赞助关系。
-- Volkswagen、Touareg、4MOTION 为 Volkswagen AG 的注册商标；CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.；Android Auto 为 Google LLC 商标；百度地图为百度公司商标。
+- Volkswagen、Touareg、4MOTION 为 Volkswagen AG 的注册商标；CarPlay is a trademark of Apple Inc., registered in the U.S. and other countries and regions.；Android Auto 为 Google LLC 商标；百度地图与百度 CarLife 为百度公司商标。
 - 本包内附 LICENSE、LICENSE.ADDITIONAL-TERMS.md 与 LICENSES/ 目录；详细适用边界与免责声明见仓库 README.md。
 """
 

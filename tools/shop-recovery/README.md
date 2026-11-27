@@ -21,10 +21,10 @@
 
 ## 使用原则（务必遵守）
 
-1. **先只读摸底，再决定是否接管**：永远先单独刷 `VW_ShopAudit`，确认整机无定时还原暗桩、且 `servicemgrmibhigh_orgapp` 与 `dio_manager.org` 均完好后再使用 `VW_ShopTakeover`。
-2. **每次只放一个模块进 `Mods/`**：用已准备好的 ModKit U 盘（根目录保留 `Data/`、`Meta/`），**清空 `Mods/`** 后只放入需要运行的那一个目录（例如 `Mods/VW_ShopAudit/Update/install.sh`）。**严禁同时把 `VW_ShopTakeover` 和 `VW_ShopRollback` 放进 `Mods/`**（脚本也会自动拦截中止）。
-3. **妥善保管 `ShopBackup/orig/`**：接管成功后将 U 盘根目录生成的 `ShopBackup/orig/` 拷贝一份到电脑留档，并切勿将该备份目录或任何车机 `backup/` 公开上传。
-4. **本地沙盒自测**：上车前或修改脚本后，可在 macOS / Linux 下运行内置沙盒测试验证全部 8 个场景（正常接管、幂等防覆写、双包防呆、损坏 ELF 拦截、缺 `dio_manager.org` 拦截、一键回滚与防反覆写、回滚后再接管、以及 `VW_ShopAudit` 只读扫描）：
+1. **先只读摸底，再决定是否接管/绕过**：永远先单独刷 `VW_ShopAudit`，根据导出报告区分 **变体 B**（双件套 `servicemgrmibhigh_orgapp` + `dio_manager.org` 均完好 → 使用 `VW_ShopTakeover`）还是 **变体 A**（109B `servicemgrmibhigh` 被底层定时还原，但 `servicemgrmibhigh0` 与 `dio_manager` 均为纯原厂 ELF → 使用 `VW_ShopBypassA`）。
+2. **每次只放一个模块进 `Mods/`**：用已准备好的 ModKit U 盘（根目录保留 `Data/`、`Meta/`），**清空 `Mods/`** 后只放入需要运行的那一个目录（例如 `Mods/VW_ShopAudit/Update/install.sh`）。**严禁同时把接管/绕过包和对应的回滚包放进 `Mods/`**（脚本也会自动拦截中止）。
+3. **妥善保管备份目录**：接管/绕过成功后将 U 盘根目录生成的 `ShopBackup/orig/`（变体 B）或 `ShopBackupA/orig/`（变体 A）拷贝一份到电脑留档，并切勿将该备份目录或任何车机 `backup/` 公开上传。
+4. **本地沙盒自测**：上车前或修改脚本后，可在 macOS / Linux 下运行内置沙盒测试验证全部 13 个场景（变体 B 接管/幂等/双包防呆/损坏 ELF 拦截/缺 `dio_manager.org` 拦截/一键回滚/回滚后再接管、`VW_ShopAudit` 只读扫描、以及变体 A 绕过/幂等/拒接变体 B 车机/双包防呆/一键回滚）：
    ```sh
    sh tools/shop-recovery/test_shop_recovery.sh
    ```

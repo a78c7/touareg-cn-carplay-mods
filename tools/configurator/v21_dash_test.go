@@ -15,6 +15,7 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 		"未选模块/VW_FullScreenCarPlay",
 		"未选模块/AppleCarPlay",
 		"未选模块/AndroidAuto",
+		"未选模块/VW_FullScreenCarLife",
 		"未选模块/VW_HUD_1_RouteGuidance",
 		"未选模块/VW_HUD_2_ClusterNav",
 		"未选模块/VW_HUD_3_CarPlayCluster/Update",
@@ -35,7 +36,7 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 	// 验证前置依赖校验：单独装 mapswitch / siri 而未勾 hud 应被后端拒绝
 	badReq := applyReq{
 		Features: map[string]string{
-			"fullscreen": "skip", "carplay": "skip", "aa": "skip",
+			"fullscreen": "skip", "carplay": "skip", "aa": "skip", "carlife": "skip",
 			"hud": "skip", "cluster": "skip", "mapswitch": "install", "siri": "skip",
 			"wifi5gfix": "skip", "nobtauth": "skip", "nosimpopup": "skip", "wifi": "skip",
 		},
@@ -46,7 +47,7 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 	}
 	badSiri := badReq
 	badSiri.Features = map[string]string{
-		"fullscreen": "skip", "carplay": "skip", "aa": "skip",
+		"fullscreen": "skip", "carplay": "skip", "aa": "skip", "carlife": "skip",
 		"hud": "skip", "cluster": "skip", "mapswitch": "skip", "siri": "install",
 		"wifi5gfix": "skip", "nobtauth": "skip", "nosimpopup": "skip", "wifi": "skip",
 	}
@@ -59,6 +60,7 @@ func TestV21SportBarsAndChassisDashRoundTrip(t *testing.T) {
 			"fullscreen": "install",
 			"carplay":    "install",
 			"aa":         "skip",
+			"carlife":    "skip",
 			"hud":        "install",
 			"cluster":    "install",
 			"mapswitch":  "install",
@@ -154,8 +156,8 @@ func TestRealUSBPackageAllDefaultOffAndUninstallable(t *testing.T) {
 	if len(st.Errors) > 0 {
 		t.Fatalf("unexpected USB package errors: %v", st.Errors)
 	}
-	if len(features) != 11 {
-		t.Fatalf("expected 11 streamlined features, got %d", len(features))
+	if len(features) != 12 {
+		t.Fatalf("expected 12 streamlined features, got %d", len(features))
 	}
 	for _, f := range features {
 		if st.States[f.ID] != "skip" {
