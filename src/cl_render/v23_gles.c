@@ -178,6 +178,8 @@ typedef struct {
     uint8_t         ring[V23_PROBE_RING][V23_PROBE_W * V23_PROBE_H * 4];
     uint64_t        ts_ms[V23_PROBE_RING];
     int             didx_hist[V23_PROBE_RING];
+    uint8_t         luma_hist[V23_PROBE_RING];
+    uint8_t         white_pct[V23_PROBE_RING];
     uint32_t        count;
     volatile uint32_t traps;
     uint64_t        last_trap_ms;
@@ -242,6 +244,21 @@ static int v23_probe_scan_and_luma(int didx, int prev_night) {
     uint64_t now_ms = v23_now_us() / 1000ULL;
     g_v23_probe.ts_ms[cur_slot] = now_ms;
     g_v23_probe.didx_hist[cur_slot] = didx;
+    {
+        uint32_t flsum = 0, fwcnt = 0, fpcnt = 0;
+        for (int y = 0; y < V23_PROBE_H; y += 2) {
+            const uint8_t *row = cur + (size_t)y * row_bytes;
+            for (int x = 0; x < V23_PROBE_W; x += 2) {
+                const uint8_t *p = row + (size_t)x * 4u;
+                uint8_t b = p[0], g = p[1], r = p[2];
+                flsum += ((uint32_t)r * 77u + (uint32_t)g * 150u + (uint32_t)b * 29u) >> 8;
+                if (r >= 240u && g >= 240u && b >= 240u) fwcnt++;
+                fpcnt++;
+            }
+        }
+        g_v23_probe.luma_hist[cur_slot] = fpcnt ? (uint8_t)(flsum / fpcnt) : 0u;
+        g_v23_probe.white_pct[cur_slot] = fpcnt ? (uint8_t)((fwcnt * 100u) / fpcnt) : 0u;
+    }
     g_v23_probe.count = idx + 1u;
 
     int night = prev_night;
@@ -276,13 +293,16 @@ static int v23_probe_scan_and_luma(int didx, int prev_night) {
         v23_diag("probe: manual 4-frame ring dumped to /tmp/probe_ring.ppm (count=%u)", g_v23_probe.count);
     }
 
-    /* 自动三帧脉冲异常捕获：检查中间帧 mid 是否相对于 prev 与 next 出现单帧孤立剧变/红绿块/白横条 */
+    /* 自动脉冲异常捕获：
+     * 1) 单帧孤立剧变 / 红绿爆色块 / 暗底白横条；
+     * 2) 兼容白天浅白高德底图的连续 1~5 帧（0.05~0.25s）瞬态全屏白闪回落捕获。 */
     if (g_v23_probe.count >= 3u && g_v23_probe.traps < 3u &&
         (g_v23_probe.last_trap_ms == 0ULL || now_ms - g_v23_probe.last_trap_ms >= 5000ULL)) {
+        int trapped = 0;
         int s_prev = (int)((g_v23_probe.count - 3u) & (V23_PROBE_RING - 1u));
         int s_mid  = (int)((g_v23_probe.count - 2u) & (V23_PROBE_RING - 1u));
         int s_next = cur_slot;
-        if (now_ms - g_v23_probe.ts_ms[s_prev] <= 2000ULL) {
+        if (now_ms - g_v23_probe.ts_ms[s_prev] <= 2500ULL) {
             const uint8_t *bp = g_v23_probe.ring[s_prev];
             const uint8_t *bm = g_v23_probe.ring[s_mid];
             const uint8_t *bn = g_v23_probe.ring[s_next];
@@ -328,6 +348,43 @@ static int v23_probe_scan_and_luma(int didx, int prev_night) {
                              (unsigned)tid, gpath, g_v23_probe.didx_hist[s_mid],
                              (unsigned)avg_pm, (unsigned)avg_mn, (unsigned)avg_pn,
                              (unsigned)chroma_spike, (unsigned)white_rows);
+                    trapped = 1;
+                }
+            }
+        }
+        /* 多帧瞬态白闪检测（1~5 帧，覆盖昼夜双模式）：当 cur_slot 已恢复常态，而前 1~5 帧出现白像素占比跃升 >=18% 且 >=85% 时抓拍 4 帧 */
+        if (!trapped && g_v23_probe.count >= 7u) {
+            int cur_w = (int)g_v23_probe.white_pct[cur_slot];
+            int cur_l = (int)g_v23_probe.luma_hist[cur_slot];
+            for (uint32_t span = 2u; span <= 6u; span++) {
+                int s_base = (int)((g_v23_probe.count - 1u - span) & (V23_PROBE_RING - 1u));
+                if (now_ms - g_v23_probe.ts_ms[s_base] > 3500ULL) break;
+                int base_w = (int)g_v23_probe.white_pct[s_base];
+                int base_l = (int)g_v23_probe.luma_hist[s_base];
+                if (abs(base_w - cur_w) <= 10 && abs(base_l - cur_l) <= 10) {
+                    int peak_slot = -1, peak_w = 0, all_high = 1;
+                    for (uint32_t k = 1u; k < span; k++) {
+                        int sk = (int)((g_v23_probe.count - 1u - k) & (V23_PROBE_RING - 1u));
+                        int wk = (int)g_v23_probe.white_pct[sk];
+                        int lk = (int)g_v23_probe.luma_hist[sk];
+                        if (wk < 85 || wk - base_w < 18 || wk - cur_w < 18 || lk - base_l < 14) {
+                            all_high = 0;
+                            break;
+                        }
+                        if (wk > peak_w) { peak_w = wk; peak_slot = sk; }
+                    }
+                    if (all_high && peak_slot >= 0) {
+                        uint32_t tid = g_v23_probe.traps++;
+                        g_v23_probe.last_trap_ms = now_ms;
+                        char gpath[48];
+                        snprintf(gpath, sizeof(gpath), "/tmp/glitch_%u.ppm", (unsigned)tid);
+                        int s_last_flash = (int)((g_v23_probe.count - 2u) & (V23_PROBE_RING - 1u));
+                        int s4[4] = { s_base, peak_slot, s_last_flash, cur_slot };
+                        v23_probe_write_ppm(gpath, s4, 4);
+                        v23_diag("WHITE_FLASH_TRAP #%u saved %s: span=%uframes base_w=%d%% peak_w=%d%% cur_w=%d%%",
+                                 (unsigned)tid, gpath, (unsigned)(span - 1u), base_w, peak_w, cur_w);
+                        break;
+                    }
                 }
             }
         }

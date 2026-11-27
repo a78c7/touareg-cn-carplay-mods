@@ -14,7 +14,8 @@ import org.dsi.ifc.base.DSIListener;
  *    直读 65 模块（J502）四轮真实胎压与低压告警位
  * 2) DSICarDrivingCharacteristics：直读越野俯仰角（pitch）与侧倾角（roll）
  *    （需实车配备空气悬架底盘；无空悬车型如中规 2021–2022 eHybrid 无上报）
- * 3) DSINavigation：直读 GNSS 海拔高度（alt）
+ * 3) DSIPositionInformation（de.vw.mib.dsi.nav / org.dsi.ifc.nav，ATTR_SOPOSPOSITION=1；
+ *    回退旧版 MIB2 org.dsi.ifc.navigation.DSINavigation ATTR_SOPOSPOSITION=28）：直读 GNSS 海拔高度（alt，整米）
  */
 final class ExtraDSI {
     // 四轮胎压（统一换算为 bar）与告警位掩码（bit0=FL, bit1=FR, bit2=RL, bit3=RR）
@@ -64,10 +65,18 @@ final class ExtraDSI {
         }
         if (sNav == null) {
             sNav = new Slot(
-                "org.dsi.ifc.navigation.DSINavigation",
-                "org.dsi.ifc.navigation.DSINavigationListener",
+                new String[] {
+                    "de.vw.mib.dsi.nav.DSIPositionInformation",
+                    "org.dsi.ifc.nav.DSIPositionInformation",
+                    "org.dsi.ifc.navigation.DSINavigation"
+                },
+                new String[] {
+                    "de.vw.mib.dsi.nav.DSIPositionInformationListener",
+                    "org.dsi.ifc.nav.DSIPositionInformationListener",
+                    "org.dsi.ifc.navigation.DSINavigationListener"
+                },
                 new String[] { "ATTR_SOPOSPOSITION" },
-                new int[] { 28 },
+                new int[] { 1 },
                 new NavHandler()
             );
         }
@@ -199,6 +208,9 @@ final class ExtraDSI {
                             try {
                                 id = sc.getField(attrNames[i]).getInt(null);
                             } catch (Throwable t1) {
+                                if (id <= 0 && "ATTR_SOPOSPOSITION".equals(attrNames[i])) {
+                                    id = (sName.indexOf(".navigation.") >= 0) ? 28 : 1;
+                                }
                                 for (int j = 0; j < svcNames.length && id <= 0; j++) {
                                     if (j == k) continue;
                                     try {
@@ -351,6 +363,18 @@ final class ExtraDSI {
         }
     }
 
+    private static int readPosHeight(Object pos) {
+        int h = getIntField(pos, "height", Integer.MIN_VALUE);
+        if (h != Integer.MIN_VALUE) return h;
+        try {
+            Method gm = pos.getClass().getMethod("getHeight", new Class[0]);
+            Object v = gm.invoke(pos, new Object[0]);
+            if (v instanceof Number) return ((Number) v).intValue();
+        } catch (Throwable t) {
+        }
+        return Integer.MIN_VALUE;
+    }
+
     private static final class NavHandler implements InvocationHandler {
         public Object invoke(Object proxy, Method m, Object[] args) throws Throwable {
             String name = m.getName();
@@ -361,11 +385,15 @@ final class ExtraDSI {
                     int valid = (args[1] instanceof Number) ? ((Number) args[1]).intValue() : 0;
                     Object pos = args[0];
                     if (valid != 1 || pos == null) return null;
-                    int h = getIntField(pos, "height", Integer.MIN_VALUE);
+                    int h = readPosHeight(pos);
+                    int st = getIntField(pos, "state", -1);
+                    int sats = getIntField(pos, "usedSatellites", -1);
+                    // 过滤冷车从未校准且无卫星时的初始 0 值，一旦校准或原厂惯导维持（state != 0）即正常采纳整米海拔
+                    if (st == 0 && sats <= 0 && h == 0 && altM == Integer.MIN_VALUE) return null;
                     if (h >= -500 && h <= 9000) altM = h;
                     if (!navLogged && h != Integer.MIN_VALUE) {
                         navLogged = true;
-                        Log.log("extradsi: sopos height=" + h);
+                        Log.log("extradsi: sopos height=" + h + " state=" + st + " sats=" + sats);
                     }
                 }
             } catch (Throwable t) {

@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -1738,6 +1739,93 @@ static int open_http_sock(uint32_t bind_ip, int port) {
     return fd;
 }
 
+/*
+ * 无线 CarPlay 射频共存退避（根治未开手机热点时 bcm2 每 5.5s 全频段扫网导致 CarPlay 冻结 ~1.96s 跳帧/白闪）：
+ *   - 途锐 MH2p 的无线 CarPlay 5GHz AP (bcm0) 与无线控制台 STA (bcm2) 共用单颗博通 Wi-Fi 芯片；
+ *   - 当手机未开启个人热点（bcm2 未关联）时，wpa_supplicant 默认每 5s 发起全信道 QWDI_CMD_SCAN2，
+ *     切离 5GHz 主信道长达 1.3~1.98s，引发 CarPlay 积压帧泄洪跳顿；
+ *   - 此处通过 /var/run/wpa_supplicant/<iface> 纯用户态控制指令动态调节 SCAN_INTERVAL（绝不重启进程、
+ *     绝不触碰 qwdi 驱动 ioctl、亦不在 /tmp 建 AF_UNIX 套接字以免触发 QNX /dev/shmem ENOSYS）：
+ *       * 开机或刚断开前 45s：保持 5s 快扫，开启热点可秒连；
+ *       * 超 45s 仍未连热点且处于 CarPlay 投屏或行车（spd >= 5 km/h）：退避至 180s 慢扫，削减 97% 切信道冻结；
+ *       * 驻车（spd < 3 km/h）且无 CarPlay 视频流时：温和 20s 轮询，兼顾驻车开热点自动连入。
+ */
+#ifndef TOUAREG_NETD_NO_MAIN
+static int is_carplay_streaming(void) {
+    struct stat st;
+    if (stat("/tmp/cl_status", &st) == 0 && st.st_size > 0) {
+        time_t now = time(NULL);
+        time_t diff = (now >= st.st_mtime) ? (now - st.st_mtime) : (st.st_mtime - now);
+        if (diff <= 30) {
+            FILE *fp = fopen("/tmp/cl_status", "r");
+            if (fp) {
+                char buf[256];
+                size_t n = fread(buf, 1, sizeof(buf) - 1, fp);
+                fclose(fp);
+                buf[n] = '\0';
+                if (strstr(buf, "rx=1") || strstr(buf, "s111=1")) return 1;
+            }
+        }
+    }
+    if (stat("/tmp/ap.config.bcm0", &st) == 0 && st.st_size > 0) {
+        double spd = -1.0, odo = -1.0;
+        read_dash_state(&spd, &odo);
+        if (spd >= 5.0) return 1;
+    }
+    return 0;
+}
+
+static int wpa_set_scan_interval(const char *ifname, int sec) {
+    if (g_dry_test || !ifname || !ifname[0] || sec <= 0) return -1;
+    char srv_path[104], cli_path[104];
+    int sn = snprintf(srv_path, sizeof(srv_path), "/var/run/wpa_supplicant/%s", ifname);
+    int cn = snprintf(cli_path, sizeof(cli_path), "/var/run/wpa_ctrl_netd_%d", (int)getpid());
+    if (sn <= 0 || (size_t)sn >= sizeof(srv_path) || cn <= 0 || (size_t)cn >= sizeof(cli_path)) return -1;
+    struct stat st;
+    if (stat(srv_path, &st) != 0) return -1;
+
+    int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (fd < 0) return -1;
+
+    struct sockaddr_un local_addr, dst_addr;
+    memset(&local_addr, 0, sizeof(local_addr));
+    local_addr.sun_family = AF_UNIX;
+    strncpy(local_addr.sun_path, cli_path, sizeof(local_addr.sun_path) - 1);
+    unlink(cli_path);
+    if (bind(fd, (struct sockaddr *)&local_addr, (socklen_t)sizeof(local_addr)) != 0) {
+        close(fd);
+        return -1;
+    }
+
+    memset(&dst_addr, 0, sizeof(dst_addr));
+    dst_addr.sun_family = AF_UNIX;
+    strncpy(dst_addr.sun_path, srv_path, sizeof(dst_addr.sun_path) - 1);
+
+    char cmd[32];
+    int cmd_len = snprintf(cmd, sizeof(cmd), "SCAN_INTERVAL %d", sec);
+    int rc = -1;
+    if (cmd_len > 0 &&
+        sendto(fd, cmd, (size_t)cmd_len, 0, (struct sockaddr *)&dst_addr, (socklen_t)sizeof(dst_addr)) == cmd_len) {
+        struct pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        if (poll(&pfd, 1, 150) > 0 && (pfd.revents & POLLIN)) {
+            char rep[32];
+            ssize_t rn = recv(fd, rep, sizeof(rep) - 1, 0);
+            if (rn > 0) {
+                rep[rn] = '\0';
+                if (strncmp(rep, "OK", 2) == 0) rc = 0;
+            }
+        } else {
+            rc = 0;
+        }
+    }
+    close(fd);
+    unlink(cli_path);
+    return rc;
+}
+#endif
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGTERM, on_sig);
@@ -1749,7 +1837,7 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v23.5 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
+    nlog("touareg_netd v23.7 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
 
     int pin_init_rc = ensure_web_pin_boot();
     if (pin_init_rc == 1) {
@@ -1761,6 +1849,8 @@ int main(void) {
     uint32_t cur_ip = 0;
     int http_fd = -1, mdns_fd = -1;
     time_t last_check = 0, last_ann = 0;
+    time_t unassoc_since = time(NULL);
+    int cur_scan_iv = 5;
 
     while (!g_stop) {
         time_t now = time(NULL);
@@ -1775,7 +1865,9 @@ int main(void) {
                 if (http_fd >= 0) { close(http_fd); http_fd = -1; }
                 if (mdns_fd >= 0) { close(mdns_fd); mdns_fd = -1; }
                 cur_ip = ip;
+                unassoc_since = now;
                 if (cur_ip != 0) {
+                    if (cur_scan_iv != 5 && wpa_set_scan_interval(g_iface, 5) == 0) cur_scan_iv = 5;
                     http_fd = open_http_sock(cur_ip, g_http_port);
                     mdns_fd = open_mdns_sock(cur_ip);
                     if (http_fd >= 0) nlog("http listening on %s:%d", s_new, g_http_port);
@@ -1784,10 +1876,26 @@ int main(void) {
                         last_ann = now;
                         nlog("mdns advertising %s.local -> %s", MDNS_HOST_LABEL, s_new);
                     }
+                } else {
+                    if (cur_scan_iv != 5 && wpa_set_scan_interval(g_iface, 5) == 0) cur_scan_iv = 5;
                 }
             } else if (cur_ip != 0 && mdns_fd >= 0 && now - last_ann >= 60) {
                 send_mdns_reply(mdns_fd, cur_ip, 0, NULL);
                 last_ann = now;
+            } else if (cur_ip == 0) {
+                time_t idle_s = (now >= unassoc_since) ? (now - unassoc_since) : 0;
+                double spd = -1.0, odo = -1.0;
+                read_dash_state(&spd, &odo);
+                int cp_busy = is_carplay_streaming();
+                int want_iv = 5;
+                if (idle_s >= 45) {
+                    want_iv = (cp_busy || spd >= 5.0) ? 180 : 20;
+                }
+                if (want_iv != cur_scan_iv && wpa_set_scan_interval(g_iface, want_iv) == 0) {
+                    cur_scan_iv = want_iv;
+                    nlog("bcm2 unassociated (%lus, cp=%d, spd=%.1f): set wpa SCAN_INTERVAL=%ds",
+                         (unsigned long)idle_s, cp_busy, spd, want_iv);
+                }
             }
         }
 
