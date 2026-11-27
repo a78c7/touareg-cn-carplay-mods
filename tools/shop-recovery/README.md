@@ -11,7 +11,7 @@
 
 | 目录 | 性质 | 用途与适用范围 |
 | :--- | :---: | :--- |
-| **`VW_ShopAudit/`** | **严格只读** | 摸底体检工具：不改/不删车机任何文件，自动脱敏并导出 `ShopAudit/audit_N/REPORT.txt`，一次看清启动入口、定时还原暗桩、`dio_manager.org` 双件套替换、`.j`/`autorunner`/`challenge.pub`、`/mnt/persist_new/fec` 清单与陌生 SSH 公钥。 |
+| **`VW_ShopAudit/`** | **严格只读** | 深度摸底体检工具：不改/不删车机任何文件，自动脱敏并导出 `ShopAudit/audit_N/REPORT.txt`，一次看清启动入口、定时还原暗桩（含 `/mnt/app/eso/bin` 全目录、`runMMX/runHMI/runLSD/java.sh` 真实内容防时间戳伪装、`/mnt/ota/{app,system,ot}` 2 层子目录与 `/mnt/system/etc` 深度寻源）、`dio_manager.org` 双件套替换、`.j`/`autorunner`/`challenge.pub`、`/mnt/persist_new/fec` 清单与陌生 SSH 公钥。 |
 | **`VW_ShopTakeover/`** | **定点接管** | 针对 **变体 B 商业双件套**（`servicemgrmibhigh_orgapp` + `dio_manager.org` + `/eso/hmi/lsd/.j` + 3 秒死循环杀 `sshd`/`challenge`）实车验证通过（#16 `MH2p_CN_VWG36_P2838`）。先强校验原厂 ELF 并完整备份商业原件到 U 盘 `ShopBackup/orig/`，再原子恢复原厂 `dio_manager`、清理陌生公钥 `rsa-key-20210318`、建立 `servicemgrmibhigh0` 交由 ModKit 接管；车机原 `.org` / `_orgapp` / `.j` 均不删除。 |
 | **`VW_ShopRollback/`** | **一键回滚** | `VW_ShopTakeover` 配套后悔药：保留同一根存有 `ShopBackup/orig/` 的 U 盘，清空 `Mods/` 后单独刷入即可还原旧商业版 `dio_manager` 与启动脚本，并移除 `servicemgrmibhigh0` 与 `modkit_persist.sh`（末尾触发 `error: unknown patch state` 属刻意保护，防止 ModKit 再次覆写还原后的脚本）。 |
 

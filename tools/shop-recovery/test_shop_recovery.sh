@@ -271,11 +271,13 @@ grep -q "modkit_persist" "$S1/app/eso/bin/servicemgrmibhigh" || fail "re-takeove
 cmp -s "$S1/app/eso/bin/apps/dio_manager" "$S1/app/eso/bin/apps/dio_manager.org" || fail "re-takeover dio_manager mismatch"
 pass "full round-trip (takeover -> rollback -> re-takeover) verified"
 
-# ---- 场景 8：VW_ShopAudit 严格只读摸底测试 ----
-echo "=== [8] VW_ShopAudit read-only audit on Issue #16 variant B ==="
+# ---- 场景 8：VW_ShopAudit 严格只读摸底测试（含变体 B 双件套 + 变体 A 深度寻源） ----
+echo "=== [8] VW_ShopAudit read-only deep audit (variant B + variant A hunt) ==="
 S8="$TMP/s8"
 setup_car "$S8"
-mkdir -p "$S8/sys/etc/eso/production" "$S8/crash/core" "$S8/usb/Mods/VW_ShopAudit/Update"
+mkdir -p "$S8/sys/etc/eso/production" "$S8/crash/core" "$S8/ota/app/shopsub" "$S8/usb/Mods/VW_ShopAudit/Update"
+printf '#!/bin/sh\necho hmi\n# hidden restore\nmount -uw /mnt/app && cp /eso/bin/del /eso/bin/servicemgrmibhigh\n' > "$S8/app/eso/bin/runHMI.sh"
+printf '#!/bin/sh\nsleep 120\ncp /eso/bin/del /eso/bin/servicemgrmibhigh\n' > "$S8/ota/app/shopsub/watch.sh"
 _pre_sm_crc=$(cksum "$S8/app/eso/bin/servicemgrmibhigh")
 _pre_dio_crc=$(cksum "$S8/app/eso/bin/apps/dio_manager")
 RELEASE_VERSION="MH2p_CN_VWG36_P2838" \
@@ -296,9 +298,11 @@ grep -q "servicemgrmibhigh0 is MISSING" "$RPT" || fail "REPORT.txt missing servi
 grep -q "shop payload/hook files detected" "$RPT" || fail "REPORT.txt missing .j/autorunner warning"
 grep -q "rsa-key-20210318" "$RPT" || fail "REPORT.txt missing external SSH key warning"
 grep -q "granted.fecs" "$RPT" || fail "REPORT.txt missing fec listing"
+grep -q "runHMI.sh (sanitized" "$RPT" || fail "REPORT.txt missing full runHMI.sh dump"
+grep -q "shopsub/watch.sh" "$RPT" || fail "REPORT.txt missing deep /mnt/ota/app/* keyword hit"
 [ "$(cksum "$S8/app/eso/bin/servicemgrmibhigh")" = "$_pre_sm_crc" ] || fail "VW_ShopAudit modified servicemgrmibhigh!"
 [ "$(cksum "$S8/app/eso/bin/apps/dio_manager")" = "$_pre_dio_crc" ] || fail "VW_ShopAudit modified dio_manager!"
-pass "VW_ShopAudit read-only audit + zero mutations verified"
+pass "VW_ShopAudit deep read-only audit + zero mutations verified"
 
 echo ""
 echo "ALL 8 SANDBOX SCENARIOS PASSED!"

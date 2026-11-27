@@ -202,7 +202,7 @@ scan_dir_keywords() {
             line = $0
             sub(/\r$/, "", line)
             low = tolower(line)
-            if (low ~ /servicemgrmibhigh|challenge|sshd|authorized_keys|\/eso\/bin\/del|\/mnt\/app\/eso\/bin\/shadow|crontab|slay[ \t]+-9|sleep[ \t]+(60|90|100|120|150|180|240|300)/) {
+            if (low ~ /servicemgrmibhigh|challenge|sshd|authorized_keys|\/eso\/bin\/del|\/mnt\/app\/eso\/bin\/shadow|crontab|slay[ \t]+-9|sleep[ \t]+(60|90|100|120|150|180|240|300)|mount[ \t]+-uw|autorunner|\/eso\/hmi\/lsd\/\.j/) {
                 hits++
                 if (hits == 1) printf "[HIT] %s\n", fn
                 if (hits <= 15) {
@@ -353,22 +353,32 @@ F1="$OUT/01_boot_entry.txt"
 
     if [ -f "$_bin/runMMX.sh" ]; then
         echo ""
-        echo "-- $_bin/runMMX.sh key lines --"
-        awk '
-        {
-            line = $0; sub(/\r$/, "", line)
-            low = tolower(line)
-            if (low ~ /servicemgrmibhigh|modkit|slay|challenge|sshd|shadow|del/) {
-                printf "  L%d: %s\n", NR, line
-                hit = 1
-            }
-        }
-        END {
-            printf "  (runMMX.sh total lines: %d)\n", NR
-            if (!hit) print "  (no keyword hits)"
-        }
-        ' "$_bin/runMMX.sh" 2>/dev/null || true
+        echo "-- $_bin/runMMX.sh full (sanitized, up to 100 lines) --"
+        dump_sanitized "$_bin/runMMX.sh" 100
     fi
+
+    # 深度寻源（防商业包用 touch -r 伪装 Sep 01 2020 时间戳）：检查关键启动脚本与 /mnt/app/eso/bin 全目录
+    echo ""
+    echo "-- $_bin full directory listing (ls -la, catch hidden / non-.sh hooks) --"
+    ls -la "$_bin" 2>/dev/null || true
+
+    for _ksh in runHMI.sh runLSD.sh java.sh redirect.sh servicemgrapprestartinfo.sh servicemgrresetinfo.sh; do
+        if [ -f "$_bin/$_ksh" ]; then
+            echo ""
+            echo "-- $_bin/$_ksh (sanitized, up to 100 lines) --"
+            dump_sanitized "$_bin/$_ksh" 100
+        fi
+    done
+
+    echo ""
+    echo "-- $_APP/eso/hmi/lsd top-level (ls -la, catch hidden payloads like .j) --"
+    ls -la "$_APP/eso/hmi/lsd" 2>/dev/null || echo "(not accessible)"
+
+    echo ""
+    echo "-- shadow file metadata comparison (hashes redacted) --"
+    for _shf in "$_bin/shadow" "$_APP/etc/shadow" "$_SYS/etc/shadow"; do
+        [ -e "$_shf" ] && ls -l "$_shf" 2>/dev/null || true
+    done
 } > "$F1" 2>&1
 
 # ==============================================================================
@@ -384,10 +394,19 @@ F2="$OUT/02_restore_hunt.txt"
     ls -la "$_OTA" 2>/dev/null || echo "(not accessible)"
 
     echo ""
-    echo "-- $_OTA/{system,app,ot} & $_PERSIST/fec (filenames & sizes only) --"
+    echo "-- $_OTA/{system,app,ot} & $_PERSIST/fec (2-level listing, filenames & sizes only) --"
     for _od in "$_OTA/system" "$_OTA/app" "$_OTA/ot" "$_PERSIST/fec"; do
         echo "[$_od]"
-        [ -d "$_od" ] && ls -la "$_od" 2>/dev/null || echo "  (absent)"
+        if [ -d "$_od" ]; then
+            ls -la "$_od" 2>/dev/null || true
+            for _subd in "$_od"/*; do
+                [ -d "$_subd" ] || continue
+                echo "  [$_subd]"
+                ls -la "$_subd" 2>/dev/null || true
+            done
+        else
+            echo "  (absent)"
+        fi
     done
 
     echo ""
@@ -488,18 +507,31 @@ F2="$OUT/02_restore_hunt.txt"
     for _scan_d in \
         "$_APP/eso/bin" \
         "$_APP/eso/bin/apps" \
+        "$_APP/eso/hmi/lsd" \
         "$_APP/root" \
         "$_APP/etc" \
         "$_APP/etc/rc.d" \
         "$_APP/armle/etc" \
+        "$_APP/usr/bin" \
         "$_SYS/etc" \
         "$_SYS/etc/eso" \
         "$_SYS/etc/eso/production" \
         "$_OTA" \
+        "$_OTA/app" \
+        "$_OTA/system" \
+        "$_OTA/ot" \
         "$_OTA/modkit"
     do
         scan_dir_keywords "$_scan_d"
     done
+    for _ota_sub in "$_OTA/app"/* "$_OTA/system"/* "$_OTA/ot"/*; do
+        [ -d "$_ota_sub" ] || continue
+        scan_dir_keywords "$_ota_sub"
+    done
+    echo ""
+    echo "-- $_SYS/etc & $_APP/etc directory listing (ls -la) --"
+    ls -la "$_SYS/etc" 2>/dev/null || true
+    ls -la "$_APP/etc" 2>/dev/null || true
     for _app_sub in "$_APP/eso/bin/apps"/*; do
         [ -d "$_app_sub" ] || continue
         _an="${_app_sub##*/}"
