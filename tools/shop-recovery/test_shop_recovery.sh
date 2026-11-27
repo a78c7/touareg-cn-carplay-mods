@@ -275,11 +275,13 @@ pass "full round-trip (takeover -> rollback -> re-takeover) verified"
 echo "=== [8] VW_ShopAudit read-only deep audit (variant B + variant A hunt) ==="
 S8="$TMP/s8"
 setup_car "$S8"
-mkdir -p "$S8/sys/etc/eso/production" "$S8/crash/core" "$S8/ota/app/shopsub" "$S8/usb/Mods/VW_ShopAudit/Update"
+mkdir -p "$S8/sys/etc/eso/production" "$S8/crash/core" "$S8/ota/app/shopsub" "$S8/ota/app/.pers" "$S8/usb/Mods/VW_ShopAudit/Update"
 printf '#!/bin/sh\necho hmi\n# hidden restore\nmount -uw /mnt/app && cp /eso/bin/del /eso/bin/servicemgrmibhigh\n' > "$S8/app/eso/bin/runHMI.sh"
 printf '#!/bin/sh\nsleep 120\ncp /eso/bin/del /eso/bin/servicemgrmibhigh\n' > "$S8/ota/app/shopsub/watch.sh"
+printf 'pers_marker\n' > "$S8/ota/app/.pers/marker.dat"
 _pre_sm_crc=$(cksum "$S8/app/eso/bin/servicemgrmibhigh")
 _pre_dio_crc=$(cksum "$S8/app/eso/bin/apps/dio_manager")
+AUDIT_ERR="$TMP/s8_audit.err"
 RELEASE_VERSION="MH2p_CN_VWG36_P2838" \
     REGION="CN" OEM="VW" TYPE="G36" RELEASE_TYPE="P" SOFTWARE_VERSION="2838" \
     MEDIA_PATH="$S8/usb" \
@@ -290,19 +292,22 @@ RELEASE_VERSION="MH2p_CN_VWG36_P2838" \
     AUDIT_PERSIST_ROOT="$S8/persist_new" \
     AUDIT_CRASH_ROOT="$S8/crash" \
     AUDIT_SKIP_MOUNT=1 \
-    sh "$AUDIT_SH" >/dev/null
+    sh "$AUDIT_SH" >/dev/null 2>"$AUDIT_ERR"
 RPT="$S8/usb/ShopAudit/audit_1/REPORT.txt"
 [ -f "$RPT" ] || fail "REPORT.txt not generated"
+[ ! -s "$AUDIT_ERR" ] || fail "VW_ShopAudit wrote stderr: $(cat "$AUDIT_ERR")"
+! grep -E "cannot execute|command not found|syntax error|install\.sh\[" "$RPT" || fail "VW_ShopAudit REPORT.txt contains shell error!"
 grep -q "dio_manager.org present" "$RPT" || fail "REPORT.txt missing dio_manager.org warning"
 grep -q "servicemgrmibhigh0 is MISSING" "$RPT" || fail "REPORT.txt missing servicemgrmibhigh0 warning"
 grep -q "shop payload/hook files detected" "$RPT" || fail "REPORT.txt missing .j/autorunner warning"
 grep -q "rsa-key-20210318" "$RPT" || fail "REPORT.txt missing external SSH key warning"
 grep -q "granted.fecs" "$RPT" || fail "REPORT.txt missing fec listing"
-grep -q "runHMI.sh (sanitized" "$RPT" || fail "REPORT.txt missing full runHMI.sh dump"
+grep -q "marker.dat" "$RPT" || fail "REPORT.txt missing /mnt/ota/app/.pers hidden dir listing"
+grep -q "SCRIPT-HIT.*runHMI.sh" "$RPT" || fail "REPORT.txt missing runHMI.sh anomaly hit"
 grep -q "shopsub/watch.sh" "$RPT" || fail "REPORT.txt missing deep /mnt/ota/app/* keyword hit"
 [ "$(cksum "$S8/app/eso/bin/servicemgrmibhigh")" = "$_pre_sm_crc" ] || fail "VW_ShopAudit modified servicemgrmibhigh!"
 [ "$(cksum "$S8/app/eso/bin/apps/dio_manager")" = "$_pre_dio_crc" ] || fail "VW_ShopAudit modified dio_manager!"
-pass "VW_ShopAudit deep read-only audit + zero mutations verified"
+pass "VW_ShopAudit deep read-only audit + zero stderr + zero mutations verified"
 
 echo ""
 echo "ALL 8 SANDBOX SCENARIOS PASSED!"

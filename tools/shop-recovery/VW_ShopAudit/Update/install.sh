@@ -190,12 +190,28 @@ dump_ak_sanitized() {
     ' "$_f" 2>/dev/null || true
 }
 
-# 在指定目录的一层文本文件中搜索还原/劫持关键词（脱敏、带行号、单文件最多 15 条）
+# 在指定目录的一层文本文件中极速搜索还原/劫持关键词（脱敏、带行号、单文件最多 15 条）
+# 性能优化：单次 ls -la + awk 批量筛出 0 < size <= 65536 且非二进制/密钥后缀的小文件（含隐藏文件），
+# 避免在 QNX 6.6 上对大目录内几十上百个 ELF 逐个 fork dd/ls 触发 SWDL 看门狗超时。
 scan_dir_keywords() {
     _dir="$1"
     [ -d "$_dir" ] || return 0
-    for _item in "$_dir"/*; do
-        is_safe_small_text "$_item" || continue
+    _cands=$(ls -la "$_dir" 2>/dev/null | awk '
+    /^-/ {
+        sz = $5 + 0
+        if (sz <= 0 || sz > 65536) next
+        name = $NF
+        if (name == "." || name == "..") next
+        low = tolower(name)
+        if (low ~ /\.(so|so\.[0-9]+|jar|jxe|zip|gz|tar|jpg|jpeg|png|bmp|ttf|otf|bin|core|elf|o|a|db|sqlite|pak|crt|der|pem|p12|key)$/) next
+        if (low ~ /(id_rsa|id_ed25519|id_ecdsa|id_dsa|_key|wpa\.conf|web\.pin|shadow|passwd|secret)/) next
+        print name
+    }')
+    [ -z "$_cands" ] && return 0
+    for _bn in $_cands; do
+        _item="$_dir/$_bn"
+        [ -f "$_item" ] || continue
+        is_elf "$_item" && continue
         awk -v fn="$_item" '
         BEGIN { hits = 0 }
         {
@@ -276,9 +292,9 @@ F1="$OUT/01_boot_entry.txt"
         add_warn "servicemgrmibhigh0 is MISSING while servicemgrmibhigh is non-ELF (blocks ModKit Persist)"
         if [ -f "$_orgapp" ]; then
             if is_elf "$_orgapp"; then
-                echo "servicemgrmibhigh_orgapp: ELF ($(file_size "$_orgapp") B)"
+                echo "servicemgrmibhigh_orgapp: ELF ($(file_size_bytes "$_orgapp") B)"
             else
-                echo "servicemgrmibhigh_orgapp: NOT ELF ($(file_size "$_orgapp") B)"
+                echo "servicemgrmibhigh_orgapp: NOT ELF ($(file_size_bytes "$_orgapp") B)"
             fi
         fi
     fi
@@ -291,11 +307,11 @@ F1="$OUT/01_boot_entry.txt"
     if [ -e "$_dio_org" ]; then
         _dtag="non-ELF"; is_elf "$_dio" && _dtag="ELF"
         _dotag="non-ELF"; is_elf "$_dio_org" && _dotag="ELF"
-        echo "dio_manager     : $_dtag ($(file_size "$_dio") B)"
-        echo "dio_manager.org : $_dotag ($(file_size "$_dio_org") B)"
+        echo "dio_manager     : $_dtag ($(file_size_bytes "$_dio") B)"
+        echo "dio_manager.org : $_dotag ($(file_size_bytes "$_dio_org") B)"
         add_warn "dio_manager.org present (shop dio_manager replacement detected; must restore stock dio_manager together with boot entry)"
     elif [ -f "$_dio" ]; then
-        _dsz=$(file_size "$_dio")
+        _dsz=$(file_size_bytes "$_dio")
         echo "dio_manager     : $(is_elf "$_dio" && echo ELF || echo non-ELF) (${_dsz} B)"
         if [ -n "$_dsz" ] && [ "$_dsz" -gt 0 ] && [ "$_dsz" -lt 500000 ]; then
             add_warn "dio_manager size unusually small (${_dsz} B < 500000; stock is ~958KB)"
@@ -351,23 +367,30 @@ F1="$OUT/01_boot_entry.txt"
     done
     [ "$_any_sh" = "0" ] && echo "(none)"
 
-    if [ -f "$_bin/runMMX.sh" ]; then
-        echo ""
-        echo "-- $_bin/runMMX.sh full (sanitized, up to 100 lines) --"
-        dump_sanitized "$_bin/runMMX.sh" 100
-    fi
-
-    # 深度寻源（防商业包用 touch -r 伪装 Sep 01 2020 时间戳）：检查关键启动脚本与 /mnt/app/eso/bin 全目录
+    # 深度寻源（防商业包用 touch -r 伪装原厂时间戳）：单次扫描关键启动脚本异常关键词与目录全列表
     echo ""
     echo "-- $_bin full directory listing (ls -la, catch hidden / non-.sh hooks) --"
     ls -la "$_bin" 2>/dev/null || true
 
-    for _ksh in runHMI.sh runLSD.sh java.sh redirect.sh servicemgrapprestartinfo.sh servicemgrresetinfo.sh; do
-        if [ -f "$_bin/$_ksh" ]; then
-            echo ""
-            echo "-- $_bin/$_ksh (sanitized, up to 100 lines) --"
-            dump_sanitized "$_bin/$_ksh" 100
-        fi
+    echo ""
+    echo "-- Key boot scripts anomaly check (runMMX/runHMI/runLSD/java/lsd.sh) --"
+    for _ksh in "$_bin/runMMX.sh" "$_bin/runHMI.sh" "$_bin/runLSD.sh" "$_bin/java.sh" "$_APP/eso/hmi/lsd/lsd.sh" "$_APP/eso/hmi/lsd/lsd_d.sh"; do
+        [ -f "$_ksh" ] || continue
+        awk -v fn="$_ksh" '
+        BEGIN { hits = 0 }
+        {
+            line = $0; sub(/\r$/, "", line)
+            low = tolower(line)
+            if (low ~ /servicemgrmibhigh|modkit|slay|challenge|sshd|\/eso\/bin\/del|\/eso\/bin\/shadow|mount[ \t]+-uw|autorunner|\/eso\/hmi\/lsd\/\.j|sleep[ \t]+(60|90|100|120|150|180|240|300)/) {
+                hits++
+                if (hits == 1) printf "[SCRIPT-HIT] %s\n", fn
+                if (hits <= 20) printf "  L%d: %s\n", NR, line
+            }
+        }
+        END {
+            printf "  (%s: %d lines, %d keyword hits)\n", fn, NR, hits
+        }
+        ' "$_ksh" 2>/dev/null || true
     done
 
     echo ""
@@ -380,167 +403,7 @@ F1="$OUT/01_boot_entry.txt"
         [ -e "$_shf" ] && ls -l "$_shf" 2>/dev/null || true
     done
 } > "$F1" 2>&1
-
-# ==============================================================================
-# [2/5] 排查“开机 2 分钟还原源”线索 (/mnt/ota, /mnt/app, /mnt/system)
-# ==============================================================================
-F2="$OUT/02_restore_hunt.txt"
-{
-    echo "=== 02. Auto-Restore Source & Persistence Hunt ==="
-    _ota="$_OTA/modkit"
-
-    echo ""
-    echo "-- $_OTA top-level (ls -la) --"
-    ls -la "$_OTA" 2>/dev/null || echo "(not accessible)"
-
-    echo ""
-    echo "-- $_OTA/{system,app,ot} & $_PERSIST/fec (2-level listing, filenames & sizes only) --"
-    for _od in "$_OTA/system" "$_OTA/app" "$_OTA/ot" "$_PERSIST/fec"; do
-        echo "[$_od]"
-        if [ -d "$_od" ]; then
-            ls -la "$_od" 2>/dev/null || true
-            for _subd in "$_od"/*; do
-                [ -d "$_subd" ] || continue
-                echo "  [$_subd]"
-                ls -la "$_subd" 2>/dev/null || true
-            done
-        else
-            echo "  (absent)"
-        fi
-    done
-
-    echo ""
-    echo "-- /mnt/persist top-level (ls -la, if mounted) --"
-    if [ -d /mnt/persist ]; then
-        ls -la /mnt/persist 2>/dev/null || true
-    else
-        echo "(not mounted / absent)"
-    fi
-
-    echo ""
-    echo "-- $_ota top-level & Logs (ls -la) --"
-    if [ -d "$_ota" ]; then
-        ls -la "$_ota" 2>/dev/null || true
-        echo ""
-        echo "-- $_ota/Logs (ls -la) --"
-        ls -la "$_ota/Logs" 2>/dev/null || echo "(no Logs dir)"
-        if [ -f "$_ota/Logs/_ModKit_Persist.log" ]; then
-            echo ""
-            echo "-- _ModKit_Persist.log (last 80 lines) --"
-            awk '{ buf[NR % 80] = $0; n = NR } END { start = (n > 80 ? n - 79 : 1); for (i = start; i <= n; i++) print "  | " buf[i % 80] }' "$_ota/Logs/_ModKit_Persist.log" 2>/dev/null || true
-        elif [ -f "$_ota/modkit_persist.sh" ]; then
-            echo "WARN: modkit_persist.sh exists, but _ModKit_Persist.log is MISSING!"
-            add_warn "modkit_persist.sh exists from prior install, but _ModKit_Persist.log is MISSING"
-        fi
-    else
-        echo "($_ota does not exist)"
-    fi
-
-    echo ""
-    echo "-- $_ota/Mods/* (Persist & Post scripts) --"
-    if [ -d "$_ota/Mods" ]; then
-        ls -la "$_ota/Mods" 2>/dev/null || true
-        for _d in "$_ota/Mods"/*; do
-            [ -d "$_d" ] || continue
-            _m="${_d##*/}"
-            echo ""
-            echo "[Mod: $_m]"
-            ls -la "$_d" 2>/dev/null || true
-            for _sub in Persist/install.sh Post/install.sh; do
-                _s="$_d/$_sub"
-                [ -f "$_s" ] || continue
-                ls -l "$_s" 2>/dev/null || true
-                # 检测敏感/可疑关键词
-                _hits=$(awk '
-                    { low = tolower($0)
-                      if (low ~ /sshd/) h["sshd"]=1
-                      if (low ~ /challenge/) h["challenge"]=1
-                      if (low ~ /servicemgrmibhigh/) h["servicemgrmibhigh"]=1
-                      if (low ~ /shadow/) h["shadow"]=1
-                    }
-                    END { for (k in h) printf "%s ", k }
-                ' "$_s" 2>/dev/null)
-                if [ -n "$_hits" ]; then
-                    echo "  keywords: $_hits"
-                    if [ "$_m" != "VW_WiFi_Dev" ] || [ "$_hits" != "sshd " ]; then
-                        add_warn "existing ModKit script $_m/$_sub references: $_hits"
-                    fi
-                fi
-                # 第三方模块或含可疑词的脚本脱敏输出前 80 行
-                case "$_m" in
-                    VW_HUD_*|VW_WiFi_Dev|VW_FullScreenCarPlay|VW_NoSimPopup|VW_NoBtAuthPopup|VW_Wireless5GHzFix|AppleCarPlay|AndroidAuto)
-                        echo "  (known module; sanitized head 25 lines)"
-                        dump_sanitized "$_s" 25 ;;
-                    *)
-                        echo "  (THIRD-PARTY / UNKNOWN module; sanitized up to 100 lines)"
-                        add_warn "unknown third-party ModKit persist module found: $_m"
-                        dump_sanitized "$_s" 100 ;;
-                esac
-            done
-        done
-    else
-        echo "($_ota/Mods not present)"
-    fi
-
-    echo ""
-    echo "-- $_APP/eso/bin/apps top-level (ls -la) --"
-    ls -la "$_APP/eso/bin/apps" 2>/dev/null || echo "(not accessible)"
-
-    echo ""
-    echo "-- $_APP/root top-level (ls -la) --"
-    ls -la "$_APP/root" 2>/dev/null || echo "(not accessible)"
-
-    echo ""
-    echo "-- Cron locations check --"
-    _any_cron=0
-    for _c in "$_APP/etc/crontab" "$_SYS/etc/crontab" "$_APP/var/spool/cron" "$_APP/var/spool/cron/crontabs"; do
-        if [ -e "$_c" ]; then
-            ls -la "$_c" 2>/dev/null || true
-            [ -f "$_c" ] && dump_sanitized "$_c" 40
-            _any_cron=1
-        fi
-    done
-    [ "$_any_cron" = "0" ] && echo "(no standard cron files found)"
-
-    echo ""
-    echo "-- Keyword scan across common startup/config directories (safe small text files <= 64KB) --"
-    for _scan_d in \
-        "$_APP/eso/bin" \
-        "$_APP/eso/bin/apps" \
-        "$_APP/eso/hmi/lsd" \
-        "$_APP/root" \
-        "$_APP/etc" \
-        "$_APP/etc/rc.d" \
-        "$_APP/armle/etc" \
-        "$_APP/usr/bin" \
-        "$_SYS/etc" \
-        "$_SYS/etc/eso" \
-        "$_SYS/etc/eso/production" \
-        "$_OTA" \
-        "$_OTA/app" \
-        "$_OTA/system" \
-        "$_OTA/ot" \
-        "$_OTA/modkit"
-    do
-        scan_dir_keywords "$_scan_d"
-    done
-    for _ota_sub in "$_OTA/app"/* "$_OTA/system"/* "$_OTA/ot"/*; do
-        [ -d "$_ota_sub" ] || continue
-        scan_dir_keywords "$_ota_sub"
-    done
-    echo ""
-    echo "-- $_SYS/etc & $_APP/etc directory listing (ls -la) --"
-    ls -la "$_SYS/etc" 2>/dev/null || true
-    ls -la "$_APP/etc" 2>/dev/null || true
-    for _app_sub in "$_APP/eso/bin/apps"/*; do
-        [ -d "$_app_sub" ] || continue
-        _an="${_app_sub##*/}"
-        case "$_an" in
-            cluster|wifi_dev) continue ;;
-        esac
-        scan_dir_keywords "$_app_sub"
-    done
-} > "$F2" 2>&1
+sync
 
 # ==============================================================================
 # [3/5] SSH 残留安全审计 (/mnt/app/root/.ssh)
@@ -583,6 +446,7 @@ F3="$OUT/03_ssh_audit.txt"
     done
     [ "$_any_sc" = "0" ] && echo "(no sshd_config found at checked paths)"
 } > "$F3" 2>&1
+sync
 
 # ==============================================================================
 # [4/5] CarPlay / 仪表 / 全屏配置状态 (含 P2853 核对)
@@ -718,6 +582,172 @@ F4="$OUT/04_carplay_cluster_fs.txt"
         fi
     done
 } > "$F4" 2>&1
+sync
+
+# ==============================================================================
+# [2/5] 排查“开机 2 分钟还原源”线索 (/mnt/ota, /mnt/app, /mnt/system)
+# ==============================================================================
+F2="$OUT/02_restore_hunt.txt"
+{
+    echo "=== 02. Auto-Restore Source & Persistence Hunt ==="
+    _ota="$_OTA/modkit"
+
+    echo ""
+    echo "-- $_OTA top-level (ls -la) --"
+    ls -la "$_OTA" 2>/dev/null || echo "(not accessible)"
+
+    echo ""
+    echo "-- $_OTA/{system,app,ot} & $_PERSIST/fec (2-level listing incl. .pers, filenames & sizes only) --"
+    for _od in "$_OTA/system" "$_OTA/app" "$_OTA/app/.pers" "$_OTA/ot" "$_PERSIST/fec"; do
+        echo "[$_od]"
+        if [ -d "$_od" ]; then
+            ls -la "$_od" 2>/dev/null || true
+            for _subd in "$_od"/*; do
+                [ -d "$_subd" ] || continue
+                echo "  [$_subd]"
+                ls -la "$_subd" 2>/dev/null || true
+            done
+        else
+            echo "  (absent)"
+        fi
+    done
+
+    echo ""
+    echo "-- /mnt/persist top-level (ls -la, if mounted) --"
+    if [ -d /mnt/persist ]; then
+        ls -la /mnt/persist 2>/dev/null || true
+    else
+        echo "(not mounted / absent)"
+    fi
+
+    echo ""
+    echo "-- $_ota top-level & Logs (ls -la) --"
+    if [ -d "$_ota" ]; then
+        ls -la "$_ota" 2>/dev/null || true
+        echo ""
+        echo "-- $_ota/Logs (ls -la) --"
+        ls -la "$_ota/Logs" 2>/dev/null || echo "(no Logs dir)"
+        if [ -f "$_ota/Logs/_ModKit_Persist.log" ]; then
+            echo ""
+            echo "-- _ModKit_Persist.log (last 80 lines) --"
+            awk '{ buf[NR % 80] = $0; n = NR } END { start = (n > 80 ? n - 79 : 1); for (i = start; i <= n; i++) print "  | " buf[i % 80] }' "$_ota/Logs/_ModKit_Persist.log" 2>/dev/null || true
+        elif [ -f "$_ota/modkit_persist.sh" ]; then
+            echo "WARN: modkit_persist.sh exists, but _ModKit_Persist.log is MISSING!"
+            add_warn "modkit_persist.sh exists from prior install, but _ModKit_Persist.log is MISSING"
+        fi
+    else
+        echo "($_ota does not exist)"
+    fi
+
+    echo ""
+    echo "-- $_ota/Mods/* (Persist & Post scripts) --"
+    if [ -d "$_ota/Mods" ]; then
+        ls -la "$_ota/Mods" 2>/dev/null || true
+        for _d in "$_ota/Mods"/*; do
+            [ -d "$_d" ] || continue
+            _m="${_d##*/}"
+            echo ""
+            echo "[Mod: $_m]"
+            ls -la "$_d" 2>/dev/null || true
+            for _sub in Persist/install.sh Post/install.sh; do
+                _s="$_d/$_sub"
+                [ -f "$_s" ] || continue
+                ls -l "$_s" 2>/dev/null || true
+                # 检测敏感/可疑关键词
+                _hits=$(awk '
+                    { low = tolower($0)
+                      if (low ~ /sshd/) h["sshd"]=1
+                      if (low ~ /challenge/) h["challenge"]=1
+                      if (low ~ /servicemgrmibhigh/) h["servicemgrmibhigh"]=1
+                      if (low ~ /shadow/) h["shadow"]=1
+                    }
+                    END { for (k in h) printf "%s ", k }
+                ' "$_s" 2>/dev/null)
+                if [ -n "$_hits" ]; then
+                    echo "  keywords: $_hits"
+                    if [ "$_m" != "VW_WiFi_Dev" ] || [ "$_hits" != "sshd " ]; then
+                        add_warn "existing ModKit script $_m/$_sub references: $_hits"
+                    fi
+                fi
+                # 第三方模块或含可疑词的脚本脱敏输出前 80 行
+                case "$_m" in
+                    VW_HUD_*|VW_WiFi_Dev|VW_FullScreenCarPlay|VW_NoSimPopup|VW_NoBtAuthPopup|VW_Wireless5GHzFix|AppleCarPlay|AndroidAuto)
+                        echo "  (known module; sanitized head 25 lines)"
+                        dump_sanitized "$_s" 25 ;;
+                    *)
+                        echo "  (THIRD-PARTY / UNKNOWN module; sanitized up to 100 lines)"
+                        add_warn "unknown third-party ModKit persist module found: $_m"
+                        dump_sanitized "$_s" 100 ;;
+                esac
+            done
+        done
+    else
+        echo "($_ota/Mods not present)"
+    fi
+
+    echo ""
+    echo "-- $_APP/eso/bin/apps top-level (ls -la) --"
+    ls -la "$_APP/eso/bin/apps" 2>/dev/null || echo "(not accessible)"
+
+    echo ""
+    echo "-- $_APP/root top-level (ls -la) --"
+    ls -la "$_APP/root" 2>/dev/null || echo "(not accessible)"
+
+    echo ""
+    echo "-- Cron locations check --"
+    _any_cron=0
+    for _c in "$_APP/etc/crontab" "$_SYS/etc/crontab" "$_APP/var/spool/cron" "$_APP/var/spool/cron/crontabs"; do
+        if [ -e "$_c" ]; then
+            ls -la "$_c" 2>/dev/null || true
+            [ -f "$_c" ] && dump_sanitized "$_c" 40
+            _any_cron=1
+        fi
+    done
+    [ "$_any_cron" = "0" ] && echo "(no standard cron files found)"
+
+    echo ""
+    echo "-- Keyword scan across common startup/config directories (fast pre-filtered <= 64KB) --"
+    for _scan_d in \
+        "$_APP/eso/bin" \
+        "$_APP/eso/bin/apps" \
+        "$_APP/eso/hmi/lsd" \
+        "$_APP/eso/config/production" \
+        "$_APP/root" \
+        "$_APP/etc" \
+        "$_APP/etc/rc.d" \
+        "$_APP/armle/etc" \
+        "$_SYS/etc" \
+        "$_SYS/etc/eso" \
+        "$_SYS/etc/eso/production" \
+        "$_OTA" \
+        "$_OTA/app" \
+        "$_OTA/app/.pers" \
+        "$_OTA/system" \
+        "$_OTA/ot" \
+        "$_OTA/modkit"
+    do
+        scan_dir_keywords "$_scan_d"
+    done
+    for _ota_sub in "$_OTA/app"/* "$_OTA/system"/* "$_OTA/ot"/*; do
+        [ -d "$_ota_sub" ] || continue
+        scan_dir_keywords "$_ota_sub"
+    done
+    echo ""
+    echo "-- $_SYS/etc, $_SYS/etc/eso/production, $_APP/etc, $_APP/eso/config/production listing (ls -la) --"
+    for _ld in "$_SYS/etc" "$_SYS/etc/eso/production" "$_APP/etc" "$_APP/eso/config/production"; do
+        echo "[$_ld]"
+        [ -d "$_ld" ] && ls -la "$_ld" 2>/dev/null || echo "  (absent)"
+    done
+    for _app_sub in "$_APP/eso/bin/apps"/*; do
+        [ -d "$_app_sub" ] || continue
+        _an="${_app_sub##*/}"
+        case "$_an" in
+            cluster|wifi_dev) continue ;;
+        esac
+        scan_dir_keywords "$_app_sub"
+    done
+} > "$F2" 2>&1
+sync
 
 # ==============================================================================
 # [5/5] 汇总总览 00_summary.txt + 一体化 REPORT.txt

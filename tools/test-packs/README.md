@@ -5,4 +5,5 @@
 
 | 文件名 | 性质 | 对应源码 | 适用场景 |
 | :--- | :---: | :--- | :--- |
-| [`VW_ShopAudit_v2_readonly.zip`](VW_ShopAudit_v2_readonly.zip) | **严格只读** | [`tools/shop-recovery/VW_ShopAudit`](../shop-recovery/VW_ShopAudit/Update/install.sh) | 商业改装旧包深度只读摸底（覆盖变体 A 定时还原寻源与变体 B 双件套 `dio_manager.org` 体检，不改车机任何文件，自动脱敏） |
+| [`VW_ShopAudit_v3_readonly.zip`](VW_ShopAudit_v3_readonly.zip) | **严格只读（推荐）** | [`tools/shop-recovery/VW_ShopAudit`](../shop-recovery/VW_ShopAudit/Update/install.sh) | 商业改装旧包极速深度只读摸底（单次目录预筛提速 ~20 倍防 SWDL 看门狗超时、`01/03/04` 优先落盘、覆盖变体 A 定时还原寻源含 `.pers`/`lsd.sh`/`config/production` 与变体 B `dio_manager.org` 体检，自动脱敏） |
+| [`VW_ShopAudit_v2_readonly.zip`](VW_ShopAudit_v2_readonly.zip) | **严格只读（旧版）** | [`tools/shop-recovery/VW_ShopAudit`](../shop-recovery/VW_ShopAudit/Update/install.sh) | 历史版本（慢盘上可能因扫描超时缺 `03/04/REPORT.txt`，请改用上方 `v3`） |
