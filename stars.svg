@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="28" role="img" aria-label="累计标星: 44 Star">
+  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".12"/><stop offset="1" stop-opacity=".12"/></linearGradient>
+  <clipPath id="r"><rect width="180" height="28" rx="6" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="96" height="28" fill="#24292f"/>
+    <rect x="96" width="84" height="28" fill="#bf8700"/>
+    <rect width="180" height="28" fill="url(#s)"/>
+  </g>
+  <path d="M16 7.8l1.8 3.65 4.02.58-2.91 2.84.69 4.01L16 17l-3.6 1.88.69-4.01-2.91-2.84 4.02-.58z" fill="#ffd33d"/>
+  <g fill="#fff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600">
+    <text x="60.0" y="18.5">累计标星</text>
+    <text x="138.0" y="18.5">44 Star</text>
+  </g>
+</svg>

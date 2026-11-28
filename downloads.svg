@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="185" height="28" role="img" aria-label="累计下载: 1,495 次">
+  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".12"/><stop offset="1" stop-opacity=".12"/></linearGradient>
+  <clipPath id="r"><rect width="185" height="28" rx="6" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="96" height="28" fill="#24292f"/>
+    <rect x="96" width="89" height="28" fill="#0969da"/>
+    <rect width="185" height="28" fill="url(#s)"/>
+  </g>
+  <path d="M16 8.5v7m0 0-3-3m3 3 3-3M11.5 19h9" stroke="#79c0ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <g fill="#fff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei','Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="600">
+    <text x="60.0" y="18.5">累计下载</text>
+    <text x="140.5" y="18.5">1,495 次</text>
+  </g>
+</svg>
