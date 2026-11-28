@@ -30,7 +30,15 @@ Ein-USB-Stick-Paket ohne Demontage und ohne System-Upgrade für Wireless- & Voll
 <div align="center">
   <img src="docs/img/cluster.png" alt="Touareg Digital Cockpit CarPlay-Karte, Sport-Infoboxen und Navigationskarte" width="92%">
   <br>
-  <sub><i>Ansicht im Digital Cockpit: zentrierte CarPlay-Karte mit symmetrischen Großschrift-Fahrdaten und Abbiege-Navigationskarte.</i></sub>
+  <sub><i>CarPlay-Ansicht im Digital Cockpit: zentrierte CarPlay-Karte mit symmetrischen Großschrift-Fahrdaten und Abbiege-Navigationskarte.</i></sub>
+</div>
+
+<br>
+
+<div align="center">
+  <img src="docs/img/carlife_preview.png" alt="Touareg Vollbild-Baidu-CarLife-Erweiterung mit klassischem Original-Doppelrundinstrument und Windschutzscheiben-HUD (Vorschau)" width="92%">
+  <br>
+  <sub><i>CarLife-Vorschau (synthetisches UI-Mockup, kein Fahrzeugfoto): randloses 15"-Vollbild-Baidu-CarLife + synchronisierte W-HUD-Abbiegepfeile, während das 12"-Digital-Cockpit sauber in der klassischen Original-Doppelrundansicht bleibt.</i></sub>
 </div>
 
 <br>

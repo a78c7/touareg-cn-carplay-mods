@@ -30,7 +30,15 @@ Single-USB, no-disassembly, no-firmware-upgrade toolkit unlocking wireless & ful
 <div align="center">
   <img src="docs/img/cluster.png" alt="Touareg Digital Cockpit CarPlay map, bold driving telemetry boxes, and turn-by-turn card" width="92%">
   <br>
-  <sub><i>In-cluster layout: auto-centered CarPlay map flanked by symmetrical bold driving telemetry boxes and a turn-by-turn navigation card.</i></sub>
+  <sub><i>CarPlay cluster layout: auto-centered CarPlay map flanked by symmetrical bold driving telemetry boxes and a turn-by-turn navigation card.</i></sub>
+</div>
+
+<br>
+
+<div align="center">
+  <img src="docs/img/carlife_preview.png" alt="Touareg full-screen Baidu CarLife enhancement with OEM classic dual-dial Digital Cockpit and Windshield W-HUD mockup" width="92%">
+  <br>
+  <sub><i>CarLife enhancement preview (synthetic UI mockup, not an in-car photo): edge-to-edge 15" full-screen Baidu CarLife + synchronized Windshield W-HUD turn arrows, while keeping the 12" Digital Cockpit on the clean OEM classic dual-dial Touareg view.</i></sub>
 </div>
 
 <br>

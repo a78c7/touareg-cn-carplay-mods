@@ -2,6 +2,12 @@
 
 [← 目录](README.md)
 
+<div align="center">
+  <img src="img/carlife_preview.png" alt="途锐全屏百度 CarLife 增强、原车经典双仪表与前风挡 W-HUD 联动示意" width="92%">
+  <br>
+  <sub><i>效果示意（虚拟 UI 渲染，非实车拍摄）：15 寸中控点对点满屏 CarLife + 前风挡 W-HUD 转向联动，12 寸仪表保持原车经典双仪表大途锐主页。</i></sub>
+</div>
+
 国行改款前第三代途锐（CR7，15 英寸 Discover Premium，MH2p / QNX 6.6 ARMv7，`MH2p_CN_VWG36_P*`）原厂自带一套 2016 版百度 CarLife 协议栈（`/carlife/carlife` + `/carlife/lib/libcarlifevehicle.so`），存在四周大黑边、分辨率仅 `1024×480`、对接现代 CarLife+ 容易 `SIGABRT` 黑屏闪退、无挡风玻璃 HUD 导航箭头的痛点。这一篇记录 `VW_FullScreenCarLife` 模块（源码目录 [`src/carlife/`](../src/carlife)）如何原地无损增强原厂有线百度 CarLife，并与 CarPlay 保持 100% 独立共存。
 
 ## 1. 增强能力与客观边界（与 CarPlay 差异）

@@ -30,7 +30,15 @@
 <div align="center">
   <img src="docs/img/cluster.png" alt="途锐液晶仪表 CarPlay 地图、大字行车数据与路口导航卡效果" width="92%">
   <br>
-  <sub><i>仪表实车布局：CarPlay 地图自动居中，左右对称显示大字行车数据与路口导航卡。</i></sub>
+  <sub><i>CarPlay 仪表布局：CarPlay 地图自动居中，左右对称显示大字行车数据与路口导航卡。</i></sub>
+</div>
+
+<br>
+
+<div align="center">
+  <img src="docs/img/carlife_preview.png" alt="途锐全屏百度 CarLife 增强、原车经典双仪表与前风挡 W-HUD 联动示意" width="92%">
+  <br>
+  <sub><i>CarLife 增强示意（虚拟 UI 渲染，非实车拍摄）：15 寸中控点对点满屏百度 CarLife + 前风挡 W-HUD 转向联动，12 寸仪表保持原车经典双仪表大途锐主页。</i></sub>
 </div>
 
 <br>
