@@ -320,6 +320,8 @@ body.live-fs main{max-width:1200px;padding:10px}
       <div class="row"><label>关闭 OK 双击切地图 (switch_off)<span class="sub">v21 默认由 VW_HUD_4 模块开启；取消勾选即允许连按 2 下 OK 键切换地图</span></label><input type="checkbox" id="tg_switch_off" onchange="doToggle('switch_off',this.checked)"></div>
       <div class="row"><label>方向盘语音键短按唤 Siri（试验，siri_short）<span class="sub">CarPlay 在线时短按方向盘语音键直接唤出 Siri（原厂长按不受影响；部分固件短按可能同时触发原车语音）</span></label><input type="checkbox" id="tg_siri_short" onchange="doToggle('siri_short',this.checked)"></div>
       <div class="row"><label>v23 60fps AI 皮肤引擎 (v23_mode)<span class="sub">默认关闭（稳跑 v22.1 经典通道）；开启后支持 CarPlay 地图与 60fps 皮肤同屏（实车零拷贝 55~59fps），方向盘默认双击 OK 盲切风格（同时开启切原车地图时为双击切图、三连击切皮肤），异常自动秒退回经典通道</span></label><input type="checkbox" id="tg_v23_mode" onchange="doToggle('v23_mode',this.checked)"></div>
+      <div class="row"><label>v23 关闭地图硬件零拷贝（闪屏排障，v23_no_zerocopy）<span class="sub">保留自定义皮肤，改走 Pitch-Linear + glTexSubImage2D 传图（同 v23.6）；切换后约 3 秒自动重启渲染生效，无需重启车机</span></label><input type="checkbox" id="tg_v23_no_zerocopy" onchange="doToggle('v23_no_zerocopy',this.checked)"></div>
+      <div class="row"><label>v23 换帧前 GPU 强同步（闪屏排障，v23_gl_finish）<span class="sub">每次 eglSwapBuffers 前执行 glFinish() 等待 3D GPU 完帧；切换后约 3 秒自动重启渲染生效，无需重启车机</span></label><input type="checkbox" id="tg_v23_gl_finish" onchange="doToggle('v23_gl_finish',this.checked)"></div>
       <div class="row"><label>独立 60fps GLES2 动画仪表（试验，gles60_mode）<span class="sub">无 CarPlay 地图流时启用独立 OpenGL ES 2.0 60fps 仪表；有 CarPlay 地图流时自动切回地图模式</span></label><input type="checkbox" id="tg_gles60_mode" onchange="doToggle('gles60_mode',this.checked)"></div>
       <div class="row"><label>手动安全模式 (safe_mode)<span class="sub">勾选后下次重启跳过全部改装插件，快速回归纯原厂状态排障</span></label><input type="checkbox" id="tg_safe_mode" onchange="doToggle('safe_mode',this.checked)"></div>
     </div>
@@ -726,6 +728,8 @@ async function loadStatus(){
     document.getElementById('tg_switch_off').checked=!!tg.switch_off;
     document.getElementById('tg_siri_short').checked=!!tg.siri_short;
     document.getElementById('tg_v23_mode').checked=!!tg.v23_mode;
+    document.getElementById('tg_v23_no_zerocopy').checked=!!tg.v23_no_zerocopy;
+    document.getElementById('tg_v23_gl_finish').checked=!!tg.v23_gl_finish;
     document.getElementById('tg_gles60_mode').checked=!!tg.gles60_mode;
     document.getElementById('tg_safe_mode').checked=!!tg.safe_mode;
     const v23s=S.v23||{};

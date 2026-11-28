@@ -1058,9 +1058,9 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
     l += (size_t)snprintf(buf + l, CAP - l,
         "=== Touareg MH2p Sanitized Diagnostic Bundle ===\n"
         "Free & Open Source: https://github.com/a78c7/touareg-cn-carplay-mods\n"
-        "netd_version=v23.5 ota_version=%s bcm2_ip=%s\n"
+        "netd_version=v24.1-test1 ota_version=%s bcm2_ip=%s\n"
         "safe_mode: manual=%d hmi=%d dio=%d cluster=%d render_fused=%d v23_fallback=%d\n"
-        "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d v23_mode=%d\n\n",
+        "toggles: disable=%d ka_off=%d zoom_flip=%d switch_off=%d siri_short=%d gles60_mode=%d v23_mode=%d v23_no_zerocopy=%d v23_gl_finish=%d\n\n",
         ota_ver, ipstr,
         file_exists(CLUSTER_DIR "/safe_mode"), file_exists("/tmp/vw_hmi_safe_mode"),
         file_exists("/tmp/vw_dio_safe_mode"), file_exists("/tmp/vw_cluster_safe_mode"),
@@ -1068,7 +1068,8 @@ static void handle_diag_bundle(int fd, uint32_t bcm2_ip) {
         file_exists(CLUSTER_DIR "/disable"), file_exists(CLUSTER_DIR "/ka_off"),
         file_exists(CLUSTER_DIR "/zoom_flip"), file_exists(CLUSTER_DIR "/switch_off"),
         file_exists(CLUSTER_DIR "/siri_short"), file_exists(CLUSTER_DIR "/gles60_mode"),
-        file_exists(CLUSTER_DIR "/v23_mode"));
+        file_exists(CLUSTER_DIR "/v23_mode"), file_exists(CLUSTER_DIR "/v23_no_zerocopy"),
+        file_exists(CLUSTER_DIR "/v23_gl_finish"));
 
     /* Include dash.conf & cl.conf (non-sensitive display config) */
     const char *cfgs[] = { DASH_CONF_PATH, CL_CONF_PATH, NULL };
@@ -1170,7 +1171,7 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         "\"car_up\":%d,\"acc_up\":%d,\"amap_turn\":%d,\"alpha\":%d,\"tank_l\":%d,\"lat_flip\":%d,\"trip_base\":%.1f,"
         "\"nav_box\":%d,\"nav_side\":\"%s\",\"nav_tz\":%d},"
         "\"cl\":{\"wide_on\":%d,\"wide\":%d,\"view\":%d},"
-        "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d,\"siri_short\":%d,\"gles60_mode\":%d,\"v23_mode\":%d,\"safe_mode\":%d},\"drive_logs\":[",
+        "\"toggles\":{\"disable\":%d,\"ka_off\":%d,\"zoom_flip\":%d,\"switch_off\":%d,\"siri_short\":%d,\"gles60_mode\":%d,\"v23_mode\":%d,\"v23_no_zerocopy\":%d,\"v23_gl_finish\":%d,\"safe_mode\":%d},\"drive_logs\":[",
         esc_ov, has_ota_backup_files(),
         ipstr, spd, odo, has_cl, ssh_on,
         p_cld, p_ren, p_dio,
@@ -1194,6 +1195,8 @@ static void handle_status(int fd, uint32_t bcm2_ip) {
         file_exists(CLUSTER_DIR "/siri_short"),
         file_exists(CLUSTER_DIR "/gles60_mode"),
         file_exists(CLUSTER_DIR "/v23_mode"),
+        file_exists(CLUSTER_DIR "/v23_no_zerocopy"),
+        file_exists(CLUSTER_DIR "/v23_gl_finish"),
         file_exists(CLUSTER_DIR "/safe_mode"));
 
     /* 扫描 U 盘 drive_logs CSV 文件 */
@@ -1596,7 +1599,8 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
             if (strcmp(name, "disable") != 0 && strcmp(name, "ka_off") != 0 &&
                 strcmp(name, "zoom_flip") != 0 && strcmp(name, "switch_off") != 0 &&
                 strcmp(name, "siri_short") != 0 && strcmp(name, "gles60_mode") != 0 &&
-                strcmp(name, "v23_mode") != 0 && strcmp(name, "safe_mode") != 0) {
+                strcmp(name, "v23_mode") != 0 && strcmp(name, "v23_no_zerocopy") != 0 &&
+                strcmp(name, "v23_gl_finish") != 0 && strcmp(name, "safe_mode") != 0) {
                 send_json(cfd, 400, 0, "不支持的开关");
                 return;
             }
@@ -1611,7 +1615,9 @@ static void handle_http_client(int cfd, uint32_t bcm2_ip, uint32_t peer_ip) {
                 ok = (unlink(path) == 0 || errno == ENOENT);
             }
             mount_app_ro();
-            if (ok && strcmp(name, "v23_mode") == 0 && !g_dry_test) {
+            if (ok && (strcmp(name, "v23_mode") == 0 ||
+                       strcmp(name, "v23_no_zerocopy") == 0 ||
+                       strcmp(name, "v23_gl_finish") == 0) && !g_dry_test) {
                 unlink("/tmp/v23_fallback_v22");
                 unlink("/tmp/v23_theme_loading");
                 run_const_cmd("slay -f cl_render >/dev/null 2>&1");
@@ -1837,7 +1843,7 @@ int main(void) {
     if (env_port && atoi(env_port) > 0) g_http_port = atoi(env_port);
     if (getenv("NETD_DRY_TEST")) g_dry_test = 1;
 
-    nlog("touareg_netd v23.7 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
+    nlog("touareg_netd v24.1-test1 started (iface=%s port=%d) — FREE & OPEN SOURCE: github.com/a78c7/touareg-cn-carplay-mods", g_iface, g_http_port);
 
     int pin_init_rc = ensure_web_pin_boot();
     if (pin_init_rc == 1) {

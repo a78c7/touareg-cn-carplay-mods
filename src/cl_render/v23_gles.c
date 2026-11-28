@@ -38,6 +38,7 @@ typedef void  (*V23_PFN_DeleteShader)(GLuint);
 typedef void  (*V23_PFN_DeleteProgram)(GLuint);
 typedef void  (*V23_PFN_DeleteTextures)(GLsizei, const GLuint *);
 typedef void  (*V23_PFN_PixelStorei)(GLenum, GLint);
+typedef void  (*V23_PFN_Finish)(void);
 typedef void *(*V23_PFN_EglCreateImageKHR)(EGLDisplay, EGLContext, EGLenum, EGLClientBuffer, const EGLint *);
 typedef EGLBoolean (*V23_PFN_EglDestroyImageKHR)(EGLDisplay, void *);
 typedef void  (*V23_PFN_GlEGLImageTargetTex2D)(GLenum, void *);
@@ -67,6 +68,7 @@ static struct {
     V23_PFN_DeleteProgram      DeleteProgram;
     V23_PFN_DeleteTextures     DeleteTextures;
     V23_PFN_PixelStorei        PixelStorei;
+    V23_PFN_Finish             Finish;
     V23_PFN_EglCreateImageKHR  EglCreateImageKHR;
     V23_PFN_EglDestroyImageKHR EglDestroyImageKHR;
     V23_PFN_GlEGLImageTargetTex2D GlEGLImageTargetTex2D;
@@ -116,6 +118,7 @@ static int v23_load_extra_gl(void) {
     v23gl.DeleteProgram      = (V23_PFN_DeleteProgram)v23_sym("glDeleteProgram");
     v23gl.DeleteTextures     = (V23_PFN_DeleteTextures)v23_sym("glDeleteTextures");
     v23gl.PixelStorei        = (V23_PFN_PixelStorei)v23_sym("glPixelStorei");
+    v23gl.Finish             = (V23_PFN_Finish)v23_sym("glFinish");
     v23gl.EglCreateImageKHR  = (V23_PFN_EglCreateImageKHR)v23_sym("eglCreateImageKHR");
     v23gl.EglDestroyImageKHR = (V23_PFN_EglDestroyImageKHR)v23_sym("eglDestroyImageKHR");
     v23gl.GlEGLImageTargetTex2D = (V23_PFN_GlEGLImageTargetTex2D)v23_sym("glEGLImageTargetTexture2DOES");
@@ -411,11 +414,12 @@ static int v23_map_setup(int w, int h) {
     g_v23_map.auto_night = 1;
     g_v23_stop = 0;
 
-    int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0);
+    int want_zc = (access("/mnt/app/eso/bin/apps/cluster/v23_no_zerocopy", F_OK) != 0 &&
+                   access("/tmp/v23_no_zerocopy", F_OK) != 0);
     int fmt = SCREEN_FORMAT_RGBX8888;
     int sz[2] = { w, h };
     g_v23_map.zc_alloc = want_zc ? 1 : 0;
-    v23_diag("v23.7 map_setup start %dx%d slots=%d want_zc=%d", w, h, V23_MAP_SLOTS, want_zc);
+    v23_diag("v24.1-test1 map_setup start %dx%d slots=%d want_zc=%d", w, h, V23_MAP_SLOTS, want_zc);
 
     for (int i = 0; i < V23_MAP_SLOTS; i++) {
         if (screen_create_pixmap(&g_v23_map.pix[i], g_dec.scr_ctx) != 0) {
@@ -921,6 +925,7 @@ typedef struct {
     int      map_ever_flipped;
     int      map_w, map_h;
     int      win_bufs;
+    int      gl_finish;
 
     /* dash.c 信息框纹理[0..1] + navbox.c 导航卡纹理 */
     GLuint dash_tex[2];
@@ -1676,13 +1681,13 @@ static void v23_write_status_json(const v23_sandbox_t *cur_sb, const v23_gl_ctx_
 
     char buf[4096];
     int o = snprintf(buf, sizeof(buf),
-        "{\"ok\":%s,\"mode\":\"v23_gles60\",\"engine_ver\":\"v23.8\",\"target_fps\":%d,\"nvwsi_fifo\":%s,\"map_slots\":%d,\"win_bufs\":%d,"
+        "{\"ok\":%s,\"mode\":\"v23_gles60\",\"engine_ver\":\"v24.1-test1\",\"target_fps\":%d,\"nvwsi_fifo\":%s,\"gl_finish\":%s,\"map_slots\":%d,\"win_bufs\":%d,"
         "\"glitch_traps\":%u,"
         "\"source\":\"%s\",\"theme_id\":\"%s\",\"theme_name\":\"%s\","
         "\"active_idx\":%d,\"theme_count\":%d,\"compile_ms\":%.2f,\"fps\":%d,\"map_fps\":%d,"
         "\"map_zero_copy\":%s,\"night\":%s,\"fallback\":%s,\"error\":%s%s%s,\"shader_error\":%s%s%s,\"themes\":[",
         (!fallback && (!err_msg || !err_msg[0])) ? "true" : "false",
-        target_fps, nvwsi_on ? "true" : "false",
+        target_fps, nvwsi_on ? "true" : "false", gc->gl_finish ? "true" : "false",
         V23_MAP_SLOTS, gc->win_bufs, (unsigned)g_v23_probe.traps,
         src_e, id_e, name_e, idx, cur_sb ? cur_sb->entry_count : 1,
         cur_sb ? cur_sb->last_compile_ms : 0.0, fps, map_fps,
@@ -2011,6 +2016,8 @@ static int v23_run_gl_loop(int with_carplay_map) {
     gc->win_w = ww;
     gc->win_h = wh;
     gc->win_bufs = alloc_win_bufs;
+    gc->gl_finish = (access("/mnt/app/eso/bin/apps/cluster/v23_gl_finish", F_OK) == 0 ||
+                     access("/tmp/v23_gl_finish", F_OK) == 0) ? 1 : 0;
     gc->map_has_stream = with_carplay_map;
     gc->map_w = with_carplay_map ? g_v23_map.width : ww;
     gc->map_h = with_carplay_map ? g_v23_map.height : wh;
@@ -2451,6 +2458,7 @@ static int v23_run_gl_loop(int with_carplay_map) {
         /* 6. 叠画顶部安全提示横幅并按单调绝对网格（默认 33333us=30fps，建 v23_rate60 为 16667us=60fps）送显
          *    （4 缓冲下 libEGL 不阻塞 VSync，扣除 1000us QNX 1ms 时钟向上取整余量，慢帧自动重对齐不飙帧） */
         v23_draw_banner(gc, t_now);
+        if (gc->gl_finish && v23gl.Finish) v23gl.Finish();
         eglSwapBuffers(edpy, esurf);
         if (swaps_since_flip < 1000000u) swaps_since_flip++;
         {
@@ -2476,8 +2484,8 @@ static int v23_run_gl_loop(int with_carplay_map) {
             }
             /* 首帧就绪后关闭常规帧流水日志（仅保留 rdbg_err 异常配额），将稳态 /tmp RAMFS 写入降为 0 */
             g_rdbg = 0;
-            v23_diag("[11] first eglSwapBuffers ok -> cl_render_ready written (%dx%d win_bufs=%d slots=%d map=%d zc=%d)",
-                     ww, wh, alloc_win_bufs, V23_MAP_SLOTS, with_carplay_map, gc->map_zero_copy);
+            v23_diag("[11] first eglSwapBuffers ok -> cl_render_ready written (%dx%d win_bufs=%d slots=%d map=%d zc=%d gl_finish=%d)",
+                     ww, wh, alloc_win_bufs, V23_MAP_SLOTS, with_carplay_map, gc->map_zero_copy, gc->gl_finish);
         }
 
         fps_frames++;
